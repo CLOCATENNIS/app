@@ -39,6 +39,10 @@ section{display:none}section.on{display:block}
 .tile{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:10px 0;color:var(--tx);text-decoration:none;font:inherit;font-size:18px;font-weight:600}
 .tile small{display:block;font-weight:400;color:var(--mut);font-size:14px;margin-top:2px}
 nav[hidden]{display:none}
+.part{margin:26px 4px 4px;text-align:center}
+.part .pt{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+.part .pl{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.part a{font-size:13px;color:var(--mut);text-decoration:none;border:1px solid var(--bd);padding:7px 14px;border-radius:16px;background:var(--card)}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .chips button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font:inherit;font-size:14px}
 .chips button.on{background:var(--ac);border-color:var(--ac);color:#fff}
@@ -53,6 +57,7 @@ nav[hidden]{display:none}
 <button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, fiche joueur</small></button>
 <a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur ADOC</small></a>
 <div id="actus"></div>
+<div class="part"><div class="pt">Nos partenaires</div><div class="pl"><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></div>
 </section>
 <section id="arena">
 <button class="tile" onclick="show('clas')">🥇 Classement</button>
