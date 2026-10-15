@@ -41,10 +41,11 @@ nav[hidden]{display:none}
 <nav id="nav" hidden></nav>
 <main>
 <section id="home">
-<button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, résultats, fiche joueur</small></button>
-<button class="tile" onclick="window.open(FICHE_URL,'_blank')">👤 Fiche joueur<small>Stats et historique d'un joueur</small></button>
+<div id="today" class="card" style="display:none"></div>
+<button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, fiche joueur</small></button>
 <a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur ADOC</small></a>
 <button class="tile" onclick="show('social')">📲 Réseaux<small>Instagram, Facebook</small></button>
+<div class="card"><div class="wk">📣 Dernières publications</div><iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2FClocaTennis%2F&tabs=timeline&width=320&height=480&small_header=true&hide_cover=true&show_facepile=false" width="320" height="480" style="border:none;overflow:hidden;max-width:100%;display:block;margin:10px auto 0" scrolling="no" frameborder="0" allow="encrypted-media" loading="lazy" title="Publications Facebook"></iframe></div>
 </section>
 <section id="arena">
 <button class="tile" onclick="show('clas')">🥇 Classement</button>
@@ -68,7 +69,7 @@ var NIVEAUX=[["Blanc","#9aa39c"],["Violet","#8e4ec6"],["Rouge","#e5484d"],["Oran
 var DEBUT=new Date(2026,9,19); // lundi 19 octobre 2026
 var ADOC_URL="https://adoc.app.fft.fr/adoc/";
 var INSTAGRAM_URL="https://www.instagram.com/cloc.acheres.tennis?cplk=Mnd4OTkwdWFjdGZz";
-var FACEBOOK_URL="https://www.facebook.com/share/1Fi4YHu9LP/";
+var FACEBOOK_URL="https://www.facebook.com/ClocaTennis/";
 var SEANCES=[[0,"Lundi","17h30 – 18h30"],[4,"Vendredi","17h30 – 18h30"],[5,"Samedi","14h30 – 16h00"]];
 
 var fmt=function(d){return d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})};
@@ -131,7 +132,30 @@ function show(id){
   Array.prototype.forEach.call(nav.children,function(b){b.classList.toggle("on",b.dataset.id===id)});
 }
 tabs.forEach(function(t){var b=document.createElement("button");b.textContent=t[1];b.dataset.id=t[0];b.onclick=function(){show(t[0])};nav.appendChild(b)});
+function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]})}
+function loadToday(){
+  var box=document.getElementById("today");
+  fetch(PROG_URL+"?format=json").then(function(r){return r.json()}).then(function(list){
+    var d=new Date(),t=("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2);
+    var today=list.filter(function(s){return s.date===t});
+    var items=today.length?today:list.slice(0,1);
+    if(!items.length)return;
+    var h='<div class="wk">'+(today.length?"\ud83d\udcc5 Aujourd'hui au club":"\ud83d\udcc5 Prochaine s\u00e9ance")+'</div>';
+    items.forEach(function(s){
+      var b=s.filles?'<span class="badge" style="background:#d94f8a">100% filles</span> ':'';
+      s.niveaux.forEach(function(n){
+        var c=NIVEAUX.filter(function(x){return x[0]===n})[0];
+        b+='<span class="badge" style="background:'+(c?c[1]:"#667068")+'">'+esc(n)+'</span> ';
+      });
+      h+='<div style="margin-top:8px"><b>'+esc(s.format||(s.filles?"Miss Cup":"S\u00e9ance"))+'</b>'+
+        '<div class="mut">'+esc(s.jour)+' '+esc(s.date)+' \u00b7 '+esc(s.debut)+(s.duree?' \u00b7 '+esc(s.duree):'')+(s.lieu?' \u00b7 '+esc(s.lieu):'')+'</div>'+
+        '<div style="margin-top:6px">'+b+'</div></div>';
+    });
+    box.innerHTML=h;box.style.display="block";
+  }).catch(function(){});
+}
 show("home");
+loadToday();
 </script>
 </body>
 </html>
