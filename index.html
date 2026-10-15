@@ -12,9 +12,17 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 :root[data-theme="dark"]{--bg:#121613;--card:#1c231e;--tx:#eef2ee;--mut:#98a39b;--ac:#5fc08a;--bd:#2c372f}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{padding:20px 16px 8px}
-h1{margin:0;font-size:24px}
-header p{margin:4px 0 0;color:var(--mut);font-size:14px}
+header{background:linear-gradient(135deg,#1f5d3a,#2f7d4f);color:#fff;padding:20px 0 22px;border-radius:0 0 22px 22px;margin-bottom:8px}
+.hw{max-width:640px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:12px}
+#logo{display:none;width:54px;height:54px;border-radius:50%;object-fit:cover;background:#fff;flex:none}
+h1{margin:0;font-size:24px;color:#fff}
+header p{margin:3px 0 0;color:rgba(255,255,255,.88);font-size:14px}
+.news{overflow:hidden}
+.nimg{display:block;width:100%;border-radius:10px;margin-bottom:10px}
+.nd{font-size:12px;color:var(--mut)}
+.nt{font-weight:700;font-size:16px;margin:2px 0}
+.ntx{white-space:pre-line;margin-top:4px}
+.nl{display:inline-block;margin-top:8px;color:var(--ac);font-weight:600;text-decoration:none}
 nav{display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
 nav button{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font:inherit;font-size:14px}
 nav button.on{background:var(--ac);border-color:var(--ac);color:#fff}
@@ -37,15 +45,14 @@ nav[hidden]{display:none}
 </style>
 </head>
 <body>
-<header><h1>🎾 CLOCA Tennis</h1><p id="sub">Bienvenue au club</p></header>
+<header><div class="hw"><img id="logo" src="logo.png" alt="" onload="this.style.display='block';document.getElementById('emo').style.display='none'"><div><h1><span id="emo">🎾 </span>CLOCA Tennis</h1><p id="sub">Bienvenue au club</p></div></div></header>
 <nav id="nav" hidden></nav>
 <main>
 <section id="home">
 <div id="today" class="card" style="display:none"></div>
 <button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, fiche joueur</small></button>
 <a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur ADOC</small></a>
-<button class="tile" onclick="show('social')">📲 Réseaux<small>Instagram, Facebook</small></button>
-<div class="card"><div class="wk">📣 Dernières publications</div><iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2FClocaTennis%2F&tabs=timeline&width=320&height=480&small_header=true&hide_cover=true&show_facepile=false" width="320" height="480" style="border:none;overflow:hidden;max-width:100%;display:block;margin:10px auto 0" scrolling="no" frameborder="0" allow="encrypted-media" loading="lazy" title="Publications Facebook"></iframe></div>
+<div id="actus"></div>
 </section>
 <section id="arena">
 <button class="tile" onclick="show('clas')">🥇 Classement</button>
@@ -154,8 +161,32 @@ function loadToday(){
     box.innerHTML=h;box.style.display="block";
   }).catch(function(){});
 }
+function safeUrl(u){return /^https?:\/\//i.test(u||"")?u:""}
+function newsFallback(){
+  document.getElementById("actus").innerHTML='<div class="card"><div class="wk">\ud83d\udce3 Suivez-nous</div><p class="mut">Retrouvez toutes les actualit\u00e9s du club sur nos r\u00e9seaux.</p>'+
+    '<a class="btn" target="_blank" rel="noopener" href="'+FACEBOOK_URL+'">\ud83d\udc4d Facebook</a>'+
+    '<a class="btn" target="_blank" rel="noopener" href="'+INSTAGRAM_URL+'">\ud83d\udcf8 Instagram</a></div>';
+}
+function loadActus(){
+  fetch(PROG_URL+"?format=actus").then(function(r){return r.json()}).then(function(list){
+    if(!list||!list.length){newsFallback();return}
+    var h='<div class="wk" style="margin:18px 4px 6px">\ud83d\udce3 Derni\u00e8res infos</div>';
+    list.forEach(function(a){
+      var img=safeUrl(a.image),link=safeUrl(a.lien);
+      h+='<div class="card news">'+
+        (img?'<img class="nimg" src="'+esc(img)+'" alt="" loading="lazy" onerror="this.remove()">':'')+
+        (a.date?'<div class="nd">'+esc(a.date)+'</div>':'')+
+        '<div class="nt">'+esc(a.titre)+'</div>'+
+        (a.texte?'<div class="mut ntx">'+esc(a.texte)+'</div>':'')+
+        (link?'<a class="nl" href="'+esc(link)+'" target="_blank" rel="noopener">En savoir plus \u2192</a>':'')+
+        '</div>';
+    });
+    document.getElementById("actus").innerHTML=h;
+  }).catch(newsFallback);
+}
 show("home");
 loadToday();
+loadActus();
 </script>
 </body>
 </html>
