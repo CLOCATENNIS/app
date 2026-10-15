@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CLOCA Tennis</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#102f4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CLOCA Tennis">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 --bg:#f7f4ef;--card:#fff;--tx:#12304a;--mut:#6a7784;--ac:#b85c33;--bd:#e6e0d8}
@@ -39,6 +47,22 @@ section{display:none}section.on{display:block}
 .tile{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:10px 0;color:var(--tx);text-decoration:none;font:inherit;font-size:18px;font-weight:600}
 .tile small{display:block;font-weight:400;color:var(--mut);font-size:14px;margin-top:2px}
 nav[hidden]{display:none}
+.alert{border-radius:14px;padding:14px 16px;margin:10px 0;font-weight:600;line-height:1.35;color:#fff;background:#b85c33}
+.alert.urgent{background:#c62f2f}
+.alert a{color:#fff;display:inline-block;margin-top:6px;font-weight:700}
+.info .lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
+.info .big{font-size:17px;font-weight:700;margin:2px 0}
+.info .btn{margin:10px 0 0}
+.info .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info .two .btn{padding:12px 6px;font-size:14px}
+.info .alt{background:transparent;border:1px solid var(--ac);color:var(--ac)}
+.mrow{padding:9px 0;border-top:1px solid var(--bd);font-size:15px}
+.mrow:first-child{border-top:0}
+.mrow .sc{color:var(--mut);font-size:13px}
+.pod{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--bd);font-size:15px}
+.pod:first-of-type{border-top:0}
+.pod span:last-child{color:var(--mut)}
+.done{opacity:.65}
 .part{margin:26px 4px 4px;text-align:center}
 .part .pt{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
 .part .pl{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
@@ -53,22 +77,44 @@ nav[hidden]{display:none}
 <nav id="nav" hidden></nav>
 <main>
 <section id="home">
+<div id="annonce"></div>
 <div id="today" class="card" style="display:none"></div>
 <button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, fiche joueur</small></button>
 <a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur ADOC</small></a>
+<button class="tile" onclick="show('evt')">🎉 Événements<small>En cours, à venir, passés</small></button>
+<button class="tile" onclick="show('infos')">ℹ️ Infos pratiques<small>Adresse, horaires, contacts</small></button>
 <div id="actus"></div>
 <div class="part"><div class="pt">Nos partenaires</div><div class="pl"><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></div>
 </section>
 <section id="arena">
 <button class="tile" onclick="show('clas')">🥇 Classement</button>
 <button class="tile" onclick="show('prog')">🗓️ Programmation</button>
+<button class="tile" onclick="show('res')">📊 Résultats récents</button>
+<button class="tile" onclick="show('pal')">🏅 Palmarès</button>
 <button class="tile" onclick="window.open(FICHE_URL,'_blank')">👤 Fiche joueur</button>
 <button class="tile" onclick="show('home')">← Accueil</button>
 </section>
 <section id="clas"><div id="clist"></div><p class="mut" id="cmsg"></p><button class="tile" onclick="show('arena')">← Retour</button></section>
 <section id="fiche"><div class="card"><div class="wk">Fiche joueur</div><p class="mut">Bientôt disponible.</p></div><button class="tile" onclick="show('arena')">← Retour</button></section>
 <section id="prog"><button class="tile" onclick="show('arena')">← Retour</button><p class="mut">Choisis ton niveau :</p><div id="lv" class="chips"></div><button class="tile" onclick="openProg()">📅 Voir la programmation</button><button class="tile" onclick="openCal()">🔔 Ajouter mon niveau à mon agenda</button><button class="tile" onclick="openCal('Miss Cup')">👧 Ajouter l'agenda Miss Cup</button><div id="list"></div></section>
-<section id="evt"><div class="card"><div class="wk">Lancement du CLOC'ARENA</div><p class="mut">Les événements du club seront ajoutés ici.</p></div></section>
+<section id="evt"><button class="tile" onclick="show('home')">← Accueil</button><div id="evlist"><p class="mut">Chargement…</p></div></section>
+<section id="infos" class="info">
+<button class="tile" onclick="show('home')">← Accueil</button>
+<div class="card"><div class="lbl">📍 Le club</div><div class="big">CLOCA Tennis</div><div class="mut">81 Rue de Saint-Germain<br>78260 Achères</div>
+<a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=81+Rue+de+Saint-Germain+78260+Ach%C3%A8res">🗺️ Itinéraire</a></div>
+<div class="card"><div class="lbl">🏠 Club House</div><div class="big">Ouvert le mercredi et le samedi</div><div class="mut">9h30 – 12h et 14h – 16h30</div>
+<a class="btn" href="tel:+33139116947">📞 01 39 11 69 47</a></div>
+<div class="card"><div class="lbl">🎾 Coordinateur sportif</div><div class="big">Dorian</div><div class="mut">06 62 48 80 87</div>
+<a class="btn" target="_blank" rel="noopener" href="https://wa.me/33662488087">💬 WhatsApp</a>
+<div class="two" style="margin-top:8px"><a class="btn alt" href="tel:+33662488087">📞 Appeler</a><a class="btn alt" href="sms:+33662488087">✉️ SMS</a></div></div>
+<div class="card"><div class="lbl">✉️ Nous contacter</div><div class="mut">tennis@cloca.fr</div>
+<a class="btn" href="mailto:tennis@cloca.fr">✉️ Nous contacter</a></div>
+<div class="card"><div class="lbl">📲 Installer l'appli</div>
+<button class="btn" id="install" style="display:none;width:100%;border:0;font:inherit;font-weight:600;font-size:16px" onclick="installApp()">📲 Ajouter à l'écran d'accueil</button>
+<p class="mut" style="margin:6px 0 0"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l'écran d'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».</p></div>
+</section>
+<section id="res"><button class="tile" onclick="show('arena')">← Retour</button><div id="reslist"><p class="mut">Chargement…</p></div></section>
+<section id="pal"><button class="tile" onclick="show('arena')">← Retour</button><div id="pallist"><p class="mut">Chargement…</p></div></section>
 <section id="social">
 <a class="tile" id="insta" href="#" target="_blank" rel="noopener">📸 Instagram</a>
 <a class="tile" id="fb" href="#" target="_blank" rel="noopener">👍 Facebook</a>
@@ -135,12 +181,16 @@ var CLASSEMENTS=[["Général","https://docs.google.com/spreadsheets/d/e/2PACX-1v
 CLASSEMENTS.forEach(function(c){var b=document.createElement("button");b.className="tile";b.textContent=c[0];
   b.onclick=function(){if(c[1]){window.open(c[1],"_blank")}else{document.getElementById("cmsg").textContent="Classement "+c[0]+" bientôt disponible."}};
   document.getElementById("clist").appendChild(b)});
-var ALL=["home","arena","clas","prog","fiche","evt","social"];
+var ALL=["home","arena","clas","prog","fiche","evt","infos","res","pal","social"];
 var nav=document.getElementById("nav");
 function show(id){
   ALL.forEach(function(s){document.getElementById(s).classList.toggle("on",s===id)});
   nav.hidden=true;
-  document.getElementById("sub").textContent=id==="home"?"Bienvenue au club":id==="social"?"Nos réseaux":"CLOC'ARENA · le tournoi des jeunes";
+  if(id==="evt")loadEvents();
+  if(id==="res")loadResultats();
+  if(id==="pal")loadPalmares();
+  window.scrollTo(0,0);
+  document.getElementById("sub").textContent=id==="home"?"Bienvenue au club":id==="social"?"Nos réseaux":id==="evt"?"Événements du club":id==="infos"?"Infos pratiques":id==="res"?"CLOC'ARENA · résultats récents":id==="pal"?"CLOC'ARENA · palmarès":"CLOC'ARENA · le tournoi des jeunes";
   Array.prototype.forEach.call(nav.children,function(b){b.classList.toggle("on",b.dataset.id===id)});
 }
 tabs.forEach(function(t){var b=document.createElement("button");b.textContent=t[1];b.dataset.id=t[0];b.onclick=function(){show(t[0])};nav.appendChild(b)});
@@ -152,7 +202,7 @@ function loadToday(){
     var today=list.filter(function(s){return s.date===t});
     var items=today.length?today:list.slice(0,1);
     if(!items.length)return;
-    var h='<div class="wk">'+(today.length?"\ud83d\udcc5 Aujourd'hui au club":"\ud83d\udcc5 Prochaine s\u00e9ance")+'</div>';
+    var h='<div class="wk">'+(today.length?"\ud83d\udcc5 Aujourd'hui \u00b7 CLOC'ARENA":"\ud83d\udcc5 Prochain rdv CLOC'ARENA")+'</div>';
     items.forEach(function(s){
       var b=s.filles?'<span class="badge" style="background:#d94f8a">100% filles</span> ':'';
       s.niveaux.forEach(function(n){
@@ -192,7 +242,72 @@ function loadActus(){
     document.getElementById("actus").innerHTML=h+followCard();
   }).catch(newsFallback);
 }
+function evCard(e,done){
+  var img=safeUrl(e.image),link=safeUrl(e.lien),b='';
+  if(!done&&e.inscription==="ouvertes")b='<span class="badge" style="background:#30a46c">Inscriptions ouvertes</span>';
+  if(!done&&e.inscription==="fermees")b='<span class="badge" style="background:#667068">Inscriptions closes</span>';
+  var lbl=(!done&&e.inscription==="ouvertes")?"S'inscrire":"En savoir plus";
+  return '<div class="card news'+(done?' done':'')+'">'+
+    (img?'<img class="nimg" src="'+esc(img)+'" alt="" loading="lazy" onerror="this.remove()">':'')+
+    '<div class="nd">'+esc(e.dates)+'</div>'+
+    '<div class="nt">'+esc(e.titre)+'</div>'+
+    (e.description?'<div class="mut ntx">'+esc(e.description)+'</div>':'')+
+    (b?'<div style="margin-top:8px">'+b+'</div>':'')+
+    (link?'<a class="nl" href="'+esc(link)+'" target="_blank" rel="noopener">'+lbl+' \u2192</a>':'')+
+    '</div>';
+}
+function loadEvents(){
+  var box=document.getElementById("evlist");
+  fetch(PROG_URL+"?format=events").then(function(r){return r.json()}).then(function(d){
+    var h="";
+    [["encours","\ud83d\udfe2 En cours",false],["avenir","\ud83d\udcc5 \u00c0 venir",false],["termines","\u2705 Termin\u00e9s",true]].forEach(function(g){
+      var l=d[g[0]]||[];
+      if(!l.length)return;
+      h+='<div class="wk" style="margin:18px 4px 6px">'+g[1]+'</div>'+l.map(function(e){return evCard(e,g[2])}).join("");
+    });
+    box.innerHTML=h||'<div class="card"><p class="mut">Aucun \u00e9v\u00e9nement pour le moment.</p></div>';
+  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les \u00e9v\u00e9nements pour le moment.</p></div>'});
+}
+function loadAnnonce(){
+  fetch(PROG_URL+"?format=annonce").then(function(r){return r.json()}).then(function(a){
+    if(!a||!a.message)return;
+    var link=safeUrl(a.lien);
+    document.getElementById("annonce").innerHTML='<div class="alert'+(a.type==="urgent"?' urgent':'')+'">'+(a.type==="urgent"?'\u26a0\ufe0f ':'\ud83d\udce2 ')+esc(a.message)+
+      (link?'<br><a href="'+esc(link)+'" target="_blank" rel="noopener">En savoir plus \u2192</a>':'')+'</div>';
+  }).catch(function(){});
+}
+function loadResultats(){
+  var box=document.getElementById("reslist");
+  fetch(FICHE_URL+"?format=resultats").then(function(r){return r.json()}).then(function(days){
+    if(!days.length){box.innerHTML='<div class="card"><p class="mut">Pas encore de r\u00e9sultats.</p></div>';return}
+    box.innerHTML=days.map(function(d){
+      return '<div class="wk" style="margin:18px 4px 6px">\ud83d\udcc5 '+esc(d.date)+'</div><div class="card">'+d.matchs.map(function(m){
+        var c=NIVEAUX.filter(function(x){return x[0]===m.niveau})[0];
+        var dot=c?'<span class="badge" style="background:'+c[1]+';font-size:11px;padding:2px 8px;margin-left:6px">'+esc(m.niveau)+'</span>':'';
+        return '<div class="mrow">'+(m.nul?esc(m.gagnant)+' = '+esc(m.perdant):'\ud83c\udfc6 <b>'+esc(m.gagnant)+'</b> bat '+esc(m.perdant))+dot+
+          (m.score?'<div class="sc">'+esc(m.score)+'</div>':'')+'</div>';
+      }).join('')+'</div>';
+    }).join('');
+  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les r\u00e9sultats pour le moment.</p></div>'});
+}
+function loadPalmares(){
+  var box=document.getElementById("pallist");
+  fetch(FICHE_URL+"?format=palmares").then(function(r){return r.json()}).then(function(cats){
+    if(!cats.length){box.innerHTML='<div class="card"><p class="mut">Pas encore de classement.</p></div>';return}
+    var med=["\ud83e\udd47","\ud83e\udd48","\ud83e\udd49"];
+    box.innerHTML='<p class="mut" style="margin:10px 4px">Leaders actuels de chaque classement.</p>'+cats.map(function(c){
+      return '<div class="card"><div class="wk" style="margin-bottom:6px">'+esc(c.titre)+'</div>'+c.podium.map(function(p,i){
+        return '<div class="pod"><span>'+med[i]+' '+esc(p.nom)+'</span><span>'+esc(p.points)+' pts</span></div>';
+      }).join('')+'</div>';
+    }).join('');
+  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger le palmar\u00e8s pour le moment.</p></div>'});
+}
+var DEFERRED=null;
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();DEFERRED=e;document.getElementById("install").style.display="block"});
+function installApp(){if(!DEFERRED)return;DEFERRED.prompt();DEFERRED=null;document.getElementById("install").style.display="none"}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 show("home");
+loadAnnonce();
 loadToday();
 loadActus();
 </script>
