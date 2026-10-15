@@ -167,10 +167,13 @@ function loadToday(){
   }).catch(function(){});
 }
 function safeUrl(u){return /^https?:\/\//i.test(u||"")?u:""}
-function newsFallback(){
-  document.getElementById("actus").innerHTML='<div class="card"><div class="wk">\ud83d\udce3 Suivez-nous</div><p class="mut">Retrouvez toutes les actualit\u00e9s du club sur nos r\u00e9seaux.</p>'+
+function followCard(){
+  return '<div class="card"><div class="wk">\ud83d\udce3 Suivez-nous</div><p class="mut">Retrouvez toutes les actualit\u00e9s du club sur nos r\u00e9seaux.</p>'+
     '<a class="btn" target="_blank" rel="noopener" href="'+FACEBOOK_URL+'">\ud83d\udc4d Facebook</a>'+
     '<a class="btn" target="_blank" rel="noopener" href="'+INSTAGRAM_URL+'">\ud83d\udcf8 Instagram</a></div>';
+}
+function newsFallback(){
+  document.getElementById("actus").innerHTML=followCard();
 }
 function loadActus(){
   fetch(PROG_URL+"?format=actus").then(function(r){return r.json()}).then(function(list){
@@ -186,7 +189,7 @@ function loadActus(){
         (link?'<a class="nl" href="'+esc(link)+'" target="_blank" rel="noopener">En savoir plus \u2192</a>':'')+
         '</div>';
     });
-    document.getElementById("actus").innerHTML=h;
+    document.getElementById("actus").innerHTML=h+followCard();
   }).catch(newsFallback);
 }
 show("home");
