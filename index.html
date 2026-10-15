@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CLOCA Tennis</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f7f4;--card:#fff;--tx:#1b2a1f;--mut:#667068;--ac:#2f7d4f;--bd:#e2e6df}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121613;--card:#1c231e;--tx:#eef2ee;--mut:#98a39b;--ac:#5fc08a;--bd:#2c372f}}
+:root[data-theme="dark"]{--bg:#121613;--card:#1c231e;--tx:#eef2ee;--mut:#98a39b;--ac:#5fc08a;--bd:#2c372f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:20px 16px 8px}
+h1{margin:0;font-size:24px}
+header p{margin:4px 0 0;color:var(--mut);font-size:14px}
+nav{display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
+nav button{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font:inherit;font-size:14px}
+nav button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+main{padding:4px 12px 32px;max-width:640px;margin:0 auto}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin:10px 0}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.wk{font-weight:600}
+.badge{color:#fff;font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px}
+.row{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--bd);font-size:15px}
+.row span:last-child{color:var(--mut)}
+.btn{display:block;text-align:center;background:var(--ac);color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600;margin:10px 0}
+.mut{color:var(--mut);font-size:14px}
+.tile{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:10px 0;color:var(--tx);text-decoration:none;font:inherit;font-size:18px;font-weight:600}
+.tile small{display:block;font-weight:400;color:var(--mut);font-size:14px;margin-top:2px}
+nav[hidden]{display:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chips button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font:inherit;font-size:14px}
+.chips button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+</style>
+</head>
+<body>
+<header><h1>🎾 CLOCA Tennis</h1><p id="sub">Bienvenue au club</p></header>
+<nav id="nav" hidden></nav>
+<main>
+<section id="home">
+<button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, résultats, fiche joueur</small></button>
+<button class="tile" onclick="window.open(FICHE_URL,'_blank')">👤 Fiche joueur<small>Stats et historique d'un joueur</small></button>
+<a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur ADOC</small></a>
+<button class="tile" onclick="show('social')">📲 Réseaux<small>Instagram, Facebook</small></button>
+</section>
+<section id="arena">
+<button class="tile" onclick="show('clas')">🥇 Classement</button>
+<button class="tile" onclick="show('prog')">🗓️ Programmation</button>
+<button class="tile" onclick="window.open(FICHE_URL,'_blank')">👤 Fiche joueur</button>
+<button class="tile" onclick="show('home')">← Accueil</button>
+</section>
+<section id="clas"><div id="clist"></div><p class="mut" id="cmsg"></p><button class="tile" onclick="show('arena')">← Retour</button></section>
+<section id="fiche"><div class="card"><div class="wk">Fiche joueur</div><p class="mut">Bientôt disponible.</p></div><button class="tile" onclick="show('arena')">← Retour</button></section>
+<section id="prog"><button class="tile" onclick="show('arena')">← Retour</button><p class="mut">Choisis ton niveau :</p><div id="lv" class="chips"></div><button class="tile" onclick="openProg()">📅 Voir la programmation</button><button class="tile" onclick="openCal()">🔔 Ajouter mon niveau à mon agenda</button><button class="tile" onclick="openCal('Miss Cup')">👧 Ajouter l'agenda Miss Cup</button><div id="list"></div></section>
+<section id="evt"><div class="card"><div class="wk">Lancement du CLOC'ARENA</div><p class="mut">Les événements du club seront ajoutés ici.</p></div></section>
+<section id="social">
+<a class="tile" id="insta" href="#" target="_blank" rel="noopener">📸 Instagram</a>
+<a class="tile" id="fb" href="#" target="_blank" rel="noopener">👍 Facebook</a>
+<button class="tile" onclick="show('home')">← Accueil</button>
+</section>
+</main>
+<script>
+// À MODIFIER : niveaux (dans l'ordre de rotation), date du premier lundi, lien ADOC
+var NIVEAUX=[["Blanc","#9aa39c"],["Violet","#8e4ec6"],["Rouge","#e5484d"],["Orange","#f76b15"],["Vert","#30a46c"],["Jaune","#d4a20a"]];
+var DEBUT=new Date(2026,9,19); // lundi 19 octobre 2026
+var ADOC_URL="https://adoc.app.fft.fr/adoc/";
+var INSTAGRAM_URL="https://www.instagram.com/cloc.acheres.tennis?cplk=Mnd4OTkwdWFjdGZz";
+var FACEBOOK_URL="https://www.facebook.com/share/1Fi4YHu9LP/";
+var SEANCES=[[0,"Lundi","17h30 – 18h30"],[4,"Vendredi","17h30 – 18h30"],[5,"Samedi","14h30 – 16h00"]];
+
+var fmt=function(d){return d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})};
+var today=new Date();today.setHours(0,0,0,0);
+var CHOIX="";try{CHOIX=localStorage.getItem("niveau")||""}catch(e){}
+function render(){
+var html="",shown=0,SEMAINES=0; // 0 = programmation masquée
+for(var i=0;i<SEMAINES&&shown<10;i++){
+  var lundi=new Date(DEBUT);lundi.setDate(lundi.getDate()+7*i);
+  var sam=new Date(lundi);sam.setDate(sam.getDate()+5);
+  if(sam<today)continue;
+  var n=NIVEAUX[i%NIVEAUX.length];
+  if(CHOIX&&n[0]!==CHOIX)continue;
+  html+='<div class="card"><div class="top"><span class="wk">Semaine du '+fmt(lundi)+'</span><span class="badge" style="background:'+n[1]+'">'+n[0]+'</span></div>';
+  SEANCES.forEach(function(s){
+    var d=new Date(lundi);d.setDate(d.getDate()+s[0]);
+    html+='<div class="row"><span>'+s[1]+' '+d.getDate()+'</span><span>'+s[2]+'</span></div>';
+  });
+  html+='</div>';shown++;
+}
+document.getElementById("list").innerHTML=html||'';
+var lv=document.getElementById("lv");lv.innerHTML="";
+[["","Tous"]].concat(NIVEAUX.map(function(n){return [n[0],n[0]]})).forEach(function(o){
+  var b=document.createElement("button");b.textContent=o[1];b.className=CHOIX===o[0]?"on":"";
+  b.onclick=function(){CHOIX=o[0];try{localStorage.setItem("niveau",CHOIX)}catch(e){}render()};lv.appendChild(b)});
+}
+render();
+document.getElementById("adoc").href=ADOC_URL;
+document.getElementById("insta").href=INSTAGRAM_URL;
+document.getElementById("fb").href=FACEBOOK_URL;
+
+var tabs=[["home","← Accueil"],["prog","Programme"],["evt","Événements"],["res","Résultats"]];
+var FICHE_URL="https://script.google.com/macros/s/AKfycbzSAt9Pgom2zNLD8zzkMqKC7gg-e01nwVGnnbZTCWkzl9ihrhDL7aXSkU3sChnVOsfvrg/exec";
+var PROG_URL="https://script.google.com/macros/s/AKfycbw1SHjhfBL1mLDN9weJ1dJOR0RkSIoMF7TPUhIv5A20_Pkt0LJpvz2KdeWQALGjPRGz/exec";
+function openProg(){window.open(PROG_URL+(CHOIX?"?niveau="+encodeURIComponent(CHOIX):""),"_blank")}
+// À REMPLIR : lien partageable de chaque agenda Google (un par niveau + Miss Cup)
+var CAL_LINKS={
+"Blanc":"https://calendar.google.com/calendar/u/0?cid=ZjRhMjg3MDNhMzA4MTA1NzFjYjE0ZGRlMzRiMDZhNjA1NGNlNGFiNjM5ZDRkM2EyNDExM2UzMTg1MjQ5NTdlOEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+"Violet":"https://calendar.google.com/calendar/u/0?cid=Njc3NGZmYTdkNDUyNmM2ODkwMjQ4YTBiNzI4YzY5MWI0ZGI1MjRlYzlmZmQ1NjNlYzRjMTZmY2Q5ZGZiZTU3ZkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+"Rouge":"https://calendar.google.com/calendar/u/0?cid=NGIxMjMzNTYxNzk3NjdhZTZkNWNjNmZkYjUxZWY0MGUwZDMxYjI4NzczZTZjNjU4OWUyNjNkMTc5OTZiNGMxY0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+"Orange":"https://calendar.google.com/calendar/u/0?cid=MjBmNTE5ZmU3ZjhmOWE2ZTRlZmQ4NDM4YzNjM2Q1NjU5YmU2MjI3MjE2NmFlNzE5ZjBhYjIyYjcyMGIwNjc2YUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+"Vert":"https://calendar.google.com/calendar/u/0?cid=YmQwNmVkNjVhNzUzZjEzYTE5YzEyZTA3NjE4OGIwNmE1MDk1ZDgxMTAxMGZkOWZlYTE2MTdlMWY0NjBiZTBiYUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+"Jaune":"https://calendar.google.com/calendar/u/0?cid=ZDA2Y2UzY2I2ZjBlYWM3MjBiYWRmMWU0MWIzYjM2MGFjMGFjZTk2YmFiY2VkNDhkNTkwOWIxYjQxYjlmNTdmMUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+"Miss Cup":"https://calendar.google.com/calendar/u/0?cid=NDQ3MGZkNzc5MmNjYzZkZGJiZGVlYTc4NmE4YWZjMzc0ZDljZmNjMzIxOGVjNzZiNjg0MzMzYzkwMDBmNDllMEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t"};
+function openCal(k){var key=k||CHOIX;var l=CAL_LINKS[key];var m=document.getElementById("list");
+  if(!key){m.innerHTML='<div class="card">Choisis d\'abord ton niveau.</div>'}
+  else if(!l){m.innerHTML='<div class="card">Agenda '+key+' bientôt disponible.</div>'}
+  else{window.open(l,"_blank")}}
+// À REMPLIR : lien Google Sheets (publié sur le web) de chaque classement
+var CLASSEMENTS=[["Général","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1815896277&single=true"],["Filles","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1132488567&single=true"],["Garçons","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1624443513&single=true"],["Blanc","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=993258424&single=true"],["Violet","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1354815220&single=true"],["Rouge","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1557042492&single=true"],["Orange","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=783162423&single=true"],["Vert","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1839420530&single=true"],["Jaune","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1110696610&single=true"]];
+CLASSEMENTS.forEach(function(c){var b=document.createElement("button");b.className="tile";b.textContent=c[0];
+  b.onclick=function(){if(c[1]){window.open(c[1],"_blank")}else{document.getElementById("cmsg").textContent="Classement "+c[0]+" bientôt disponible."}};
+  document.getElementById("clist").appendChild(b)});
+var ALL=["home","arena","clas","prog","fiche","evt","social"];
+var nav=document.getElementById("nav");
+function show(id){
+  ALL.forEach(function(s){document.getElementById(s).classList.toggle("on",s===id)});
+  nav.hidden=true;
+  document.getElementById("sub").textContent=id==="home"?"Bienvenue au club":id==="social"?"Nos réseaux":"CLOC'ARENA · le tournoi des jeunes";
+  Array.prototype.forEach.call(nav.children,function(b){b.classList.toggle("on",b.dataset.id===id)});
+}
+tabs.forEach(function(t){var b=document.createElement("button");b.textContent=t[1];b.dataset.id=t[0];b.onclick=function(){show(t[0])};nav.appendChild(b)});
+show("home");
+</script>
+</body>
+</html>
