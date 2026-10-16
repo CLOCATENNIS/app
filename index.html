@@ -223,13 +223,13 @@ function show(id){
 }
 tabs.forEach(function(t){var b=document.createElement("button");b.textContent=t[1];b.dataset.id=t[0];b.onclick=function(){show(t[0])};nav.appendChild(b)});
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]})}
-function loadToday(){
+function renderToday(list){
   var box=document.getElementById("today");
-  fetch(PROG_URL+"?format=json").then(function(r){return r.json()}).then(function(list){
+  {
     var d=new Date(),t=("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2);
     var today=list.filter(function(s){return s.date===t});
     var items=today.length?today:list.slice(0,1);
-    if(!items.length)return;
+    if(!items.length){box.style.display="none";return}
     var h='<div class="wk">'+(today.length?"\ud83d\udcc5 Aujourd'hui \u00b7 CLOC'ARENA":"\ud83d\udcc5 Prochain rdv CLOC'ARENA")+'</div>';
     items.forEach(function(s){
       var b=s.filles?'<span class="badge" style="background:#d94f8a">100% filles</span> ':'';
@@ -242,7 +242,21 @@ function loadToday(){
         '<div style="margin-top:6px">'+b+'</div></div>';
     });
     box.innerHTML=h;box.style.display="block";
-  }).catch(function(){});
+  }
+}
+function swr(url){
+  var o={cb:null,
+    then:function(cb){o.cb=cb;return o},
+    catch:function(fail){
+      var k="c:"+url,c=null;
+      try{c=JSON.parse(localStorage.getItem(k))}catch(e){}
+      if(c!==null&&c!==undefined){try{o.cb(c)}catch(e){}}
+      fetch(url).then(function(r){return r.json()}).then(function(d){
+        try{localStorage.setItem(k,JSON.stringify(d))}catch(e){}
+        o.cb(d);
+      }).catch(function(){if(c===null||c===undefined)fail()});
+    }};
+  return o;
 }
 function safeUrl(u){return /^https?:\/\//i.test(u||"")?u:""}
 function followCard(){
@@ -253,8 +267,8 @@ function followCard(){
 function newsFallback(){
   document.getElementById("actus").innerHTML=followCard();
 }
-function loadActus(){
-  fetch(PROG_URL+"?format=actus").then(function(r){return r.json()}).then(function(list){
+function renderActus(list){
+  {
     if(!list||!list.length){newsFallback();return}
     var h='<div class="wk" style="margin:18px 4px 6px">\ud83d\udce3 Derni\u00e8res infos</div>';
     list.forEach(function(a){
@@ -268,7 +282,7 @@ function loadActus(){
         '</div>';
     });
     document.getElementById("actus").innerHTML=h+followCard();
-  }).catch(newsFallback);
+  }
 }
 function evCard(e,done){
   var img=safeUrl(e.image),link=safeUrl(e.lien),b='';
@@ -286,7 +300,7 @@ function evCard(e,done){
 }
 function loadEvents(){
   var box=document.getElementById("evlist");
-  fetch(PROG_URL+"?format=events").then(function(r){return r.json()}).then(function(d){
+  swr(PROG_URL+"?format=events").then(function(d){
     var h="";
     [["encours","\ud83d\udfe2 En cours",false],["avenir","\ud83d\udcc5 \u00c0 venir",false],["termines","\u2705 Termin\u00e9s",true]].forEach(function(g){
       var l=d[g[0]]||[];
@@ -296,17 +310,22 @@ function loadEvents(){
     box.innerHTML=h||'<div class="card"><p class="mut">Aucun \u00e9v\u00e9nement pour le moment.</p></div>';
   }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les \u00e9v\u00e9nements pour le moment.</p></div>'});
 }
-function loadAnnonce(){
-  fetch(PROG_URL+"?format=annonce").then(function(r){return r.json()}).then(function(a){
-    if(!a||!a.message)return;
+function renderAnnonce(a){
+  {
+    if(!a||!a.message){document.getElementById("annonce").innerHTML="";return}
     var link=safeUrl(a.lien);
     document.getElementById("annonce").innerHTML='<div class="alert'+(a.type==="urgent"?' urgent':'')+'">'+(a.type==="urgent"?'\u26a0\ufe0f ':'\ud83d\udce2 ')+esc(a.message)+
       (link?'<br><a href="'+esc(link)+'" target="_blank" rel="noopener">En savoir plus \u2192</a>':'')+'</div>';
-  }).catch(function(){});
+  }
+}
+function loadHome(){
+  swr(PROG_URL+"?format=accueil").then(function(d){
+    renderAnnonce(d.annonce);renderToday(d.seances||[]);renderActus(d.actus||[]);
+  }).catch(newsFallback);
 }
 function loadResultats(){
   var box=document.getElementById("reslist");
-  fetch(FICHE_URL+"?format=resultats").then(function(r){return r.json()}).then(function(days){
+  swr(FICHE_URL+"?format=resultats").then(function(days){
     if(!days.length){box.innerHTML='<div class="card"><p class="mut">Pas encore de r\u00e9sultats.</p></div>';return}
     box.innerHTML=days.map(function(d){
       return '<div class="wk" style="margin:18px 4px 6px">\ud83d\udcc5 '+esc(d.date)+'</div><div class="card">'+d.matchs.map(function(m){
@@ -320,7 +339,7 @@ function loadResultats(){
 }
 function loadPalmares(){
   var box=document.getElementById("pallist");
-  fetch(FICHE_URL+"?format=palmares").then(function(r){return r.json()}).then(function(cats){
+  swr(FICHE_URL+"?format=palmares").then(function(cats){
     if(!cats.length){box.innerHTML='<div class="card"><p class="mut">Pas encore de classement.</p></div>';return}
     var med=["\ud83e\udd47","\ud83e\udd48","\ud83e\udd49"];
     box.innerHTML='<p class="mut" style="margin:10px 4px">Leaders actuels de chaque classement.</p>'+cats.map(function(c){
@@ -339,7 +358,7 @@ function waLink(n,t){return "https://wa.me/"+encodeURIComponent(n)+"?text="+enco
 function val(id){return document.getElementById(id).value}
 function loadVente(){
   var box=document.getElementById("vlist");
-  fetch(PROG_URL+"?format=vente").then(function(r){return r.json()}).then(function(l){
+  swr(PROG_URL+"?format=vente").then(function(l){
     if(!l||!l.length){box.innerHTML='<div class="card"><p class="mut">Aucun article \u00e0 vendre pour le moment.</p></div>';return}
     box.innerHTML=l.map(function(v){
       var img=safeUrl(v.image);
@@ -353,7 +372,7 @@ function loadVente(){
 }
 function loadPartenaires(){
   var box=document.getElementById("plist");
-  fetch(PROG_URL+"?format=partenaires").then(function(r){return r.json()}).then(function(l){
+  swr(PROG_URL+"?format=partenaires").then(function(l){
     if(!l||!l.length){box.innerHTML='<div class="card"><p class="mut">Aucune demande pour le moment. Sois le premier \u00e0 en d\u00e9poser une !</p></div>';return}
     box.innerHTML='<div class="wk" style="margin:18px 4px 6px">\ud83e\udd1d Ils cherchent un partenaire</div>'+l.map(function(p){
       var c=NIVEAUX.filter(function(x){return x[0]===p.niveau})[0];
@@ -379,9 +398,7 @@ function sendPart(ev){
   return false;
 }
 show("home");
-loadAnnonce();
-loadToday();
-loadActus();
+loadHome();
 </script>
 </body>
 </html>
