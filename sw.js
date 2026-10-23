@@ -1,7 +1,24 @@
-// Service worker minimal : rend l'appli installable, sans mettre de pages en cache
-// (les infos affichées sont toujours à jour).
-self.addEventListener('install', function(){ self.skipWaiting(); });
-self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
-self.addEventListener('fetch', function(e){
-  e.respondWith(fetch(e.request));
+// Service worker : les infos viennent toujours du réseau pour rester à jour.
+// La page d'accueil est gardée en réserve pour que l'appli s'ouvre même sans connexion.
+var CACHE='cloca-v2';
+var SHELL=['./','index.html','confidentialite.html','manifest.webmanifest','icon-192.png','icon-512.png','logo.png'];
+self.addEventListener('install',function(e){
+  e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(SHELL)}).catch(function(){}));
+  self.skipWaiting();
+});
+self.addEventListener('activate',function(e){
+  e.waitUntil(caches.keys().then(function(ks){
+    return Promise.all(ks.filter(function(k){return k!==CACHE}).map(function(k){return caches.delete(k)}));
+  }).then(function(){return self.clients.claim()}));
+});
+self.addEventListener('fetch',function(e){
+  var r=e.request;
+  if(r.method!=='GET'||new URL(r.url).origin!==self.location.origin){return}
+  e.respondWith(fetch(r).then(function(res){
+    var copy=res.clone();
+    if(res.ok){caches.open(CACHE).then(function(c){c.put(r,copy)})}
+    return res;
+  }).catch(function(){
+    return caches.match(r).then(function(m){return m||caches.match('index.html')});
+  }));
 });
