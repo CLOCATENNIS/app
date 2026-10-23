@@ -642,11 +642,11 @@ function lireScore(txt) {
 }
 function gesSaisir() {
   var box = $('ges-main');
-  if (!G.form) G.form = { date: isoJour(new Date()), format: 'FLASH MATCH', niv: '', e1: ['', ''], e2: ['', ''], inv: {}, score: '' };
+  if (!G.form) G.form = { date: isoJour(new Date()), format: 'FLASH MATCH', niv: [], e1: ['', ''], e2: ['', ''], inv: {}, score: '' };
   var F = G.form, fmt = S.formats.filter(function (x) { return x.code === F.format; })[0] || S.formats[0], dbl = fmt && fmt.double;
-  var liste = G.joueurs.filter(function (j) { return !F.niv || j.niveau_arena === F.niv; });
+  var liste = G.joueurs.filter(function (j) { return !F.niv.length || F.niv.indexOf(j.niveau_arena) >= 0; });
   var options = function (val) {
-    return '<option value="">Choisir…</option>' + liste.map(function (j) { return '<option value="' + j.id + '"' + (j.id === val ? ' selected' : '') + '>' + esc(j.prenom + ' ' + j.nom) + (F.niv ? '' : ' · ' + esc(j.niveau_arena || '')) + '</option>'; }).join('');
+    return '<option value="">Choisir…</option>' + liste.map(function (j) { return '<option value="' + j.id + '"' + (j.id === val ? ' selected' : '') + '>' + esc(j.prenom + ' ' + j.nom) + (F.niv.length === 1 ? '' : ' · ' + esc(j.niveau_arena || '')) + '</option>'; }).join('');
   };
   var ligne = function (eq, k) {
     var v = F['e' + eq][k];
@@ -657,7 +657,8 @@ function gesSaisir() {
   var nomEq = function (eq) { return (dbl ? [0, 1] : [0]).map(function (k) { var j = G.joueurs.filter(function (x) { return x.id === F['e' + eq][k]; })[0]; return j ? j.prenom : '?'; }).join(' / '); };
   box.innerHTML = '<section class="card stack" style="gap:10px"><label class="f">Date<input class="f" type="date" id="g-date" value="' + F.date + '"></label>' +
     '<span class="eyebrow">Format</span><div class="chips" style="flex-wrap:wrap">' + S.formats.map(function (x) { return '<button class="chip ' + (x.code === F.format ? 'on' : '') + '" data-fmt="' + esc(x.code) + '">' + esc(x.libelle) + ' · ' + (+x.points_victoire) + '/' + (+x.points_defaite) + '</button>'; }).join('') + '</div></section>' +
-    '<section class="card stack" style="gap:10px"><span class="eyebrow">Joueurs</span><div class="chips"><button class="chip ' + (!F.niv ? 'on' : '') + '" data-gniv="">Tous niveaux</button>' + NIVEAUX.map(function (n) { return '<button class="chip ' + (F.niv === n ? 'on' : '') + '" data-gniv="' + n + '">' + n + '</button>'; }).join('') + '</div>' +
+    '<section class="card stack" style="gap:10px"><span class="eyebrow">Joueurs</span><div class="chips"><button class="chip ' + (!F.niv.length ? 'on' : '') + '" data-gniv="">Tous niveaux</button>' + NIVEAUX.map(function (n) { return '<button class="chip ' + (F.niv.indexOf(n) >= 0 ? 'on' : '') + '" data-gniv="' + n + '">' + n + '</button>'; }).join('') + '</div>' +
+    '<span class="mut xs">Touche plusieurs niveaux pour un regroupement (ex. Violet + Rouge).</span>' +
     '<b class="small">' + (dbl ? 'Équipe 1' : 'Joueur 1') + '</b>' + ligne(1, 0) + (dbl ? ligne(1, 1) : '') +
     '<b class="small">' + (dbl ? 'Équipe 2' : 'Joueur 2') + '</b>' + ligne(2, 0) + (dbl ? ligne(2, 1) : '') +
     '<label class="f">Score (côté ' + (dbl ? 'équipe 1' : 'joueur 1') + ', sets séparés par un espace)<input class="f" id="g-score" inputmode="numeric" placeholder="7-4  ou  6-3 4-6 10-8" value="' + esc(F.score) + '"></label>' +
@@ -666,7 +667,7 @@ function gesSaisir() {
     (S.isDir ? '' : '<p class="mut xs" style="margin:0">Le score sera ajouté au classement après validation par la direction sportive.</p>') + '</section>';
   $('g-date').onchange = function () { F.date = this.value; };
   Array.prototype.forEach.call(box.querySelectorAll('[data-fmt]'), function (b) { b.onclick = function () { F.format = b.dataset.fmt; gesSaisir(); }; });
-  Array.prototype.forEach.call(box.querySelectorAll('[data-gniv]'), function (b) { b.onclick = function () { F.niv = b.dataset.gniv; gesSaisir(); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-gniv]'), function (b) { b.onclick = function () { var n = b.dataset.gniv, i = F.niv.indexOf(n); if (!n) F.niv = []; else if (i >= 0) F.niv.splice(i, 1); else F.niv.push(n); gesSaisir(); }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-j]'), function (s) { s.onchange = function () { var x = s.dataset.j.split('-'); F['e' + x[0]][+x[1]] = s.value; gesSaisir(); }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-inv]'), function (c) { c.onchange = function () { F.inv[c.dataset.inv] = c.checked; }; });
   $('g-score').oninput = function () {
