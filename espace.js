@@ -23,7 +23,7 @@ window.espaceEnvoyer=function(){
   $("m_send").disabled=true; msg("Envoi en cours…");
   c.auth.signInWithOtp({email:EMAIL,options:{emailRedirectTo:location.origin+location.pathname}}).then(function(r){
     $("m_send").disabled=false;
-    if(r.error){msg(r.error.status===429?"Trop de demandes : attends une minute puis réessaie.":"L'envoi a échoué : "+r.error.message,true);return}
+    if(r.error){msg(r.error.status===429?"Trop de demandes d'affilée : attends quelques minutes, ou utilise le dernier mail reçu.":"L'envoi a échoué : "+r.error.message,true);return}
     $("m_step1").style.display="none"; $("m_step2").style.display="block";
     msg("Un mail vient de partir vers "+EMAIL+". Tape le code reçu, ou clique sur le lien du mail.");
   });
