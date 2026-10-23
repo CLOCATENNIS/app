@@ -7,7 +7,7 @@
 var SUPA_URL = 'https://ccvfdsriogqerdcopuuv.supabase.co';
 var SUPA_KEY = 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM';
 var LEGACY_URL = 'https://script.google.com/macros/s/AKfycbw1SHjhfBL1mLDN9weJ1dJOR0RkSIoMF7TPUhIv5A20_Pkt0LJpvz2KdeWQALGjPRGz/exec'; // petites annonces (encore sur Google)
-var ADOC_URL = 'https://adoc.app.fft.fr/adoc/';
+var ADOC_URL = 'https://tenup.fft.fr/club/57780019/reservations';
 var INSTAGRAM_URL = 'https://www.instagram.com/cloc.acheres.tennis?cplk=Mnd4OTkwdWFjdGZz';
 var FACEBOOK_URL = 'https://www.facebook.com/ClocaTennis/';
 var WA_CLUB = '33662488087';
@@ -223,7 +223,7 @@ function pageAccueil() {
   h += '<div class="grid2">' +
     '<a class="tile" href="#/arena">' + ic('trophy', 24) + '<b>CLOC\'ARENA</b><span class="mut small">' + arenaTxt + '</span></a>' +
     '<a class="tile" href="#/club/evenements">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
-    '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur ADOC</span></a>' +
+    '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
     '<a class="tile" href="#/club">' + ic('club', 24) + '<b>Vie du club</b><span class="mut small">Actus, annonces, infos</span></a></div>';
 
   if (!S.user) h += '<section class="card stack" style="gap:10px"><b>Ton espace personnel</b><span class="mut small">Connecte-toi avec l\'adresse mail donnée au club pour voir ton agenda, tes inscriptions et la fiche de tes enfants.</span><a class="btn" href="#/profil">Me connecter</a></section>';
