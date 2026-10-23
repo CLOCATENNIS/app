@@ -63,7 +63,7 @@ function charger(c,user){
   Promise.all([
     c.from("comptes").select("foyer_id,personne_id,email").eq("user_id",user.id).maybeSingle(),
     c.from("personnes").select("id,prenom,nom,profil,niveau_arena,groupe_membres(groupe_id,groupes(nom,couleur,type))").order("prenom"),
-    c.from("evenements").select("id,titre,description,debut,fin,lieu,encadrant,statut,groupe_id,inscription_ouverte,places_max,groupes(nom,couleur)").gte("debut",debut.toISOString()).lte("debut",fin.toISOString()).order("debut"),
+    c.from("evenements").select("id,titre,description,debut,fin,lieu,encadrant,statut,groupe_id,inscription_ouverte,places_max,groupes!evenements_groupe_id_fkey(nom,couleur)").gte("debut",debut.toISOString()).lte("debut",fin.toISOString()).order("debut"),
     c.from("creneaux").select("id,groupe_id,jour_semaine,heure_debut,heure_fin,lieu,encadrant,du,au,groupes(nom,couleur)"),
     c.from("inscriptions").select("evenement_id,personne_id,statut,paye"),
     c.from("responsabilites").select("role,groupe_id").eq("user_id",user.id)

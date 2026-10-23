@@ -82,7 +82,7 @@ function chargerPublic() {
   var depuis = new Date(); depuis.setDate(depuis.getDate() - 60);
   return Promise.all([
     q(sb.from('publications').select('*').order('epingle', { ascending: false }).order('publie_le', { ascending: false }).limit(20)).catch(function () { return []; }),
-    q(sb.from('evenements').select('*, groupes(nom,couleur), evenement_groupes(groupe_id, groupes(nom,couleur))').gte('debut', depuis.toISOString()).order('debut')).catch(function () { return []; })
+    q(sb.from('evenements').select('*, groupes!evenements_groupe_id_fkey(nom,couleur), evenement_groupes(groupe_id, groupes(nom,couleur))').gte('debut', depuis.toISOString()).order('debut')).catch(function () { return []; })
   ]).then(function (r) { S.pubs = r[0]; S.evts = r[1]; });
 }
 
