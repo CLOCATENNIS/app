@@ -85,6 +85,7 @@ nav[hidden]{display:none}
 <section id="home">
 <div id="annonce"></div>
 <div id="today" class="card" style="display:none"></div>
+<button class="tile" onclick="show('moi')">👤 Mon espace<small id="m_tile_sub">Se connecter · agenda, inscriptions</small></button>
 <button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, fiche joueur</small></button>
 <a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur ADOC</small></a>
 <button class="tile" onclick="show('evt')">🎉 Événements<small>En cours, à venir, passés</small></button>
@@ -104,6 +105,16 @@ nav[hidden]{display:none}
 <section id="clas"><div id="clist"></div><p class="mut" id="cmsg"></p><button class="tile" onclick="show('arena')">← Retour</button></section>
 <section id="fiche"><div class="card"><div class="wk">Fiche joueur</div><p class="mut">Bientôt disponible.</p></div><button class="tile" onclick="show('arena')">← Retour</button></section>
 <section id="prog"><button class="tile" onclick="show('arena')">← Retour</button><p class="mut">Choisis ton niveau :</p><div id="lv" class="chips"></div><button class="tile" onclick="openProg()">📅 Voir la programmation</button><button class="tile" onclick="openCal()">🔔 Ajouter mon niveau à mon agenda</button><button class="tile" onclick="openCal('Miss Cup')">👧 Ajouter l'agenda Miss Cup</button><div id="list"></div></section>
+<section id="moi"><button class="tile" onclick="show('home')">← Accueil</button>
+<div id="m_login"><div class="card fm"><div class="wk">Connexion</div><p class="mut" style="margin:4px 0 0">Entre l'adresse mail que tu as donnée au club. Tu recevras un code, sans mot de passe à retenir.</p>
+<div id="m_step1"><label for="m_email">Adresse mail</label><input id="m_email" type="email" autocomplete="email" inputmode="email" placeholder="prenom.nom@exemple.fr" onkeydown="if(event.key==='Enter')espaceEnvoyer()">
+<button class="btn" id="m_send" style="width:100%;border:0;font:inherit;font-weight:600;font-size:16px" onclick="espaceEnvoyer()">Recevoir mon code</button></div>
+<div id="m_step2" style="display:none"><label for="m_code">Code reçu par mail</label><input id="m_code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')espaceValider()">
+<button class="btn" id="m_ok" style="width:100%;border:0;font:inherit;font-weight:600;font-size:16px" onclick="espaceValider()">Me connecter</button>
+<button class="tile" style="font-size:15px;padding:12px" onclick="espaceRetour()">← Changer d'adresse</button></div>
+<p class="mut" id="m_msg" style="margin:8px 0 0"></p></div></div>
+<div id="m_espace" style="display:none"><div id="m_contenu"></div><button class="tile" style="font-size:15px" onclick="espaceDeconnexion()">Se déconnecter</button></div>
+</section>
 <section id="evt"><button class="tile" onclick="show('home')">← Accueil</button><div id="evlist"><p class="mut">Chargement…</p></div></section>
 <section id="infos" class="info">
 <button class="tile" onclick="show('home')">← Accueil</button>
@@ -208,7 +219,7 @@ var CLASSEMENTS=[["Général","https://docs.google.com/spreadsheets/d/e/2PACX-1v
 CLASSEMENTS.forEach(function(c){var b=document.createElement("button");b.className="tile";b.textContent=c[0];
   b.onclick=function(){if(c[1]){window.open(c[1],"_blank")}else{document.getElementById("cmsg").textContent="Classement "+c[0]+" bientôt disponible."}};
   document.getElementById("clist").appendChild(b)});
-var ALL=["home","arena","clas","prog","fiche","evt","infos","res","pal","ann","vente","part","social"];
+var ALL=["moi","home","arena","clas","prog","fiche","evt","infos","res","pal","ann","vente","part","social"];
 var nav=document.getElementById("nav");
 function show(id){
   ALL.forEach(function(s){document.getElementById(s).classList.toggle("on",s===id)});
@@ -218,8 +229,9 @@ function show(id){
   if(id==="vente")loadVente();
   if(id==="part")loadPartenaires();
   if(id==="pal")loadPalmares();
+  if(id==="moi"&&window.espaceOuvrir)espaceOuvrir();
   window.scrollTo(0,0);
-  document.getElementById("sub").textContent=id==="home"?"Bienvenue au club":id==="social"?"Nos réseaux":id==="evt"?"Événements du club":id==="infos"?"Infos pratiques":id==="ann"?"Petites annonces":id==="vente"?"Vente de matériel":id==="part"?"Recherche de partenaire":id==="res"?"CLOC'ARENA · résultats récents":id==="pal"?"CLOC'ARENA · palmarès":"CLOC'ARENA · le tournoi des jeunes";
+  document.getElementById("sub").textContent=id==="home"?"Bienvenue au club":id==="moi"?"Mon espace":id==="social"?"Nos réseaux":id==="evt"?"Événements du club":id==="infos"?"Infos pratiques":id==="ann"?"Petites annonces":id==="vente"?"Vente de matériel":id==="part"?"Recherche de partenaire":id==="res"?"CLOC'ARENA · résultats récents":id==="pal"?"CLOC'ARENA · palmarès":"CLOC'ARENA · le tournoi des jeunes";
   Array.prototype.forEach.call(nav.children,function(b){b.classList.toggle("on",b.dataset.id===id)});
 }
 tabs.forEach(function(t){var b=document.createElement("button");b.textContent=t[1];b.dataset.id=t[0];b.onclick=function(){show(t[0])};nav.appendChild(b)});
@@ -401,5 +413,7 @@ function sendPart(ev){
 show("home");
 loadHome();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="espace.js"></script>
 </body>
 </html>

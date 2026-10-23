@@ -1,7 +1,7 @@
 // Service worker : les infos viennent toujours du réseau pour rester à jour.
 // La page d'accueil est gardée en réserve pour que l'appli s'ouvre même sans connexion.
-var CACHE='cloca-v2';
-var SHELL=['./','index.html','confidentialite.html','manifest.webmanifest','icon-192.png','icon-512.png','logo.png'];
+var CACHE='cloca-v3';
+var SHELL=['./','index.html','confidentialite.html','espace.js','manifest.webmanifest','icon-192.png','icon-512.png','logo.png'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(SHELL)}).catch(function(){}));
   self.skipWaiting();
