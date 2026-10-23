@@ -67,6 +67,7 @@ var IC = {
   dl: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+  racket: '<ellipse cx="14" cy="9" rx="6" ry="7" transform="rotate(35 14 9)"/><path d="M9.5 13.5L3 20M11 6l6 6M9 9l6 6M12 4l4 8"/>',
   people: '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M15 20a4.5 4.5 0 0 1 6-4.2"/>'
 };
 function ic(n, size, color) {
@@ -224,7 +225,7 @@ function pageAccueil() {
     '<a class="tile" href="#/arena">' + ic('trophy', 24) + '<b>CLOC\'ARENA</b><span class="mut small">' + arenaTxt + '</span></a>' +
     '<a class="tile" href="#/club/evenements">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
     '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
-    '<a class="tile" href="#/club">' + ic('club', 24) + '<b>Vie du club</b><span class="mut small">Actus, annonces, infos</span></a></div>';
+    '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
 
   if (!S.user) h += '<section class="card stack" style="gap:10px"><b>Ton espace personnel</b><span class="mut small">Connecte-toi avec l\'adresse mail donnée au club pour voir ton agenda, tes inscriptions et la fiche de tes enfants.</span><a class="btn" href="#/profil">Me connecter</a></section>';
   else if (!S.pers.length && !S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
@@ -567,10 +568,13 @@ function pageProfil() {
         (p.niveau_arena ? '<a href="#/fiche/' + p.id + '" class="small" style="display:block;padding:0 0 10px 18px;font-weight:600">Voir la fiche CLOC\'ARENA →</a>' : '');
     }).join('') + '</section>';
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
-  if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', coach: 'Coach', responsable: 'Responsable' }[r.role]; }).join(', ') + '</span><a class="btn navy" href="#/gestion">' + ic('tool', 18, '#fff') + 'Espace gestion</a></section>';
+  if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', coach: 'Coach', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
+    (S.isStaff || S.gere.length ? '<a class="btn navy" href="#/gestion">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
+    (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
+  h += blocPush();
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
     '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="../confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
-  setTimeout(function () { $('logout').onclick = function () { sb.auth.signOut().then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
+  setTimeout(function () { lierPush(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
 function lierLogin() {
@@ -719,6 +723,293 @@ function gesListe(statut) {
   }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les matchs.</section>'; });
 }
 
+// ---------- Cordage ----------
+var VAPID_PUBLIC = 'BMmaOXjktnfundELUQ-Cme51cT_QYxRu43l2dw8ges6gkNZkjsXFouJn61Z2Ln3bdlyTF6znQ_Hg9iFHBP1yBwU';
+var C = null; // {file, dem, cordages, tarifs}
+var CF = null; // brouillon du formulaire de dépôt
+function euros(n) { return n == null ? '' : String(+n).replace('.', ',') + ' €'; }
+function telWa(t) {
+  var d = String(t || '').replace(/[^\d+]/g, '');
+  if (d.indexOf('+') === 0) d = d.slice(1); else if (d.indexOf('00') === 0) d = d.slice(2); else if (/^0\d{9}$/.test(d)) d = '33' + d.slice(1);
+  return d.length >= 10 ? d : '';
+}
+function chargerCordage() {
+  if (!S.user) return Promise.resolve(C = null);
+  return Promise.all([
+    q(sb.rpc('cordage_file')),
+    q(sb.from('cordage_demandes').select('*, cordages(nom)').in('statut', ['attente', 'fini', 'recupere']).order('created_at')),
+    q(sb.from('cordages').select('*').order('ordre').order('nom')),
+    q(sb.from('cordage_tarifs').select('*'))
+  ]).then(function (r) { C = { file: r[0] || [], dem: r[1] || [], cordages: r[2] || [], tarifs: r[3] || [] }; return C; });
+}
+function estCordeur() { return S.roles.some(function (x) { return (x.role === 'cordeur' || x.role === 'direction') && !x.groupe_id; }); }
+function aMoi(d) { return d.cree_par === S.user.id || S.pers.some(function (p) { return p.id === d.personne_id; }); }
+function tarifPose() { var t = C && C.tarifs.filter(function (x) { return x.code === 'pose'; })[0]; return t ? +t.prix : null; }
+function resumeCordage() {
+  if (!C) return 'Déposer une raquette';
+  var mien = C.file.filter(function (x) { return x.a_moi; });
+  var prete = mien.filter(function (x) { return x.statut === 'fini'; })[0];
+  if (prete) return '<b style="color:var(--ok)">Ta raquette est prête !</b>';
+  var att = mien.filter(function (x) { return x.statut === 'attente'; })[0];
+  if (att) return 'En attente · ' + att.rang + (att.rang === 1 ? 're' : 'e') + ' dans la file';
+  if (estCordeur()) { var n = C.file.filter(function (x) { return x.statut === 'attente'; }).length; return n + ' raquette' + (n > 1 ? 's' : '') + ' à corder'; }
+  return 'Déposer une raquette';
+}
+
+function pageCordage(sous) {
+  if (sous) S.cordTab = sous;
+  var cordeur = S.user && estCordeur();
+  var tabsC = [['deposer', 'Déposer'], ['attente', cordeur ? 'Attente' : 'En attente'], ['pretes', 'Prêtes']];
+  if (cordeur) tabsC.push(['reglages', 'Réglages']);
+  if (!S.cordTab || (S.cordTab === 'reglages' && !cordeur)) S.cordTab = 'deposer';
+  var h = '<div class="darkhead"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) + '<div class="kicker" style="margin-top:4px">ATELIER CORDAGE' + (cordeur ? ' · CORDEUR' : '') + '</div><h1>Cordage</h1>' +
+    '<div class="seg" style="margin-top:14px">' + tabsC.map(function (t) {
+      var n = C ? C.file.filter(function (x) { return x.statut === (t[0] === 'attente' ? 'attente' : 'fini'); }).length : 0;
+      return '<button style="white-space:nowrap" data-cotab="' + t[0] + '" class="' + (S.cordTab === t[0] ? 'on' : '') + '">' + t[1] + ((t[0] === 'attente' || t[0] === 'pretes') && n ? ' · ' + n : '') + '</button>';
+    }).join('') + '</div></div></div><main id="cord-main"><div class="skel"></div></main>';
+  setTimeout(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-cotab]'), function (b) { b.onclick = function () { go('#/cordage/' + b.dataset.cotab); }; });
+    var box = $('cord-main');
+    if (!S.user) { box.innerHTML = '<section class="card stack" style="gap:10px"><b>Connecte-toi pour déposer ta raquette</b><span class="mut small">Tu suis ensuite où elle en est, et tu es prévenu dès qu\'elle est cordée.</span><a class="btn" href="#/profil">Me connecter</a></section>'; return; }
+    chargerCordage().then(function () {
+      if (S.cordTab === 'deposer') cordDeposer(box);
+      else if (S.cordTab === 'attente') cordListe(box, 'attente');
+      else if (S.cordTab === 'pretes') cordListe(box, 'fini');
+      else cordReglages(box);
+    }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger le cordage pour le moment.</section>'; });
+  });
+  return h;
+}
+
+function cordDeposer(box) {
+  var cordeur = estCordeur();
+  if (!S.pers.length && !cordeur) { box.innerHTML = '<section class="card empty">Ton adresse n\'est rattachée à aucun adhérent. Contacte le club.</section>'; return; }
+  if (!CF) {
+    var dernier = C.dem.filter(function (d) { return d.cree_par === S.user.id && d.telephone; }).slice(-1)[0];
+    CF = { qui: S.pers.length === 1 ? S.pers[0].id : '', nomExt: '', raquette: '', fourni: 'club', cordage: '', perso: '', tension: '', avant: '', tel: dernier ? dernier.telephone : '', note: '' };
+  }
+  var F = CF, actifs = C.cordages.filter(function (c) { return c.actif; });
+  var prix = F.fourni === 'club' ? (actifs.filter(function (c) { return c.id === F.cordage; })[0] || {}).prix : tarifPose();
+  var pick = function (attr, val, on, label, extra) { return '<button type="button" class="pick' + (on ? ' on' : '') + '" data-' + attr + '="' + esc(val) + '" style="width:100%;text-align:left;background:' + (on ? 'var(--sun)' : 'var(--card)') + '"><span style="flex:1">' + label + '</span>' + (extra || '') + '</button>'; };
+  var h = '<section class="card stack" style="gap:6px"><b>Comment ça marche</b><span class="mut small">1. Remplis ce formulaire. 2. Laisse ta raquette au club house avec une étiquette à ton nom. 3. Tu reçois une notification dès qu\'elle est cordée, et tu règles en la récupérant.</span></section>' +
+    '<section class="card stack" style="gap:10px"><span class="eyebrow">Pour qui ?</span>' +
+    S.pers.map(function (p) { return pick('cqui', p.id, F.qui === p.id, '<span class="dot" style="background:' + S.couleur[p.id] + ';margin-right:8px"></span>' + esc(p.prenom + ' ' + p.nom)); }).join('') +
+    (cordeur ? pick('cqui', 'ext', F.qui === 'ext', 'Autre joueur (saisi par le cordeur)') + (F.qui === 'ext' ? '<label class="f">Nom du joueur<input class="f" data-cf="nomExt" value="' + esc(F.nomExt) + '" placeholder="Prénom Nom"></label>' : '') : '') +
+    '<label class="f">Raquette (facultatif)<input class="f" data-cf="raquette" value="' + esc(F.raquette) + '" placeholder="Ex. Babolat Pure Drive bleue"></label></section>' +
+    '<section class="card stack" style="gap:10px"><span class="eyebrow">Cordage</span><div class="grid2">' +
+    pick('cfour', 'club', F.fourni === 'club', 'Fourni par le club') + pick('cfour', 'joueur', F.fourni === 'joueur', 'J\'apporte le mien') + '</div>' +
+    (F.fourni === 'club'
+      ? (actifs.length ? actifs.map(function (c) { return pick('ccord', c.id, F.cordage === c.id, esc(c.nom), '<b>' + euros(c.prix) + '</b>'); }).join('') : '<span class="mut small">Aucun cordage du club disponible pour le moment.</span>')
+      : '<label class="f">Quel cordage ?<input class="f" data-cf="perso" value="' + esc(F.perso) + '" placeholder="Ex. Luxilon Alu Power 1.25"></label><span class="mut xs">Pense à le laisser avec la raquette. Pose seule : ' + euros(tarifPose()) + '.</span>') +
+    '<label class="f">Tension (facultatif)<input class="f" data-cf="tension" value="' + esc(F.tension) + '" placeholder="Ex. 24 kg / 23 kg, ou « comme d\'habitude »"></label></section>' +
+    '<section class="card stack" style="gap:10px"><label class="f">J\'en ai besoin avant le (facultatif)<input class="f" type="date" data-cf="avant" min="' + isoJour(new Date()) + '" value="' + esc(F.avant) + '"></label>' +
+    '<label class="f">Téléphone (pour te prévenir)<input class="f" type="tel" inputmode="tel" autocomplete="tel" data-cf="tel" value="' + esc(F.tel) + '" placeholder="06 12 34 56 78"></label>' +
+    '<label class="f">Un mot pour le cordeur (facultatif)<textarea class="f" data-cf="note" placeholder="Ex. garder le même grip">' + esc(F.note) + '</textarea></label></section>' +
+    '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span>Prix</span><b class="disp" style="font-size:28px">' + (prix != null ? euros(prix) : '—') + '</b></div>' +
+    '<span class="mut xs">À régler au club house en récupérant la raquette.</span><button class="btn" id="cf-go">Déposer ma raquette</button></section>';
+  box.innerHTML = h;
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cf]'), function (i) { i.oninput = function () { F[i.dataset.cf] = i.value; }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cqui]'), function (b) { b.onclick = function () { F.qui = b.dataset.cqui; cordDeposer(box); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cfour]'), function (b) { b.onclick = function () { F.fourni = b.dataset.cfour; cordDeposer(box); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-ccord]'), function (b) { b.onclick = function () { F.cordage = b.dataset.ccord; cordDeposer(box); }; });
+  $('cf-go').onclick = function () {
+    if (!F.qui) return toast('Choisis pour qui');
+    if (F.qui === 'ext' && !F.nomExt.trim()) return toast('Indique le nom du joueur');
+    if (F.fourni === 'club' && !F.cordage) return toast('Choisis un cordage');
+    if (F.fourni === 'joueur' && !F.perso.trim()) return toast('Indique ton cordage');
+    if (!telWa(F.tel)) return toast('Vérifie le numéro de téléphone');
+    var row = {
+      personne_id: F.qui === 'ext' ? null : F.qui, nom: F.qui === 'ext' ? F.nomExt.trim() : '-', telephone: F.tel.trim(), raquette: F.raquette.trim() || null,
+      fourni_par: F.fourni, cordage_id: F.fourni === 'club' ? F.cordage : null, cordage_perso: F.fourni === 'joueur' ? F.perso.trim() : null,
+      tension: F.tension.trim() || null, besoin_avant: F.avant || null, note: F.note.trim() || null
+    };
+    $('cf-go').disabled = true;
+    q(sb.from('cordage_demandes').insert(row)).then(function () {
+      CF = null;
+      return chargerCordage();
+    }).then(function () {
+      var att = C.file.filter(function (x) { return x.a_moi && x.statut === 'attente'; }).slice(-1)[0];
+      box.innerHTML = '<section class="card stack" style="gap:10px;text-align:center"><span style="font-size:40px">🎾</span><b style="font-size:18px">Demande enregistrée</b>' +
+        '<span class="mut">Laisse maintenant ta raquette au club house, avec une étiquette à ton nom.' + (att ? ' Tu es ' + att.rang + (att.rang === 1 ? 'r' : '') + 'e dans la file.' : '') + '</span></section>' +
+        blocPush() + '<a class="btn line" href="#/cordage/attente">Voir la file d\'attente</a>';
+      lierPush();
+    }).catch(function () { toast('Envoi impossible, réessaie'); $('cf-go').disabled = false; });
+  };
+}
+
+function cordListe(box, statut) {
+  var cordeur = estCordeur(), now = debutJour(new Date());
+  var h = '';
+  if (cordeur) {
+    var l = C.dem.filter(function (d) { return statut === 'attente' ? d.statut === 'attente' : (d.statut === 'fini' || (d.statut === 'recupere' && !d.paye)); });
+    if (statut === 'attente') l.sort(function (a, b) { return (a.besoin_avant || '9999') < (b.besoin_avant || '9999') ? -1 : (a.besoin_avant || '9999') > (b.besoin_avant || '9999') ? 1 : (a.created_at < b.created_at ? -1 : 1); });
+    if (!l.length) h += '<section class="card empty">' + (statut === 'attente' ? 'Aucune raquette en attente. 👌' : 'Aucune raquette à récupérer ou à régler.') + '</section>';
+    h += l.map(function (d) {
+      var urgent = d.besoin_avant && (new Date(d.besoin_avant + 'T12:00:00') - now) < 3 * 864e5;
+      var wa = telWa(d.telephone);
+      var info = [
+        d.raquette ? esc(d.raquette) : '',
+        d.fourni_par === 'club' ? 'Cordage club : ' + esc(d.cordages ? d.cordages.nom : '?') : 'Cordage perso : ' + esc(d.cordage_perso || '?'),
+        d.tension ? 'Tension : ' + esc(d.tension) : ''
+      ].filter(Boolean).join('<br>');
+      var etat = statut === 'attente'
+        ? (d.besoin_avant ? '<span class="badge" style="background:' + (urgent ? 'var(--ko)' : 'var(--soft)') + ';color:' + (urgent ? '#fff' : 'var(--tx)') + '">Avant le ' + esc(fmtCourt(new Date(d.besoin_avant + 'T12:00:00'))) + '</span>' : '')
+        : '<span class="badge" style="background:' + (d.statut === 'recupere' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (d.statut === 'recupere' ? 'var(--tx)' : '#fff') + '">' + (d.statut === 'recupere' ? 'Récupérée' : 'À récupérer') + '</span> <span class="badge" style="background:' + (d.paye ? 'var(--soft)' : 'var(--ac)') + ';color:' + (d.paye ? 'var(--tx)' : '#fff') + '">' + (d.paye ? 'Réglée' : 'À régler') + '</span>';
+      var msg = 'Bonjour ! C\'est le club CLOCA Tennis 🎾 La raquette de ' + d.nom.split(' ')[0] + ' est cordée et t\'attend au club house' + (d.prix != null ? ' (' + euros(d.prix) + ')' : '') + '. À bientôt !';
+      var actions = statut === 'attente'
+        ? '<div class="grid2"><button class="btn line" data-csup="' + d.id + '">Supprimer</button><button class="btn" data-cfini="' + d.id + '">Prête ✓</button></div>'
+        : '<div class="grid2">' + (d.statut === 'fini' ? '<button class="btn line" data-crec="' + d.id + '">Récupérée</button>' : '<span></span>') + (!d.paye ? '<button class="btn navy" data-cpaye="' + d.id + '">Réglée</button>' : '') + '</div>' +
+          '<div class="grid2">' + (wa ? '<a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/' + wa + '?text=' + encodeURIComponent(msg) + '">WhatsApp</a>' : '<span></span>') +
+          (d.personne_id ? '<button class="btn ghost" data-cnotif="' + d.id + '">' + (d.notifie_le ? 'Renvoyer la notif' : 'Envoyer la notif') + '</button>' : '') + '</div>';
+      return '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="stack"><b style="font-size:16px">' + esc(d.nom) + '</b><span class="mut xs">Déposée le ' + esc(fmtCourt(new Date(d.created_at))) + (d.fini_le ? ' · prête le ' + esc(fmtCourt(new Date(d.fini_le))) : '') + (d.notifie_le ? ' · notifiée' : '') + '</span></div><b class="disp" style="font-size:22px">' + euros(d.prix) + '</b></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' + etat + '</div><span class="small">' + info + '</span>' +
+        (d.note ? '<span class="small" style="background:var(--soft);border-radius:10px;padding:8px 10px">' + esc(d.note) + '</span>' : '') +
+        (d.telephone ? '<a class="small" href="tel:' + esc(d.telephone.replace(/\s/g, '')) + '" style="font-weight:600">' + esc(d.telephone) + '</a>' : '') + actions + '</section>';
+    }).join('');
+  } else {
+    var mes = C.dem.filter(function (d) { return aMoi(d) && (statut === 'attente' ? d.statut === 'attente' : (d.statut === 'fini' || (d.statut === 'recupere' && !d.paye))); });
+    mes.forEach(function (d) {
+      var f = C.file.filter(function (x) { return x.id === d.id; })[0];
+      h += '<section class="card stack" style="gap:8px;border:2px solid ' + (statut === 'attente' ? 'var(--ac)' : 'var(--ok)') + '"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:16px">' + esc(d.nom) + '</b><b class="disp" style="font-size:22px">' + euros(d.prix) + '</b></div>' +
+        '<span class="small">' + (statut === 'attente' ? (f ? '<b>' + f.rang + (f.rang === 1 ? 're' : 'e') + ' dans la file</b> · ' : '') + 'déposée le ' + esc(fmtCourt(new Date(d.created_at))) : (d.statut === 'fini' ? '<b style="color:var(--ok)">Prête, elle t\'attend au club house</b>' : 'Récupérée') + (!d.paye ? ' · reste à régler' : '')) + '</span>' +
+        '<span class="mut small">' + (d.fourni_par === 'club' ? esc(d.cordages ? d.cordages.nom : 'Cordage du club') : esc(d.cordage_perso || 'Cordage perso')) + (d.tension ? ' · ' + esc(d.tension) : '') + '</span>' +
+        (statut === 'attente' ? '<button class="btn line" data-csup="' + d.id + '">Annuler ma demande</button>' : '') + '</section>';
+    });
+    if (statut === 'attente' && mes.length) h += blocPush(true);
+    var file = C.file.filter(function (x) { return x.statut === statut; });
+    h += '<div class="dayhead">' + (statut === 'attente' ? 'File d\'attente du club' : 'Raquettes prêtes au club house') + '</div>';
+    h += file.length ? '<section class="card tight">' + file.map(function (x) {
+      return '<div class="rk' + (x.a_moi ? ' me' : '') + '" style="grid-template-columns:34px minmax(0,1fr) auto"><span>' + x.rang + '</span><span>' + esc(x.joueur) + (x.a_moi ? ' <span class="xs" style="color:#6f43a0">· toi</span>' : '') + '</span><span class="mut xs">' +
+        (statut === 'attente' ? (x.besoin_avant ? 'avant le ' + esc(fmtCourt(new Date(x.besoin_avant + 'T12:00:00'))) : 'déposée le ' + esc(fmtCourt(new Date(x.depose_le)))) : 'prête le ' + esc(fmtCourt(new Date(x.fini_le || x.depose_le)))) + '</span></div>';
+    }).join('') + '</section>' : '<section class="card empty">' + (statut === 'attente' ? 'Aucune raquette en attente.' : 'Aucune raquette prête pour le moment.') + '</section>';
+    if (statut === 'attente') h += '<a class="btn" href="#/cordage/deposer">Déposer une raquette</a>';
+  }
+  box.innerHTML = h;
+  lierPush();
+  var maj = function (id, champs, msg) {
+    return q(sb.from('cordage_demandes').update(champs).eq('id', id)).then(function () { toast(msg); return chargerCordage(); }).then(function () { render(); }).catch(function () { toast('Action impossible'); });
+  };
+  var notifier = function (id) {
+    return sb.functions.invoke('cordage-notifier', { body: { demande_id: id } }).then(function (r) {
+      var d = r.data || {};
+      if (r.error || d.erreur) toast('Notification non envoyée');
+      else if (d.envoyes) toast('Notification envoyée sur ' + d.envoyes + ' appareil' + (d.envoyes > 1 ? 's' : ''));
+      else toast('Pas de notif possible (' + (d.raison || 'non activées') + ') : utilise WhatsApp');
+    }).catch(function () { toast('Notification non envoyée'); });
+  };
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cfini]'), function (b) {
+    b.onclick = function () {
+      b.disabled = true; var id = b.dataset.cfini;
+      q(sb.from('cordage_demandes').update({ statut: 'fini' }).eq('id', id)).then(function () {
+        var d = C.dem.filter(function (x) { return x.id === id; })[0];
+        return d && d.personne_id ? notifier(id) : toast('Raquette prête. Préviens le joueur par WhatsApp.');
+      }).then(chargerCordage).then(function () { go('#/cordage/pretes'); }).catch(function () { toast('Action impossible'); b.disabled = false; });
+    };
+  });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-crec]'), function (b) { b.onclick = function () { maj(b.dataset.crec, { statut: 'recupere' }, 'Raquette récupérée'); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cpaye]'), function (b) { b.onclick = function () { maj(b.dataset.cpaye, { paye: true }, 'Paiement noté'); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cnotif]'), function (b) { b.onclick = function () { b.disabled = true; notifier(b.dataset.cnotif).then(chargerCordage).then(render); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-csup]'), function (b) {
+    b.onclick = function () {
+      if (!confirm(cordeur ? 'Supprimer cette demande ?' : 'Annuler ta demande de cordage ?')) return;
+      q(sb.from('cordage_demandes').delete().eq('id', b.dataset.csup)).then(function () { toast(cordeur ? 'Demande supprimée' : 'Demande annulée'); return chargerCordage(); }).then(render).catch(function () { toast('Action impossible'); });
+    };
+  });
+}
+
+function cordReglages(box) {
+  var h = '<section class="card stack" style="gap:10px"><span class="eyebrow">Barème</span>' +
+    '<label class="f">Pose seule (cordage apporté par le joueur), en €<div style="display:flex;gap:8px"><input class="f" id="cr-pose" inputmode="decimal" value="' + esc(String(tarifPose() == null ? '' : tarifPose()).replace('.', ',')) + '"><button class="btn" id="cr-pose-ok" style="width:auto">OK</button></div></label></section>' +
+    '<section class="card stack" style="gap:10px"><span class="eyebrow">Cordages du club (pose comprise)</span>' +
+    C.cordages.map(function (c) {
+      return '<div class="stack" style="gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line)"><input class="f" data-cnom="' + c.id + '" value="' + esc(c.nom) + '" aria-label="Nom du cordage">' +
+        '<div style="display:flex;gap:8px;align-items:center"><input class="f" data-cprix="' + c.id + '" inputmode="decimal" value="' + esc(String(+c.prix).replace('.', ',')) + '" aria-label="Prix" style="width:110px"><span>€</span>' +
+        '<label class="check" style="margin-left:auto"><input type="checkbox" data-cact="' + c.id + '"' + (c.actif ? ' checked' : '') + '>Proposé</label></div>' +
+        '<button class="btn line" data-csave="' + c.id + '">Enregistrer</button></div>';
+    }).join('') +
+    '<b class="small">Ajouter un cordage</b><input class="f" id="cr-nom" placeholder="Ex. Tecnifibre X-One Biphase 1.30"><div style="display:flex;gap:8px"><input class="f" id="cr-prix" inputmode="decimal" placeholder="Prix en €"><button class="btn" id="cr-add" style="width:auto">Ajouter</button></div></section>';
+  if (S.isDir) h += '<section class="card stack" style="gap:10px" id="cr-cordeurs"><span class="eyebrow">Cordeurs</span><span class="mut small">Chargement…</span></section>';
+  box.innerHTML = h;
+  var num = function (v) { var n = parseFloat(String(v).replace(',', '.')); return isNaN(n) || n < 0 ? null : n; };
+  var apres = function (msg) { toast(msg); chargerCordage().then(function () { cordReglages(box); }); };
+  $('cr-pose-ok').onclick = function () {
+    var n = num($('cr-pose').value); if (n == null) return toast('Prix invalide');
+    q(sb.from('cordage_tarifs').update({ prix: n }).eq('code', 'pose')).then(function () { apres('Tarif enregistré'); }).catch(function () { toast('Action impossible'); });
+  };
+  Array.prototype.forEach.call(box.querySelectorAll('[data-csave]'), function (b) {
+    b.onclick = function () {
+      var id = b.dataset.csave, n = num(box.querySelector('[data-cprix="' + id + '"]').value), nom = box.querySelector('[data-cnom="' + id + '"]').value.trim();
+      if (n == null || !nom) return toast('Nom ou prix invalide');
+      q(sb.from('cordages').update({ nom: nom, prix: n, actif: box.querySelector('[data-cact="' + id + '"]').checked }).eq('id', id)).then(function () { apres('Cordage enregistré'); }).catch(function () { toast('Action impossible'); });
+    };
+  });
+  $('cr-add').onclick = function () {
+    var n = num($('cr-prix').value), nom = $('cr-nom').value.trim();
+    if (n == null || !nom) return toast('Indique un nom et un prix');
+    q(sb.from('cordages').insert({ nom: nom, prix: n, ordre: C.cordages.length + 1 })).then(function () { apres('Cordage ajouté'); }).catch(function () { toast('Action impossible'); });
+  };
+  if (S.isDir) {
+    var dessiner = function () {
+      q(sb.rpc('cordeurs_liste')).then(function (l) {
+        $('cr-cordeurs').innerHTML = '<span class="eyebrow">Cordeurs</span><span class="mut small">Ils voient toutes les demandes et préviennent les joueurs. La direction sportive a aussi ces droits.</span>' +
+          (l.length ? l.map(function (c) { return '<div class="row"><span class="small">' + esc(c.email) + '</span><button class="chip" data-cret="' + c.user_id + '">Retirer</button></div>'; }).join('') : '<span class="small">Aucun cordeur pour l\'instant.</span>') +
+          '<label class="f">Adresse mail du cordeur<input class="f" id="cr-mail" type="email" placeholder="Il doit s\'être connecté une fois à l\'appli"></label><button class="btn navy" id="cr-addc">Ajouter comme cordeur</button>';
+        Array.prototype.forEach.call(document.querySelectorAll('[data-cret]'), function (b) { b.onclick = function () { q(sb.rpc('cordeur_retirer', { u: b.dataset.cret })).then(function () { toast('Cordeur retiré'); dessiner(); }); }; });
+        $('cr-addc').onclick = function () {
+          var m = $('cr-mail').value.trim(); if (!m) return;
+          q(sb.rpc('cordeur_ajouter', { mail: m })).then(function (r) {
+            if (r === 'inconnu') toast('Cette personne doit d\'abord se connecter une fois à l\'appli'); else { toast('Cordeur ajouté'); dessiner(); }
+          }).catch(function () { toast('Action impossible'); });
+        };
+      }).catch(function () { $('cr-cordeurs').innerHTML = '<span class="mut small">Impossible de charger les cordeurs.</span>'; });
+    };
+    dessiner();
+  }
+}
+
+// Notifications push sur cet appareil
+function pushPossible() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+function estIos() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function estInstallee() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+function blocPush(compact) {
+  if (!S.user) return '';
+  if (pushPossible() && Notification.permission === 'granted' && localStorageGet('cloca-push') === S.user.id) return compact ? '' : '<section class="card"><span class="small" style="color:var(--ok)">✓ Les notifications sont activées sur cet appareil.</span></section>';
+  if (estIos() && !estInstallee()) return '<section class="card stack" style="gap:6px"><b>Être prévenu sur ton iPhone</b><span class="mut small">Installe d\'abord l\'appli : dans Safari, bouton Partager, puis « Sur l\'écran d\'accueil ». Ouvre-la depuis l\'icône et active les notifications. Sinon, le club te préviendra par WhatsApp.</span></section>';
+  if (!pushPossible()) return '<section class="card"><span class="mut small">Ce navigateur ne gère pas les notifications : le club te préviendra par WhatsApp.</span></section>';
+  if (Notification.permission === 'denied') return '<section class="card"><span class="mut small">Les notifications sont bloquées pour l\'appli dans les réglages de ton navigateur. Le club te préviendra par WhatsApp.</span></section>';
+  return '<section class="card stack" style="gap:8px"><b>Être prévenu dès que c\'est prêt</b><span class="mut small">Active les notifications sur ce téléphone.</span><button class="btn navy" id="push-on">Activer les notifications</button></section>';
+}
+function localStorageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+function swEnregistrer() { return navigator.serviceWorker.register('../sw.js', { scope: '../' }); }
+function activerPush() {
+  return Notification.requestPermission().then(function (perm) {
+    if (perm !== 'granted') throw new Error('refus');
+    return swEnregistrer().then(function () { return navigator.serviceWorker.ready; });
+  }).then(function (reg) {
+    return reg.pushManager.getSubscription().then(function (s) { return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) }); });
+  }).then(function (sub) {
+    var j = sub.toJSON();
+    return q(sb.rpc('push_enregistrer', { endpoint: j.endpoint, p256dh: j.keys.p256dh, cle: j.keys.auth, appareil: navigator.userAgent }));
+  }).then(function () { localStorageSet('cloca-push', S.user.id); });
+}
+function oublierPush() {
+  if (!pushPossible() || !navigator.serviceWorker.controller) return Promise.resolve();
+  return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+    localStorageSet('cloca-push', '');
+    return sub ? sb.from('push_abonnements').delete().eq('endpoint', sub.endpoint) : null;
+  }).catch(function () { });
+}
+function lierPush() {
+  var b = $('push-on'); if (!b) return;
+  b.onclick = function () {
+    b.disabled = true;
+    activerPush().then(function () { toast('Notifications activées'); b.parentNode.innerHTML = '<span class="small" style="color:var(--ok)">✓ Les notifications sont activées sur cet appareil.</span>'; })
+      .catch(function (e) { b.disabled = false; toast(e && e.message === 'refus' ? 'Notifications refusées' : 'Activation impossible sur cet appareil'); });
+  };
+}
+
 // ---------- Routeur ----------
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
@@ -731,6 +1022,7 @@ function render() {
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
   else if (p === 'profil') html = pageProfil();
   else if (p === 'gestion') html = pageGestion();
+  else if (p === 'cordage') { html = pageCordage(arg); actif = 'accueil'; }
   else { html = pageAccueil(); actif = 'accueil'; setTimeout(lierSel); }
   $('app').innerHTML = html;
   tabs(actif);
@@ -743,14 +1035,15 @@ function demarrer() {
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { })]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { })]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
       S.user = session.user;
-      chargerUtilisateur().then(chargerAgenda).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
+      chargerUtilisateur().then(chargerAgenda).then(function () { return chargerCordage().catch(function () { }); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
     }
   });
 }
 demarrer();
+if ('serviceWorker' in navigator) window.addEventListener('load', function () { swEnregistrer().catch(function () { }); });
 })();

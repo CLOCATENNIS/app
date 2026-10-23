@@ -1,6 +1,6 @@
 // Service worker : les infos viennent toujours du réseau pour rester à jour.
 // La page d'accueil est gardée en réserve pour que l'appli s'ouvre même sans connexion.
-var CACHE='cloca-v4';
+var CACHE='cloca-v5';
 var SHELL=['./','index.html','confidentialite.html','espace.js','manifest.webmanifest','icon-192.png','icon-512.png','logo.png'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(SHELL)}).catch(function(){}));
@@ -20,5 +20,21 @@ self.addEventListener('fetch',function(e){
     return res;
   }).catch(function(){
     return caches.match(r).then(function(m){return m||caches.match('index.html')});
+  }));
+});
+
+// Notifications push (raquette prête, etc.)
+self.addEventListener('push',function(e){
+  var d={};try{d=e.data?e.data.json():{}}catch(x){d={title:'CLOCA Tennis',body:e.data?e.data.text():''}}
+  e.waitUntil(self.registration.showNotification(d.title||'CLOCA Tennis',{
+    body:d.body||'',icon:'/app/icon-192.png',badge:'/app/icon-192.png',tag:d.tag||undefined,data:{url:d.url||'/app/v2/'}
+  }));
+});
+self.addEventListener('notificationclick',function(e){
+  e.notification.close();
+  var url=(e.notification.data&&e.notification.data.url)||'/app/v2/';
+  e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(function(l){
+    for(var i=0;i<l.length;i++){if(l[i].url.indexOf('/app/v2/')>=0&&'focus' in l[i]){l[i].navigate(url);return l[i].focus()}}
+    return self.clients.openWindow(url);
   }));
 });
