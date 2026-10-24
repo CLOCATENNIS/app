@@ -83,9 +83,9 @@ function chargerPers(force) {
     .then(function (l) { A.pers = l || []; return A.pers; });
 }
 function nomGroupe(id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g ? g.nom : '?'; }
-function choixGroupes(sel, nomChamp) {
+function choixGroupes(sel, nomChamp, sansType) {
   var par = {};
-  A.groupes.filter(function (g) { return g.actif !== false; }).forEach(function (g) { (par[g.type] = par[g.type] || []).push(g); });
+  A.groupes.filter(function (g) { return g.actif !== false && g.type !== sansType; }).forEach(function (g) { (par[g.type] = par[g.type] || []).push(g); });
   return Object.keys(TYPES_GRP).filter(function (t) { return par[t]; }).map(function (t) {
     return '<div class="sect" style="margin:8px 0 4px">' + TYPES_GRP[t] + '</div><div class="chips">' + par[t].map(function (g) {
       var on = sel.indexOf(g.id) >= 0;
@@ -395,12 +395,13 @@ function vueAdherents(m, arg) {
       p.foyer_id ? q(sb.from('acces_emails').select('email, personne_id').eq('foyer_id', p.foyer_id)) : Promise.resolve([]),
       p.foyer_id ? q(sb.from('comptes').select('email, created_at').eq('foyer_id', p.foyer_id)) : Promise.resolve([])
     ]).then(function (r) {
-      var gsel = (p.groupe_membres || []).map(function (g) { return g.groupe_id; });
+      var estNiv = function (id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g && g.type === 'niveau'; };
+      var gsel = (p.groupe_membres || []).map(function (g) { return g.groupe_id; }).filter(function (id) { return !estNiv(id); });
       panneau(p.prenom + ' ' + p.nom, '<div class="stack">' +
         '<div class="card small">' + (p.date_naissance ? 'Né(e) le ' + esc(fmtJour(new Date(p.date_naissance + 'T12:00:00'))) + ' · ' + age(p.date_naissance) + ' ans<br>' : '') + (p.adoc_id ? 'Licence ' + esc(p.adoc_id) + '<br>' : '') + (p.email ? 'Mail : ' + esc(p.email) + '<br>' : '') + (p.cours ? 'Cours ADOC : ' + esc(p.cours) : '') + '</div>' +
         '<label class="c"><input type="checkbox" id="f-c"' + (p.cotisation_a_jour ? ' checked' : '') + '>Cotisation à jour</label>' +
-        '<label class="l">Niveau CLOC\'ARENA<select class="f" id="f-n"><option value="">Aucun</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<option' + (p.niveau_arena === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
-        '<div class="sect">Groupes</div>' + choixGroupes(gsel, 'fg') + '<button class="btn" id="f-ok">Enregistrer</button>' +
+        '<label class="l">Niveau CLOC\'ARENA' + (aRole('direction') ? '' : ' (modifiable par la direction sportive)') + '<select class="f" id="f-n"' + (aRole('direction') ? '' : ' disabled') + '><option value="">Aucun</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<option' + (p.niveau_arena === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+        '<div class="sect">Groupes</div><span class="mut xs">Le groupe CLOC\'ARENA suit automatiquement le niveau choisi au-dessus.</span>' + choixGroupes(gsel, 'fg', 'niveau') + '<button class="btn" id="f-ok">Enregistrer</button>' +
         '<div class="sect">Famille</div><div class="card list">' + r[0].map(function (x) { return '<div class="it"><span>' + esc(x.prenom + ' ' + x.nom) + '</span><span class="mut xs">' + age(x.date_naissance) + ' ans</span></div>'; }).join('') + '</div>' +
         '<div class="sect">Adresses qui ouvrent l\'espace famille</div><div class="card list">' + (r[1].length ? r[1].map(function (a) {
           var c = r[2].filter(function (x) { return x.email === a.email; })[0];
@@ -413,7 +414,8 @@ function vueAdherents(m, arg) {
           var gs = lus(root, 'fg'), avant = gsel;
           var ajout = gs.filter(function (g) { return avant.indexOf(g) < 0; }), retrait = avant.filter(function (g) { return gs.indexOf(g) < 0; });
           $('f-ok').disabled = true;
-          q(sb.from('personnes').update({ cotisation_a_jour: $('f-c').checked, niveau_arena: $('f-n').value || null }).eq('id', p.id)).then(function () {
+          var ch = { cotisation_a_jour: $('f-c').checked }; if (aRole('direction') && ($('f-n').value || null) !== (p.niveau_arena || null)) ch.niveau_arena = $('f-n').value || null;
+          q(sb.from('personnes').update(ch).eq('id', p.id)).then(function () {
             return ajout.length ? q(sb.from('groupe_membres').insert(ajout.map(function (g) { return { groupe_id: g, personne_id: p.id }; }))) : null;
           }).then(function () {
             return retrait.length ? q(sb.from('groupe_membres').delete().eq('personne_id', p.id).in('groupe_id', retrait)) : null;
