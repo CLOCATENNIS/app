@@ -264,17 +264,40 @@ function pageAgenda() {
       (S.pers.length > 1 ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') +
       '</div></' + (it.id ? 'a' : 'div') + '>';
   });
-  if (items.length) h += '<button class="btn line" id="ics-semaine">' + ic('dl', 18) + 'Ajouter cette semaine à mon téléphone</button>';
-  h += '<p class="mut xs" style="text-align:center;margin:2px 0 8px">La synchronisation automatique avec ton agenda arrive bientôt.</p></main>';
+  h += blocSynchro() + '</main>';
   setTimeout(function () {
     $('wk-prev').onclick = function () { S.week--; render(); };
     $('wk-next').onclick = function () { S.week++; render(); };
     if ($('ics-semaine')) $('ics-semaine').onclick = function () { telechargerIcs(items, 'agenda-cloca-tennis.ics'); };
+    lierSynchro();
     lierSel();
   });
   return h;
 }
 
+// Abonnement : l'agenda du club se met à jour tout seul dans le téléphone
+function lienAgenda() { return S.compte && S.compte.calendrier_token ? SUPA_URL + '/functions/v1/agenda?t=' + S.compte.calendrier_token : ''; }
+function blocSynchro() {
+  var l = lienAgenda(); if (!l) return '';
+  var web = l.replace(/^https:/, 'webcal:'), ouvert = S.synchroOuverte;
+  return '<section class="card stack" style="gap:10px"><b>Mon agenda dans mon téléphone</b><span class="mut small">Ajoute-le une seule fois : les séances, stages et annulations s\'y mettent ensuite à jour tout seuls, pour toute la famille.</span>' +
+    '<div class="grid2"><a class="btn navy" href="' + esc(web) + '">' + ic('cal', 18, '#fff') + 'iPhone / Mac</a><a class="btn navy" target="_blank" rel="noopener" href="https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(web) + '">Google Agenda</a></div>' +
+    '<button class="btn line" id="sync-plus">' + (ouvert ? 'Masquer' : 'Android, Outlook et autres') + '</button>' +
+    (ouvert ? '<span class="small"><b>Android</b> : utilise le bouton Google Agenda (depuis un ordinateur si le téléphone ne l\'ouvre pas), l\'agenda apparaît ensuite sur ton téléphone. <b>Outlook</b> : Ajouter un calendrier → À partir d\'Internet, puis colle le lien.</span>' +
+      '<input class="f" readonly value="' + esc(l) + '" id="sync-lien" aria-label="Lien de l\'agenda"><div class="grid2"><button class="btn ghost" id="sync-copier">Copier le lien</button><button class="btn ghost" id="sync-reset">Changer de lien</button></div>' +
+      '<span class="mut xs">Ce lien est personnel : ne le partage pas. « Changer de lien » désactive l\'ancien (il faudra ré-ajouter l\'agenda).</span>' : '') + '</section>';
+}
+function lierSynchro() {
+  if ($('sync-plus')) $('sync-plus').onclick = function () { S.synchroOuverte = !S.synchroOuverte; render(); };
+  if ($('sync-copier')) $('sync-copier').onclick = function () {
+    var i = $('sync-lien'); i.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).then(function () { toast('Lien copié'); }).catch(function () { document.execCommand && document.execCommand('copy'); toast('Lien copié'); });
+  };
+  if ($('sync-reset')) $('sync-reset').onclick = function () {
+    if (!confirm('L\'ancien lien ne marchera plus. Il faudra ré-ajouter l\'agenda sur tes appareils. Continuer ?')) return;
+    q(sb.rpc('calendrier_nouveau_lien')).then(function (t) { S.compte.calendrier_token = t; toast('Nouveau lien créé'); render(); }).catch(function () { toast('Action impossible'); });
+  };
+}
 function icsDate(d) { return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
 function telechargerIcs(items, nom) {
   var l = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CLOCA Tennis//Appli//FR', 'CALSCALE:GREGORIAN'];
