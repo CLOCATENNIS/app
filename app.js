@@ -658,7 +658,8 @@ function pageProfil() {
     }).join('') + '</section>';
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
   if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', coach: 'Coach', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
-    (S.isStaff || S.gere.length ? '<a class="btn navy" href="#/gestion">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
+    (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
+    (S.gere.length || S.isDir ? '<a class="btn ghost" href="#/gestion">Saisie CLOC\'ARENA</a>' : '') +
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
   h += blocPush();
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
@@ -713,7 +714,8 @@ function pageGestion() {
       if (S.gesTab === 'saisir') gesSaisir(); else if (S.gesTab === 'valider') gesListe('propose'); else gesListe('valide');
     }).catch(function () { $('ges-main').innerHTML = '<section class="card empty">Impossible de charger les joueurs.</section>'; });
   });
-  return h + '<p class="mut xs" style="text-align:center;margin:12px"><a href="#/profil" style="color:var(--mut)">Mon profil et déconnexion</a></p>';
+  return h + (S.isStaff ? '<div style="padding:0 16px"><a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion complet (adhérents, actus, événements…)</a></div>' : '') +
+    '<p class="mut xs" style="text-align:center;margin:12px"><a href="#/profil" style="color:var(--mut)">Mon profil et déconnexion</a></p>';
 }
 function chargerJoueurs() {
   if (G.joueurs) return Promise.resolve(G.joueurs);

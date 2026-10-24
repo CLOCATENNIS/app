@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const jeton = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     const { data: u } = await admin.auth.getUser(jeton);
     if (!u?.user) return json({ erreur: "non connecté" }, 401);
-    const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).in("role", ["cordeur", "direction"]);
+    const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).in("role", ["cordeur", "direction", "accueil"]);
     if (!roles?.length) return json({ erreur: "réservé aux cordeurs" }, 403);
 
     const { demande_id } = await req.json();
