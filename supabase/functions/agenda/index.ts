@@ -26,6 +26,17 @@ function plier(l: string) {
   return out.join("\r\n ");
 }
 
+// Semaines sans cours (vacances, trêve) : chaque séance concernée est retirée de la répétition
+function exdates(premier: string, au: string | null, h: string, pauses: { debut: string; fin: string }[]) {
+  const out: string[] = [];
+  const fin = au || new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10);
+  for (let d = new Date(premier + "T12:00:00Z"); d.toISOString().slice(0, 10) <= fin; d.setUTCDate(d.getUTCDate() + 7)) {
+    const iso = d.toISOString().slice(0, 10);
+    if (pauses.some((p) => iso >= p.debut && iso <= p.fin)) out.push("EXDATE;TZID=Europe/Paris:" + local(iso, h));
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   const t = new URL(req.url).searchParams.get("t") || "";
   if (!/^[0-9a-f-]{36}$/i.test(t)) return new Response("Lien d'agenda invalide.", { status: 404 });
@@ -78,6 +89,7 @@ Deno.serve(async (req) => {
 
   // Les cours réguliers (créneaux hebdomadaires des groupes)
   if (groupes.length) {
+    const { data: pauses } = await db.from("periodes_sans_cours").select("debut, fin");
     const { data: cren } = await db.from("creneaux").select("id, groupe_id, jour_semaine, heure_debut, heure_fin, lieu, encadrant, du, au, groupes(nom)").in("groupe_id", groupes);
     for (const c of cren || []) {
       const premier = new Date((c.du || new Date().toISOString().slice(0, 10)) + "T12:00:00Z");
@@ -88,6 +100,7 @@ Deno.serve(async (req) => {
       L.push("BEGIN:VEVENT", "UID:cours-" + c.id + "@clocatennis.fr", "DTSTAMP:" + stamp,
         "DTSTART;TZID=Europe/Paris:" + local(jour, c.heure_debut), "DTEND;TZID=Europe/Paris:" + local(jour, c.heure_fin),
         "RRULE:FREQ=WEEKLY;BYDAY=" + JOURS[c.jour_semaine] + (c.au ? ";UNTIL=" + c.au.replace(/-/g, "") + "T235959Z" : ""),
+        ...exdates(jour, c.au, c.heure_debut, pauses || []),
         "SUMMARY:" + txt(g + ((pers || []).length > 1 && noms.length ? " (" + noms.join(", ") + ")" : "")),
         "LOCATION:" + txt(c.lieu ? c.lieu + " · " + ADRESSE : ADRESSE), "DESCRIPTION:" + txt(c.encadrant ? "Avec " + c.encadrant : ""), "END:VEVENT");
     }

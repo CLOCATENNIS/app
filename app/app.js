@@ -133,8 +133,9 @@ function chargerAgenda() {
   if (!S.user || !S.pers.length) return Promise.resolve(AG = { creneaux: [], insc: [] });
   return Promise.all([
     q(sb.from('creneaux').select('*, groupes(nom,couleur)')).catch(function () { return []; }),
-    q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye')).catch(function () { return []; })
-  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1] }; return AG; });
+    q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye')).catch(function () { return []; }),
+    q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; })
+  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [] }; return AG; });
 }
 
 function mesItems(du, au) {
@@ -148,6 +149,7 @@ function mesItems(du, au) {
     for (var j = new Date(du); j < au; j.setDate(j.getDate() + 1)) {
       var js = j.getDay() === 0 ? 7 : j.getDay(), iso = isoJour(j);
       if (cr.jour_semaine !== js || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
+      if ((AG.pauses || []).some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
       var qui = (S.groupesDe[cr.groupe_id] || []).filter(function (p) { return S.sel === 'all' || p.id === S.sel; });
       if (!qui.length) continue;
       var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
@@ -249,6 +251,8 @@ function pageAgenda() {
     '<button class="back" aria-label="Semaine précédente" id="wk-prev" style="width:44px;justify-content:center">' + ic('back', 20) + '</button>' +
     '<b>' + (S.week === 0 ? 'Cette semaine' : S.week === 1 ? 'Semaine prochaine' : 'Semaine du ' + fmtCourt(l)) + '</b>' +
     '<button class="back" aria-label="Semaine suivante" id="wk-next" style="width:44px;justify-content:center">' + ic('next', 20) + '</button></div>';
+  var pause = (AG && AG.pauses || []).filter(function (v) { return v.debut <= isoJour(new Date(f.getTime() - 864e5)) && v.fin >= isoJour(l); })[0];
+  if (pause) h += '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">Pas de cours collectifs jusqu\'au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.</span></section>';
   if (!items.length) h += '<section class="card empty">Rien de prévu cette semaine.</section>';
   var jour = '';
   items.forEach(function (it, k) {
