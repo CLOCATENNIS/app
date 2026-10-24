@@ -649,7 +649,7 @@ function vueAdoc(m) {
 }
 
 // ---------- Groupes ----------
-var OUVERTS = {};
+var OUVERTS = {}, LIEUX = {};
 function vueGroupes(m) {
   m.innerHTML = entete('Groupes', 'Les groupes servent à cibler l\'agenda, les actus et les notifications.', '<button class="btn" id="g-new">Nouveau groupe</button>') + '<div id="g-l"><div class="skel"></div></div>';
   var dessiner = function () {
@@ -666,7 +666,13 @@ function vueGroupes(m) {
         return '<details class="card" style="padding:0;margin-bottom:8px"' + (ouvert ? ' open' : '') + '><summary style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;list-style-position:inside"><b>' + titre + '</b><span class="mut small">' + sous + '</span></summary><div style="padding:0 12px 12px">' + contenu + '</div></details>';
       };
       if (t === 'creneau') {
-        var jours = {}; l.forEach(function (g) { var j = String(g.nom).split(' ')[0]; (jours[j] = jours[j] || []).push(g); });
+        var jours = {}, ext = function (g) { return /ext[ée]rieur/i.test((LIEUX[g.id] || '') + ' ' + g.nom); };
+        l.forEach(function (g) { var j = String(g.nom).split(' ')[0]; (jours[j] = jours[j] || []).push(g); });
+        Object.keys(jours).forEach(function (j) {
+          var e = jours[j].filter(ext); if (!e.length || e.length === jours[j].length) return;
+          var parts = {}; Object.keys(jours).forEach(function (k) { if (k === j) { parts[j + ' intérieur'] = jours[j].filter(function (g) { return !ext(g); }); parts[j + ' extérieur'] = e; } else parts[k] = jours[k]; });
+          jours = parts;
+        });
         return '<div class="sect">' + TYPES_GRP[t] + '</div>' + Object.keys(jours).map(function (j) {
           var n = jours[j].reduce(function (x, g) { return x + (cpt[g.id] || 0); }, 0);
           return replie(esc(j), jours[j].length + ' cours · ' + n + ' joueurs', table(jours[j], true), OUVERTS[j]);
@@ -718,7 +724,9 @@ function vueGroupes(m) {
     });
   };
   $('g-new').onclick = function () { fiche(null); };
-  Promise.all([chargerGroupes(true), chargerPers()]).then(dessiner).catch(function () { $('g-l').innerHTML = '<div class="card empty">Impossible de charger les groupes.</div>'; });
+  Promise.all([chargerGroupes(true), chargerPers(), q(sb.from('creneaux').select('groupe_id, lieu')).catch(function () { return []; })]).then(function (r) {
+    LIEUX = {}; (r[2] || []).forEach(function (c) { LIEUX[c.groupe_id] = c.lieu; }); dessiner();
+  }).catch(function () { $('g-l').innerHTML = '<div class="card empty">Impossible de charger les groupes.</div>'; });
 }
 
 // ---------- Petites annonces ----------
