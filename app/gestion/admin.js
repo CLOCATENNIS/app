@@ -649,17 +649,34 @@ function vueAdoc(m) {
 }
 
 // ---------- Groupes ----------
+var OUVERTS = {};
 function vueGroupes(m) {
   m.innerHTML = entete('Groupes', 'Les groupes servent à cibler l\'agenda, les actus et les notifications.', '<button class="btn" id="g-new">Nouveau groupe</button>') + '<div id="g-l"><div class="skel"></div></div>';
   var dessiner = function () {
     var cpt = {}; A.pers.forEach(function (p) { (p.groupe_membres || []).forEach(function (g) { cpt[g.groupe_id] = (cpt[g.groupe_id] || 0) + 1; }); });
     $('g-l').innerHTML = Object.keys(TYPES_GRP).map(function (t) {
       var l = A.groupes.filter(function (g) { return g.type === t; }); if (!l.length) return '';
-      return '<div class="sect">' + TYPES_GRP[t] + '</div><div class="tw"><table class="t"><tbody>' + l.map(function (g) {
-        return '<tr class="click" data-g="' + g.id + '"><td><span class="dot" style="background:' + esc(g.couleur || '#1f5a85') + ';margin-right:8px"></span><b>' + esc(g.nom) + '</b>' + (g.actif === false ? ' <span class="badge">Archivé</span>' : '') + '</td><td class="act small">' + (cpt[g.id] || 0) + ' membre' + ((cpt[g.id] || 0) > 1 ? 's' : '') + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
+      var table = function (liste, sansJour) {
+        return '<div class="tw"><table class="t"><tbody>' + liste.map(function (g) {
+          var nom = sansJour ? String(g.nom).replace(/^\S+\s+/, '') : g.nom;
+          return '<tr class="click" data-g="' + g.id + '"><td><span class="dot" style="background:' + esc(g.couleur || '#1f5a85') + ';margin-right:8px"></span><b>' + esc(nom) + '</b>' + (g.actif === false ? ' <span class="badge">Archivé</span>' : '') + '</td><td class="act small">' + (cpt[g.id] || 0) + ' membre' + ((cpt[g.id] || 0) > 1 ? 's' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+      };
+      var replie = function (titre, sous, contenu, ouvert) {
+        return '<details class="card" style="padding:0;margin-bottom:8px"' + (ouvert ? ' open' : '') + '><summary style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;list-style-position:inside"><b>' + titre + '</b><span class="mut small">' + sous + '</span></summary><div style="padding:0 12px 12px">' + contenu + '</div></details>';
+      };
+      if (t === 'creneau') {
+        var jours = {}; l.forEach(function (g) { var j = String(g.nom).split(' ')[0]; (jours[j] = jours[j] || []).push(g); });
+        return '<div class="sect">' + TYPES_GRP[t] + '</div>' + Object.keys(jours).map(function (j) {
+          var n = jours[j].reduce(function (x, g) { return x + (cpt[g.id] || 0); }, 0);
+          return replie(esc(j), jours[j].length + ' cours · ' + n + ' joueurs', table(jours[j], true), OUVERTS[j]);
+        }).join('');
+      }
+      if (l.length > 8) return '<div class="sect">' + TYPES_GRP[t] + '</div>' + replie(TYPES_GRP[t], l.length + ' groupes', table(l), OUVERTS[t]);
+      return '<div class="sect">' + TYPES_GRP[t] + '</div>' + table(l);
     }).join('');
     all('[data-g]').forEach(function (tr) { tr.onclick = function () { fiche(A.groupes.filter(function (g) { return g.id === tr.dataset.g; })[0]); }; });
+    all('#g-l details').forEach(function (d) { d.ontoggle = function () { OUVERTS[d.querySelector('summary b').textContent] = d.open; }; });
   };
   var fiche = function (g) {
     var nouveau = !g; g = g || { type: 'activite', couleur: '#1f5a85', actif: true };
