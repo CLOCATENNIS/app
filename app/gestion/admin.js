@@ -678,6 +678,26 @@ function vueGroupes(m) {
       chercheurPers(root, function (p) { q(sb.from('groupe_membres').insert({ groupe_id: g.id, personne_id: p.id })).then(function () { toast(p.prenom + ' ajouté(e)'); recharger(); }).catch(function () { toast('Déjà dans le groupe ?'); }); },
         function (p) { return !(p.groupe_membres || []).some(function (x) { return x.groupe_id === g.id; }); });
       all('[data-grm]').forEach(function (b) { b.onclick = function () { q(sb.from('groupe_membres').delete().eq('groupe_id', g.id).eq('personne_id', b.dataset.grm)).then(function () { toast('Retiré du groupe'); recharger(); }); }; });
+      if (g.type === 'creneau') horaireCreneau(root, g);
+    });
+  };
+  // Créneau de cours : jour, horaires, lieu, profs, et joueurs du planning en attente d'inscription ADOC
+  var horaireCreneau = function (root, g) {
+    var bloc = document.createElement('div'); bloc.className = 'stack'; root.querySelector('.stack').insertBefore(bloc, $('gr-ok').nextSibling);
+    var JN = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    Promise.all([q(sb.from('creneaux').select('*').eq('groupe_id', g.id).limit(1)), q(sb.from('creneaux_en_attente').select('id, nom_planning').eq('groupe_id', g.id)).catch(function () { return []; })]).then(function (r) {
+      var c = r[0][0] || { jour_semaine: 1, heure_debut: '18:00', heure_fin: '19:00' };
+      bloc.innerHTML = '<div class="sect">Horaire du cours</div><div class="row3"><label class="l">Jour<select class="f" id="cr-j">' + [1, 2, 3, 4, 5, 6].map(function (j) { return '<option value="' + j + '"' + (c.jour_semaine === j ? ' selected' : '') + '>' + JN[j] + '</option>'; }).join('') + '</select></label>' +
+        '<label class="l">Début<input class="f" type="time" id="cr-d" value="' + esc(String(c.heure_debut).slice(0, 5)) + '"></label><label class="l">Fin<input class="f" type="time" id="cr-f" value="' + esc(String(c.heure_fin).slice(0, 5)) + '"></label></div>' +
+        '<div class="row2"><label class="l">Lieu<input class="f" id="cr-l" value="' + esc(c.lieu) + '" placeholder="Terrain 1, Terrains 1 et 2…"></label><label class="l">Profs<input class="f" id="cr-e" value="' + esc(c.encadrant) + '" placeholder="Florian, Skander"></label></div>' +
+        '<button class="btn navy" id="cr-ok">Enregistrer l\'horaire</button><span class="mut xs">Les cours n\'apparaissent pas pendant les vacances scolaires, la semaine de trêve et les jours fériés.</span>' +
+        (r[1].length ? '<div class="sect">En attente d\'inscription ADOC (' + r[1].length + ')</div><div class="card list">' + r[1].map(function (a) { return '<div class="it"><span class="small">' + esc(a.nom_planning) + '</span><button class="btn sm ko" data-cea="' + a.id + '">Retirer</button></div>'; }).join('') + '</div><span class="mut xs">Ils seront placés ici automatiquement à la prochaine mise à jour ADOC où ils apparaissent.</span>' : '');
+      $('cr-ok').onclick = function () {
+        if (!$('cr-d').value || !$('cr-f').value || $('cr-f').value <= $('cr-d').value) return toast('Vérifie les horaires');
+        var row = { jour_semaine: +$('cr-j').value, heure_debut: $('cr-d').value, heure_fin: $('cr-f').value, lieu: $('cr-l').value.trim() || null, encadrant: $('cr-e').value.trim() || null };
+        (c.id ? q(sb.from('creneaux').update(row).eq('id', c.id)) : q(sb.from('creneaux').insert(Object.assign({ groupe_id: g.id, du: '2026-09-14', au: '2027-06-30' }, row)))).then(function () { toast('Horaire enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
+      };
+      all('[data-cea]', bloc).forEach(function (b) { b.onclick = function () { q(sb.from('creneaux_en_attente').delete().eq('id', b.dataset.cea)).then(function () { toast('Retiré de l\'attente'); fiche(g); }); }; });
     });
   };
   $('g-new').onclick = function () { fiche(null); };
