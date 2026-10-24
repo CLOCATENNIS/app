@@ -15,6 +15,7 @@ var MODULES = [
   ['evenements', 'Événements et séances', ['direction', 'bureau']],
   ['inscriptions', 'Inscriptions', ['direction', 'bureau', 'accueil']],
   ['adherents', 'Adhérents', ['direction', 'bureau', 'accueil']],
+  ['adoc', 'Mise à jour ADOC', ['direction', 'bureau']],
   ['groupes', 'Groupes', ['direction', 'bureau']],
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
@@ -480,6 +481,149 @@ function vueAdherents(m, arg) {
   }).catch(function () { $('ad-l').innerHTML = '<div class="card empty">Impossible de charger les adhérents.</div>'; });
 }
 
+// ---------- Mise à jour depuis ADOC ----------
+// ADOC n'a pas d'accès direct pour les logiciels extérieurs : on dépose l'export Excel, l'outil compare et met à jour.
+// Ce qui vient d'ADOC : identité, date de naissance, licence, mails, cours, solde. Tout le reste reste géré dans l'appli.
+var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+function chargerXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = XLSX_URL; s.onload = function () { ok(window.XLSX); }; s.onerror = ko; document.head.appendChild(s); });
+}
+function cle(s) { return norm(s).replace(/[^a-z]/g, ''); }
+function coursPropre(c) {
+  if (!c) return null;
+  var out = String(c).split(', A_').map(function (x) {
+    x = x.trim().replace(/^A_/, '').replace(/\s*\((Adhérent|Réservation Mineur)\)\s*$/, '').replace(/\s+/g, ' ').trim();
+    return x ? x.charAt(0) + x.slice(1).toLowerCase() : '';
+  }).filter(Boolean);
+  return out.length ? out.join(' | ') : null;
+}
+function lireAdoc(XLSX, buf) {
+  var wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  var ws = wb.Sheets['Détaillé'] || wb.Sheets[wb.SheetNames.filter(function (n) { return /d.taill/i.test(n); })[0]] || wb.Sheets[wb.SheetNames[0]];
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+  var hi = -1; for (var i = 0; i < Math.min(rows.length, 6); i++) { if (rows[i].indexOf('Licence') >= 0 && rows[i].indexOf('Nom') >= 0) { hi = i; break; } }
+  if (hi < 0) throw new Error('format');
+  var H = rows[hi], col = function (n) { return H.indexOf(n); };
+  var C = { fam: col('Famille'), nom: col('Nom'), pre: col('Prénom'), civ: col('Civilité'), dn: col('Date Naiss.'), m1: col('Email'), m2: col('2eme Email'), lic: col('Licence'), cours: col('Enseignement (Cours)'), solde: col('Solde') };
+  if (C.lic < 0 || C.nom < 0 || C.pre < 0) throw new Error('format');
+  var date = function (v) {
+    if (!v) return null;
+    if (v instanceof Date) return isoJour(new Date(v.getTime() + 12 * 3600e3));
+    var m = String(v).match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : null;
+  };
+  return rows.slice(hi + 1).filter(function (r) { return r[C.nom] && r[C.lic]; }).map(function (r) {
+    var mail = function (k) { var v = C[k] >= 0 && r[C[k]] ? String(r[C[k]]).trim().toLowerCase() : ''; return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? v : null; };
+    var m1 = mail('m1');
+    return {
+      licence: String(r[C.lic]).trim(), nom: String(r[C.nom]).trim(), prenom: String(r[C.pre]).trim(), sexe: r[C.civ] === 'Madame' ? 'F' : 'M',
+      naiss: date(r[C.dn]), email: m1, email2: mail('m2'), cours: C.cours >= 0 ? coursPropre(r[C.cours]) : null,
+      solde: C.solde >= 0 ? (parseFloat(r[C.solde]) || 0) : 0, foyerCle: r[C.fam] ? 'F:' + cle(r[C.fam]) : (m1 ? 'M:' + m1 : 'L:' + String(r[C.lic]).trim()),
+      foyerNom: String(r[C.fam] || r[C.nom]).trim()
+    };
+  });
+}
+function vueAdoc(m) {
+  m.innerHTML = entete('Mise à jour depuis ADOC', 'Dépose l\'export ADOC : l\'appli te montre les changements avant de les appliquer.') +
+    '<div class="two"><div class="card stack"><b>1. Exporter depuis ADOC</b><span class="small">Dans ADOC : <b>Adhérents → Gestion → Résultats</b>, puis le bouton <b>Excel</b>. Tu obtiens un fichier <i>export.xls</i>.</span>' +
+    '<b>2. Le déposer ici</b><input class="f" type="file" id="ad-f" accept=".xls,.xlsx"><div id="ad-r"></div></div>' +
+    '<div class="card stack"><b>Ce que fait la mise à jour</b><span class="small">• Ajoute les nouveaux adhérents et leur famille.<br>• Met à jour nom, prénom, date de naissance, cours et cotisation (solde) des adhérents existants, retrouvés par leur licence.<br>• Ajoute les adresses mail qui ouvrent l\'espace famille.<br>• Range chacun dans les groupes de ses cours.</span>' +
+    '<b>Ce qu\'elle ne touche jamais</b><span class="small">Niveaux CLOC\'ARENA, points et matchs, autres groupes, rôles, cordage, inscriptions. Ce que tu gères dans l\'appli reste à toi.</span>' +
+    '<span class="mut xs">Rien n\'est envoyé vers ADOC : les changements faits dans l\'appli restent dans l\'appli. Les adresses et téléphones de l\'export ne sont pas importés.</span></div></div>';
+  $('ad-f').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    $('ad-r').innerHTML = '<div class="skel"></div>';
+    Promise.all([chargerXlsx(), f.arrayBuffer(), chargerPers(true), chargerGroupes(true), q(sb.from('foyers').select('id, cle, nom')), q(sb.from('acces_emails').select('email, foyer_id'))]).then(function (r) {
+      var lignes;
+      try { lignes = lireAdoc(r[0], r[1]); } catch (e) { $('ad-r').innerHTML = '<p class="small" style="color:var(--ko)">Ce fichier ne ressemble pas à un export ADOC (feuille « Détaillé » avec une colonne « Licence »).</p>'; return; }
+      comparer(lignes, r[4] || [], r[5] || []);
+    }).catch(function () { $('ad-r').innerHTML = '<p class="small" style="color:var(--ko)">Lecture impossible. Vérifie ta connexion et réessaie.</p>'; });
+  };
+  var comparer = function (lignes, foyers, acces) {
+    var parLic = {}, parNom = {}; A.pers.forEach(function (p) { if (p.adoc_id) parLic[p.adoc_id] = p; else parNom[cle(p.nom) + '|' + cle(p.prenom)] = p; });
+    var nouveaux = [], lies = [], modifs = [], vus = {};
+    lignes.forEach(function (l) {
+      vus[l.licence] = true;
+      var p = parLic[l.licence];
+      if (!p) { var x = parNom[cle(l.nom) + '|' + cle(l.prenom)]; if (x) { lies.push({ l: l, p: x }); return; } nouveaux.push(l); return; }
+      var d = [];
+      if (p.nom !== l.nom) d.push('nom'); if (p.prenom !== l.prenom) d.push('prénom');
+      if (l.naiss && p.date_naissance !== l.naiss) d.push('naissance');
+      if ((p.cours || null) !== l.cours) d.push('cours');
+      if (!!p.cotisation_a_jour !== (l.solde >= 0)) d.push(l.solde >= 0 ? 'cotisation réglée' : 'solde négatif');
+      if (p.actif === false) d.push('réactivé');
+      if (d.length) modifs.push({ l: l, p: p, d: d });
+    });
+    var partis = A.pers.filter(function (p) { return p.adoc_id && p.actif !== false && !vus[p.adoc_id]; });
+    var mailsConnus = {}; acces.forEach(function (a) { mailsConnus[a.email] = 1; });
+    var nbMails = 0; lignes.forEach(function (l) { [l.email, l.email2].forEach(function (mm) { if (mm && !mailsConnus[mm]) { mailsConnus[mm] = 1; nbMails++; } }); });
+    var liste = function (t, arr, f) { return arr.length ? '<details' + (arr.length < 12 ? ' open' : '') + '><summary class="small"><b>' + t + ' (' + arr.length + ')</b></summary><div class="small mut" style="margin:6px 0 0 14px">' + arr.slice(0, 200).map(f).join('<br>') + '</div></details>' : ''; };
+    $('ad-r').innerHTML = '<div class="kpis" style="margin:8px 0"><div class="kpi"><b>' + lignes.length + '</b><span>dans l\'export</span></div><div class="kpi"><b>' + (nouveaux.length + lies.length) + '</b><span>nouveaux</span></div><div class="kpi"><b>' + modifs.length + '</b><span>à mettre à jour</span></div><div class="kpi"><b>' + nbMails + '</b><span>nouvelles adresses</span></div></div>' +
+      liste('Nouveaux adhérents', nouveaux, function (l) { return esc(l.prenom + ' ' + l.nom) + (l.cours ? ' · ' + esc(l.cours) : ''); }) +
+      liste('Déjà dans l\'appli sans licence, rattachés à ADOC', lies, function (x) { return esc(x.l.prenom + ' ' + x.l.nom); }) +
+      liste('Mises à jour', modifs, function (x) { return esc(x.l.prenom + ' ' + x.l.nom) + ' : ' + esc(x.d.join(', ')); }) +
+      (partis.length ? liste('Dans l\'appli mais plus dans l\'export', partis, function (p) { return esc(p.prenom + ' ' + p.nom); }) + '<label class="c"><input type="checkbox" id="ad-partis">Les passer en « ancien adhérent » (ils disparaissent des listes, leur historique CLOC\'ARENA est gardé)</label><span class="mut xs">Ne coche que si ton export contient bien tous les adhérents de la saison.</span>' : '') +
+      (nouveaux.length + lies.length + modifs.length + nbMails + partis.length ? '<button class="btn" id="ad-go">Appliquer la mise à jour</button>' : '<p class="small" style="color:var(--ok)">Tout est déjà à jour.</p>');
+    if ($('ad-go')) $('ad-go').onclick = function () { appliquer(lignes, nouveaux, lies, modifs, $('ad-partis') && $('ad-partis').checked ? partis : [], foyers); };
+  };
+  var appliquer = function (lignes, nouveaux, lies, modifs, partis, foyers) {
+    var b = $('ad-go'); b.disabled = true;
+    var etape = function (t) { b.textContent = t; };
+    var foyerDe = {}; foyers.forEach(function (f) { if (f.cle) foyerDe[f.cle] = f.id; });
+    var jeune = function (dn) { return dn ? age(dn) < 18 : false; };
+    var gJ = A.groupes.filter(function (g) { return g.nom === 'Jeunes'; })[0], gA = A.groupes.filter(function (g) { return g.nom === 'Adultes'; })[0];
+    var suite = Promise.resolve(), nbErr = 0;
+    var seq = function (arr, fn) { arr.forEach(function (x) { suite = suite.then(function () { return fn(x); }).catch(function () { nbErr++; }); }); };
+    // 1. Familles manquantes
+    var aCreer = {}; nouveaux.concat(lies.map(function (x) { return x.l; })).forEach(function (l) { if (!foyerDe[l.foyerCle]) aCreer[l.foyerCle] = l.foyerNom; });
+    etape('Familles…');
+    seq(Object.keys(aCreer), function (k) { return q(sb.from('foyers').insert({ cle: k, nom: aCreer[k] }).select('id').single()).then(function (f) { foyerDe[k] = f.id; }); });
+    // 2. Nouveaux adhérents
+    seq(nouveaux, function (l) {
+      etape('Ajout de ' + l.prenom + '…');
+      var j = jeune(l.naiss);
+      return q(sb.from('personnes').insert({ adoc_id: l.licence, nom: l.nom, prenom: l.prenom, sexe: l.sexe, date_naissance: l.naiss, foyer_id: foyerDe[l.foyerCle], cours: l.cours, profil: j ? 'jeune' : 'adulte', email: j ? null : l.email, cotisation_a_jour: l.solde >= 0, actif: true }).select('id').single())
+        .then(function (p) { var g = j ? gJ : gA; return g ? q(sb.from('groupe_membres').insert({ groupe_id: g.id, personne_id: p.id })) : null; });
+    });
+    // 3. Fiches existantes rattachées ou mises à jour (le niveau CLOC'ARENA n'est jamais touché)
+    seq(lies, function (x) { var l = x.l; return q(sb.from('personnes').update({ adoc_id: l.licence, nom: l.nom, prenom: l.prenom, date_naissance: l.naiss || x.p.date_naissance, foyer_id: x.p.foyer_id || foyerDe[l.foyerCle], cours: l.cours, cotisation_a_jour: l.solde >= 0, actif: true }).eq('id', x.p.id)); });
+    seq(modifs, function (x) { var l = x.l; etape('Mise à jour de ' + l.prenom + '…'); return q(sb.from('personnes').update({ nom: l.nom, prenom: l.prenom, date_naissance: l.naiss || x.p.date_naissance, cours: l.cours, cotisation_a_jour: l.solde >= 0, actif: true }).eq('id', x.p.id)); });
+    seq(partis, function (p) { return q(sb.from('personnes').update({ actif: false }).eq('id', p.id)); });
+    // 4. Adresses mail (ajout seulement) et groupes de cours
+    suite = suite.then(function () {
+      etape('Adresses et groupes…');
+      return Promise.all([chargerPers(true), q(sb.from('acces_emails').select('email'))]);
+    }).then(function (r) {
+      var connus = {}; r[1].forEach(function (a) { connus[a.email] = 1; });
+      var parLic = {}; A.pers.forEach(function (p) { if (p.adoc_id) parLic[p.adoc_id] = p; });
+      var mails = [];
+      lignes.forEach(function (l) { var p = parLic[l.licence]; if (!p || !p.foyer_id) return; [l.email, l.email2].forEach(function (mm) { if (mm && !connus[mm]) { connus[mm] = 1; mails.push({ email: mm, foyer_id: p.foyer_id }); } }); });
+      var formules = {}; lignes.forEach(function (l) { String(l.cours || '').split(' | ').filter(Boolean).forEach(function (c) { formules[c] = 1; }); });
+      var manquants = Object.keys(formules).filter(function (n) { return !A.groupes.some(function (g) { return g.nom === n; }); });
+      return (mails.length ? q(sb.from('acces_emails').upsert(mails)) : Promise.resolve())
+        .then(function () { return manquants.length ? q(sb.from('groupes').insert(manquants.map(function (n) { return { nom: n, type: 'cours', description: 'Formule de cours ADOC' }; }))) : null; })
+        .then(function () { return chargerGroupes(true); })
+        .then(function () {
+          var ajouts = [], retraits = [];
+          lignes.forEach(function (l) {
+            var p = parLic[l.licence]; if (!p) return;
+            var voulus = String(l.cours || '').split(' | ').filter(Boolean).map(function (n) { var g = A.groupes.filter(function (x) { return x.nom === n; })[0]; return g && g.id; }).filter(Boolean);
+            var actuels = (p.groupe_membres || []).map(function (g) { return g.groupe_id; }).filter(function (id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g && g.type === 'cours'; });
+            voulus.forEach(function (g) { if (actuels.indexOf(g) < 0) ajouts.push({ groupe_id: g, personne_id: p.id }); });
+            actuels.forEach(function (g) { if (voulus.indexOf(g) < 0) retraits.push({ g: g, p: p.id }); });
+          });
+          var t = ajouts.length ? q(sb.from('groupe_membres').upsert(ajouts, { ignoreDuplicates: true })) : Promise.resolve();
+          retraits.forEach(function (x) { t = t.then(function () { return q(sb.from('groupe_membres').delete().eq('groupe_id', x.g).eq('personne_id', x.p)); }); });
+          return t;
+        });
+    }).catch(function () { nbErr++; });
+    suite.then(function () { return chargerPers(true); }).then(function () {
+      $('ad-r').innerHTML = '<p class="small" style="color:' + (nbErr ? 'var(--ko)' : 'var(--ok)') + '"><b>' + (nbErr ? 'Mise à jour faite, avec ' + nbErr + ' erreur' + (nbErr > 1 ? 's' : '') + '. Relance l\'import pour voir ce qui reste.' : 'Mise à jour terminée.') + '</b></p>' +
+        '<span class="small">' + (nouveaux.length + lies.length) + ' nouveau' + (nouveaux.length + lies.length > 1 ? 'x' : '') + ', ' + modifs.length + ' mis à jour' + (partis.length ? ', ' + partis.length + ' passé' + (partis.length > 1 ? 's' : '') + ' en ancien adhérent' : '') + '.</span><span class="mut xs">Pense à donner leur niveau CLOC\'ARENA aux nouveaux jeunes qui jouent le tournoi.</span>';
+    });
+  };
+}
+
 // ---------- Groupes ----------
 function vueGroupes(m) {
   m.innerHTML = entete('Groupes', 'Les groupes servent à cibler l\'agenda, les actus et les notifications.', '<button class="btn" id="g-new">Nouveau groupe</button>') + '<div id="g-l"><div class="skel"></div></div>';
@@ -679,7 +823,7 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
-var VUES = { accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, presence: vuePresence, acces: vueAcces };
+var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, presence: vuePresence, acces: vueAcces };
 function router() {
   if (!A.user) return;
   fermer();

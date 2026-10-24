@@ -728,13 +728,13 @@ var G = { joueurs: null, form: null };
 function pageGestion() {
   if (!S.user || !(S.isStaff || S.gere.length)) return '<div class="pagehead wrap"><h1>Gestion</h1></div><main><section class="card empty">Espace réservé à l\'équipe du club.</section></main>';
   var h = '<div class="darkhead"><div class="wrap"><div class="kicker">GESTION · ' + (S.isDir ? 'DIRECTION SPORTIVE' : 'ÉQUIPE DU CLUB') + '</div><h1>CLOC\'ARENA</h1>' +
-    '<div class="seg" style="margin-top:14px">' + [['saisir', 'Saisir'], ['valider', 'À valider'], ['recents', 'Récents']].map(function (t) {
+    '<div class="seg" style="margin-top:14px">' + [['saisir', 'Saisir'], ['valider', 'À valider'], ['recents', 'Récents'], ['niveaux', 'Niveaux']].map(function (t) {
       return '<button data-gtab="' + t[0] + '" class="' + (S.gesTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>';
     }).join('') + '</div></div></div><main id="ges-main"><div class="skel"></div></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-gtab]'), function (b) { b.onclick = function () { S.gesTab = b.dataset.gtab; render(); }; });
     Promise.all([chargerJoueurs(), chargerFormats()]).then(function () {
-      if (S.gesTab === 'saisir') gesSaisir(); else if (S.gesTab === 'valider') gesListe('propose'); else gesListe('valide');
+      if (S.gesTab === 'saisir') gesSaisir(); else if (S.gesTab === 'valider') gesListe('propose'); else if (S.gesTab === 'niveaux') gesNiveaux(); else gesListe('valide');
     }).catch(function () { $('ges-main').innerHTML = '<section class="card empty">Impossible de charger les joueurs.</section>'; });
   });
   return h + (S.isStaff ? '<div style="padding:0 16px"><a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion complet (adhérents, actus, événements…)</a></div>' : '') +
@@ -816,6 +816,25 @@ function enregistrerMatch(dbl) {
       if (match) sb.from('arena_matchs').delete().eq('id', match.id);
       toast('Enregistrement impossible, réessaie'); $('g-save').disabled = false;
     });
+}
+function gesNiveaux() {
+  var box = $('ges-main');
+  var h = '<p class="mut small" style="margin:0">Le niveau fixé ici est celui du joueur dans CLOC\'ARENA : classement par niveau, séances dans son agenda, notifications.</p>';
+  NIVEAUX.forEach(function (n) {
+    var l = G.joueurs.filter(function (j) { return j.niveau_arena === n; }); if (!l.length) return;
+    h += '<div class="dayhead">' + niveauBadge(n) + ' <span class="mut small">' + l.length + ' joueur' + (l.length > 1 ? 's' : '') + '</span></div><section class="card tight">' + l.map(function (j) {
+      return '<div class="row"><b class="small">' + esc(j.prenom + ' ' + j.nom) + '</b><select class="f" data-niv="' + j.id + '" style="width:auto;min-height:40px">' + NIVEAUX.map(function (x) { return '<option' + (x === n ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>';
+    }).join('') + '</section>';
+  });
+  box.innerHTML = h;
+  Array.prototype.forEach.call(box.querySelectorAll('[data-niv]'), function (sel) {
+    sel.onchange = function () {
+      var j = G.joueurs.filter(function (x) { return x.id === sel.dataset.niv; })[0], n = sel.value;
+      if (!confirm('Passer ' + j.prenom + ' en ' + n + ' ?')) { sel.value = j.niveau_arena; return; }
+      q(sb.rpc('changer_niveau', { p: j.id, niveau: n })).then(function () { j.niveau_arena = n; S.classement = null; toast(j.prenom + ' passe en ' + n); gesNiveaux(); })
+        .catch(function () { sel.value = j.niveau_arena; toast('Changement impossible : seuls la direction et le coach du groupe peuvent le faire'); });
+    };
+  });
 }
 function gesListe(statut) {
   var box = $('ges-main');
