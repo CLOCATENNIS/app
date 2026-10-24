@@ -582,7 +582,7 @@ function vueAdoc(m) {
     var foyerDe = {}; foyers.forEach(function (f) { if (f.cle) foyerDe[f.cle] = f.id; });
     var jeune = function (dn) { return dn ? age(dn) < 18 : false; };
     var gJ = A.groupes.filter(function (g) { return g.nom === 'Jeunes'; })[0], gA = A.groupes.filter(function (g) { return g.nom === 'Adultes'; })[0];
-    var suite = Promise.resolve(), nbErr = 0;
+    var suite = Promise.resolve(), nbErr = 0, places = 0;
     var seq = function (arr, fn) { arr.forEach(function (x) { suite = suite.then(function () { return fn(x); }).catch(function () { nbErr++; }); }); };
     // 1. Familles manquantes
     var aCreer = {}; nouveaux.concat(lies.map(function (x) { return x.l; })).forEach(function (l) { if (!foyerDe[l.foyerCle]) aCreer[l.foyerCle] = l.foyerNom; });
@@ -626,10 +626,24 @@ function vueAdoc(m) {
           retraits.forEach(function (x) { t = t.then(function () { return q(sb.from('groupe_membres').delete().eq('groupe_id', x.g).eq('personne_id', x.p)); }); });
           return t;
         });
+    }).then(function () {
+      // Joueurs du planning qui attendaient d'être dans ADOC : placés dans leur créneau
+      etape('Créneaux en attente…');
+      return q(sb.from('creneaux_en_attente').select('id, nom_planning, groupe_id')).then(function (att) {
+        var jeu = function (s) { return norm(s).replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' '); };
+        var t = Promise.resolve();
+        (att || []).forEach(function (a) {
+          var k = jeu(a.nom_planning), p = A.pers.filter(function (x) { return x.actif !== false && jeu(x.nom + ' ' + x.prenom) === k; });
+          if (p.length !== 1) return;
+          t = t.then(function () { return q(sb.from('groupe_membres').upsert({ groupe_id: a.groupe_id, personne_id: p[0].id }, { ignoreDuplicates: true })); })
+            .then(function () { places++; return q(sb.from('creneaux_en_attente').delete().eq('id', a.id)); });
+        });
+        return t;
+      });
     }).catch(function () { nbErr++; });
     suite.then(function () { return chargerPers(true); }).then(function () {
       $('ad-r').innerHTML = '<p class="small" style="color:' + (nbErr ? 'var(--ko)' : 'var(--ok)') + '"><b>' + (nbErr ? 'Mise à jour faite, avec ' + nbErr + ' erreur' + (nbErr > 1 ? 's' : '') + '. Relance l\'import pour voir ce qui reste.' : 'Mise à jour terminée.') + '</b></p>' +
-        '<span class="small">' + (nouveaux.length + lies.length) + ' nouveau' + (nouveaux.length + lies.length > 1 ? 'x' : '') + ', ' + modifs.length + ' mis à jour' + (partis.length ? ', ' + partis.length + ' passé' + (partis.length > 1 ? 's' : '') + ' en ancien adhérent' : '') + '.</span><span class="mut xs">Pense à donner leur niveau CLOC\'ARENA aux nouveaux jeunes qui jouent le tournoi.</span>';
+        '<span class="small">' + (nouveaux.length + lies.length) + ' nouveau' + (nouveaux.length + lies.length > 1 ? 'x' : '') + ', ' + modifs.length + ' mis à jour' + (partis.length ? ', ' + partis.length + ' passé' + (partis.length > 1 ? 's' : '') + ' en ancien adhérent' : '') + (places ? ', ' + places + ' placé' + (places > 1 ? 's' : '') + ' dans leur créneau du planning' : '') + '.</span><span class="mut xs">Pense à donner leur niveau CLOC\'ARENA aux nouveaux jeunes qui jouent le tournoi.</span>';
     });
   };
 }
