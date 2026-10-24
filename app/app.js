@@ -251,8 +251,8 @@ function pageAgenda() {
     '<button class="back" aria-label="Semaine précédente" id="wk-prev" style="width:44px;justify-content:center">' + ic('back', 20) + '</button>' +
     '<b>' + (S.week === 0 ? 'Cette semaine' : S.week === 1 ? 'Semaine prochaine' : 'Semaine du ' + fmtCourt(l)) + '</b>' +
     '<button class="back" aria-label="Semaine suivante" id="wk-next" style="width:44px;justify-content:center">' + ic('next', 20) + '</button></div>';
-  var pause = (AG && AG.pauses || []).filter(function (v) { return v.debut <= isoJour(new Date(f.getTime() - 864e5)) && v.fin >= isoJour(l); })[0];
-  if (pause) h += '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">Pas de cours collectifs jusqu\'au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.</span></section>';
+  var pause = (AG && AG.pauses || []).slice().sort(function (x, y) { return (y.fin > y.debut) - (x.fin > x.debut); }).filter(function (v) { return v.debut <= isoJour(new Date(f.getTime() - 864e5)) && v.fin >= isoJour(l); })[0];
+  if (pause) h += '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">' + (pause.debut === pause.fin ? 'Pas de cours collectifs ce jour-là (' + esc(fmtJour(new Date(pause.debut + 'T12:00:00')).toLowerCase()) + ').' : 'Pas de cours collectifs du ' + esc(fmtCourt(new Date(pause.debut + 'T12:00:00'))) + ' au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.') + '</span></section>';
   if (!items.length) h += '<section class="card empty">Rien de prévu cette semaine.</section>';
   var jour = '';
   items.forEach(function (it, k) {
