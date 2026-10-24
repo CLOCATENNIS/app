@@ -195,6 +195,7 @@ function pageAccueil() {
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div></div>' +
     selFamille(true) + '</div></div><main>';
+  h += '<div id="presence"></div>';
   if (urgent) h += '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
 
   // Prochain rendez-vous
@@ -421,7 +422,7 @@ function pageClub(sous) {
     var box = $('club-main');
     if (S.clubTab === 'actus') box.innerHTML = clubActus();
     else if (S.clubTab === 'evenements') box.innerHTML = clubEvenements();
-    else if (S.clubTab === 'infos') box.innerHTML = clubInfos();
+    else if (S.clubTab === 'infos') { box.innerHTML = clubInfos(); remplirPresence(); }
     else clubAnnonces(box);
   });
   return h;
@@ -457,7 +458,7 @@ function clubEvenements() {
 function clubInfos() {
   return '<section class="card stack" style="gap:6px"><span class="eyebrow">Le club</span><b style="font-size:17px">CLOCA Tennis</b><span class="mut">81 rue de Saint-Germain, 78260 Achères</span>' +
     '<a class="btn" style="margin-top:6px" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=81+Rue+de+Saint-Germain+78260+Ach%C3%A8res">' + ic('pin', 18, '#fff') + 'Itinéraire</a></section>' +
-    '<section class="card stack" style="gap:6px"><span class="eyebrow">Club house</span><b>Ouvert le mercredi et le samedi</b><span class="mut">9h30 – 12h et 14h – 16h30</span><a class="btn ghost" href="tel:+33139116947">01 39 11 69 47</a></section>' +
+    '<div id="presence"></div><section class="card stack" style="gap:6px"><span class="eyebrow">Club house</span><b>Ouvert le mercredi et le samedi</b><span class="mut">9h30 – 12h et 14h – 16h30</span><a class="btn ghost" href="tel:+33139116947">01 39 11 69 47</a></section>' +
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Coordinateur sportif</span><b>Dorian</b><a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + WA_CLUB + '">WhatsApp</a>' +
     '<div class="grid2"><a class="btn line" href="tel:+' + WA_CLUB + '">Appeler</a><a class="btn line" href="sms:+' + WA_CLUB + '">SMS</a></div></section>' +
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Installer l\'appli</span><span class="small"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l\'écran d\'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Installer l\'application ».</span></section>' +
@@ -880,7 +881,13 @@ function cordDeposer(box) {
   var F = CF, actifs = C.cordages.filter(function (c) { return c.actif; });
   var prix = F.fourni === 'club' ? (actifs.filter(function (c) { return c.id === F.cordage; })[0] || {}).prix : tarifPose();
   var pick = function (attr, val, on, label, extra) { return '<button type="button" class="pick' + (on ? ' on' : '') + '" data-' + attr + '="' + esc(val) + '" style="width:100%;text-align:left;background:' + (on ? 'var(--sun)' : 'var(--card)') + '"><span style="flex:1">' + label + '</span>' + (extra || '') + '</button>'; };
-  var h = '<section class="card stack" style="gap:6px"><b>Comment ça marche</b><span class="mut small">1. Remplis ce formulaire. 2. Laisse ta raquette au club house avec une étiquette à ton nom. 3. Tu reçois une notification dès qu\'elle est cordée, et tu règles en la récupérant.</span></section>' +
+  var histo = C.dem.filter(function (d) { return aMoi(d) && d.statut === 'recupere'; }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 5);
+  var h = infosAtelier() + '<div id="presence"></div>' +
+    (histo.length ? '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">Mes derniers cordages</div>' + histo.map(function (d) {
+      return '<div class="row"><div class="stack" style="min-width:0"><b class="small">' + esc(d.nom.split(' ')[0]) + ' · ' + esc(fmtCourt(new Date(d.recupere_le || d.fini_le || d.created_at))) + '</b><span class="mut xs">' +
+        esc(d.fourni_par === 'club' ? (d.cordages ? d.cordages.nom : 'Cordage du club') : (d.cordage_perso || 'Cordage perso')) + (d.tension ? ' · ' + esc(d.tension) : '') + (d.raquette ? ' · ' + esc(d.raquette) : '') + ' · ' + euros(d.prix) + '</span></div>' +
+        '<button class="chip" data-crefaire="' + d.id + '" style="flex:none">Refaire le même</button></div>';
+    }).join('') + '</section>' : '') +
     '<section class="card stack" style="gap:10px"><span class="eyebrow">Pour qui ?</span>' +
     S.pers.map(function (p) { return pick('cqui', p.id, F.qui === p.id, '<span class="dot" style="background:' + S.couleur[p.id] + ';margin-right:8px"></span>' + esc(p.prenom + ' ' + p.nom)); }).join('') +
     (cordeur ? pick('cqui', 'ext', F.qui === 'ext', 'Autre joueur (saisi par le cordeur)') + (F.qui === 'ext' ? '<label class="f">Nom du joueur<input class="f" data-cf="nomExt" value="' + esc(F.nomExt) + '" placeholder="Prénom Nom"></label>' : '') : '') +
@@ -899,6 +906,17 @@ function cordDeposer(box) {
   box.innerHTML = h;
   Array.prototype.forEach.call(box.querySelectorAll('[data-cf]'), function (i) { i.oninput = function () { F[i.dataset.cf] = i.value; }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-cqui]'), function (b) { b.onclick = function () { F.qui = b.dataset.cqui; cordDeposer(box); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-crefaire]'), function (b) {
+    b.onclick = function () {
+      var d = C.dem.filter(function (x) { return x.id === b.dataset.crefaire; })[0]; if (!d) return;
+      var encore = d.cordage_id && actifs.some(function (c) { return c.id === d.cordage_id; });
+      CF = { qui: d.personne_id || (cordeur ? 'ext' : ''), nomExt: d.personne_id ? '' : d.nom, raquette: d.raquette || '', fourni: d.fourni_par, cordage: encore ? d.cordage_id : '', perso: d.cordage_perso || '',
+        tension: d.tension || '', avant: '', tel: d.telephone || F.tel, note: '' };
+      cordDeposer(box); window.scrollTo(0, document.querySelector('[data-cfour]').getBoundingClientRect().top + window.scrollY - 120);
+      toast(d.fourni_par === 'club' && !encore ? 'Ce cordage n\'est plus proposé : choisis-en un autre' : 'Formulaire rempli comme la dernière fois');
+    };
+  });
+  remplirPresence();
   Array.prototype.forEach.call(box.querySelectorAll('[data-cfour]'), function (b) { b.onclick = function () { F.fourni = b.dataset.cfour; cordDeposer(box); }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-ccord]'), function (b) { b.onclick = function () { F.cordage = b.dataset.ccord; cordDeposer(box); }; });
   $('cf-go').onclick = function () {
@@ -1099,6 +1117,64 @@ function lierPush() {
   };
 }
 
+// ---------- Présence au club (rouge / orange / vert) ----------
+var PRES = null, PRES_T = 0;
+var ETATS = {
+  ouvert: { c: '#1f8a4c', t: 'Club house ouvert', d: 'Quelqu\'un est à l\'accueil pour te rendre ta raquette.' },
+  coach: { c: '#d9822b', t: 'Un coach est au club', d: 'Il est sur le terrain : pas toujours disponible pour rendre une raquette.' },
+  ferme: { c: '#c62f2f', t: 'Personne au club', d: 'Personne n\'est présent pour le moment.' }
+};
+function chargerPresence(force) {
+  if (!force && PRES && Date.now() - PRES_T < 60e3) return Promise.resolve(PRES);
+  return q(sb.from('club_presence').select('etat, jusqua, message, maj_le').eq('id', 1).maybeSingle()).then(function (p) { PRES = p; PRES_T = Date.now(); return p; });
+}
+function etatEffectif(p) { return !p || (p.etat !== 'ferme' && p.jusqua && new Date(p.jusqua) < new Date()) ? 'ferme' : p.etat; }
+function estEquipe() { return S.user && S.roles.length > 0; }
+function remplirPresence() {
+  var box = $('presence'); if (!box || !sb) return;
+  chargerPresence().then(function (p) {
+    if (!$('presence')) return;
+    var e = etatEffectif(p), E = ETATS[e];
+    var h = '<section class="card stack" style="gap:6px"><div style="display:flex;gap:10px;align-items:center"><span class="dot" style="width:14px;height:14px;background:' + E.c + ';box-shadow:0 0 0 4px ' + E.c + '33"></span>' +
+      '<b>' + E.t + (e !== 'ferme' && p.jusqua ? ' jusqu\'à ' + fmtH(new Date(p.jusqua)) : '') + '</b></div>' +
+      '<span class="mut small">' + E.d + '</span>' + (e !== 'ferme' && p.message ? '<span class="small">' + esc(p.message) + '</span>' : '') +
+      (p && p.maj_le ? '<span class="mut xs">Mis à jour ' + (isoJour(new Date(p.maj_le)) === isoJour(new Date()) ? 'à ' + fmtH(new Date(p.maj_le)) : 'le ' + esc(fmtCourt(new Date(p.maj_le)))) + '</span>' : '') +
+      (estEquipe() ? '<button class="btn ghost" id="pres-edit" style="margin-top:4px">Je mets à jour</button>' : '') + '</section>';
+    box.innerHTML = h;
+    if ($('pres-edit')) $('pres-edit').onclick = function () { editerPresence(box, p, e); };
+  }).catch(function () { box.innerHTML = ''; });
+}
+function editerPresence(box, p, e) {
+  var choix = e, fin = new Date(Date.now() + 2 * 3600e3); fin.setMinutes(Math.ceil(fin.getMinutes() / 15) * 15, 0, 0);
+  var heure = p && p.jusqua && new Date(p.jusqua) > new Date() ? fmtH(new Date(p.jusqua)).replace('h', ':') : ('0' + fin.getHours()).slice(-2) + ':' + ('0' + fin.getMinutes()).slice(-2);
+  var dessiner = function () {
+    box.innerHTML = '<section class="card stack" style="gap:10px"><b>Qui est au club ?</b>' + ['ouvert', 'coach', 'ferme'].map(function (k) {
+      return '<button type="button" class="pick' + (choix === k ? ' on' : '') + '" data-pres="' + k + '" style="width:100%;text-align:left;background:' + (choix === k ? 'var(--sun)' : 'var(--card)') + '"><span class="dot" style="background:' + ETATS[k].c + ';margin-right:10px"></span>' + ETATS[k].t + '</button>';
+    }).join('') +
+      (choix !== 'ferme' ? '<label class="f">Jusqu\'à<input class="f" type="time" id="pres-h" value="' + heure + '" step="900"></label><label class="f">Message (facultatif)<input class="f" id="pres-m" maxlength="120" value="' + esc(p && p.message || '') + '" placeholder="Ex. raquettes à récupérer au bureau"></label>' : '') +
+      '<div class="grid2"><button class="btn line" id="pres-annul">Annuler</button><button class="btn" id="pres-ok">Enregistrer</button></div></section>';
+    Array.prototype.forEach.call(box.querySelectorAll('[data-pres]'), function (b) { b.onclick = function () { if ($('pres-h')) heure = $('pres-h').value; choix = b.dataset.pres; dessiner(); }; });
+    $('pres-annul').onclick = remplirPresence;
+    $('pres-ok').onclick = function () {
+      var row = { etat: choix, jusqua: null, message: null };
+      if (choix !== 'ferme') {
+        var hm = ($('pres-h').value || '').split(':'); if (hm.length < 2) return toast('Indique jusqu\'à quelle heure');
+        var j = new Date(); j.setHours(+hm[0], +hm[1], 0, 0); if (j <= new Date()) return toast('L\'heure doit être après maintenant');
+        row.jusqua = j.toISOString(); row.message = ($('pres-m').value || '').trim() || null;
+      }
+      q(sb.from('club_presence').update(row).eq('id', 1)).then(function () { toast('Présence mise à jour'); return chargerPresence(true); }).then(remplirPresence).catch(function () { toast('Mise à jour impossible'); });
+    };
+  };
+  dessiner();
+}
+function infosAtelier() {
+  return '<section class="card stack" style="gap:8px"><span class="eyebrow">Atelier cordage du club</span>' +
+    '<div class="row" style="padding:6px 0;border:0"><span class="mut small">Cordeur officiel</span><b class="small">Skander</b></div>' +
+    '<div class="row" style="padding:6px 0"><span class="mut small">Jours de cordage</span><b class="small" style="text-align:right">Vendredi soir et samedi après-midi</b></div>' +
+    '<div class="row" style="padding:6px 0"><span class="mut small">Paiement</span><b class="small">En espèces, au retrait</b></div>' +
+    '<span class="mut xs">Remplis le formulaire, laisse ta raquette au club house avec une étiquette à ton nom : tu es prévenu dès qu\'elle est cordée.</span></section>';
+}
+
 // ---------- Routeur ----------
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
@@ -1112,7 +1188,7 @@ function render() {
   else if (p === 'profil') html = pageProfil();
   else if (p === 'gestion') html = pageGestion();
   else if (p === 'cordage') { html = pageCordage(arg); actif = 'accueil'; }
-  else { html = pageAccueil(); actif = 'accueil'; setTimeout(lierSel); }
+  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); }); }
   $('app').innerHTML = html;
   tabs(actif);
   window.scrollTo(0, 0);
