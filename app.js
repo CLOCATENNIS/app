@@ -1128,20 +1128,63 @@ function chargerPresence(force) {
   if (!force && PRES && Date.now() - PRES_T < 60e3) return Promise.resolve(PRES);
   return q(sb.from('club_presence').select('etat, jusqua, message, maj_le').eq('id', 1).maybeSingle()).then(function (p) { PRES = p; PRES_T = Date.now(); return p; });
 }
-function etatEffectif(p) { return !p || (p.etat !== 'ferme' && p.jusqua && new Date(p.jusqua) < new Date()) ? 'ferme' : p.etat; }
+// Horaires habituels (jour : 1 = lundi … 7 = dimanche)
+var HORAIRES = {
+  clubhouse: { 3: [['09:30', '12:00'], ['14:00', '16:30']], 6: [['09:30', '12:00'], ['14:00', '16:30']] },
+  coach: { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] }
+};
+var JOURS = ['', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+function aHeure(j, hm) { var x = new Date(j), t = hm.split(':'); x.setHours(+t[0], +t[1], 0, 0); return x; }
+function creneauEnCours(type, now) {
+  now = now || new Date(); var js = now.getDay() || 7;
+  var l = (HORAIRES[type][js] || []).map(function (c) { return { debut: aHeure(now, c[0]), fin: aHeure(now, c[1]) }; });
+  return l.filter(function (c) { return now >= c.debut && now < c.fin; })[0] || null;
+}
+function prochainCreneau(type) {
+  var now = new Date();
+  for (var k = 0; k < 8; k++) {
+    var j = new Date(now); j.setDate(j.getDate() + k); var js = j.getDay() || 7;
+    var c = (HORAIRES[type][js] || []).map(function (x) { return aHeure(j, x[0]); }).filter(function (d) { return d > now; })[0];
+    if (c) return c;
+  }
+  return null;
+}
+function quandTexte(d) {
+  var auj = debutJour(new Date()), dj = debutJour(d), n = Math.round((dj - auj) / 864e5);
+  return (n === 0 ? 'aujourd\'hui' : n === 1 ? 'demain' : JOURS[d.getDay() || 7]) + ' à ' + fmtH(d);
+}
+// Ce qu'on affiche : la mise à jour manuelle tant qu'elle court, sinon les horaires des cours
+function etatAffiche(p) {
+  var now = new Date();
+  if (p && p.jusqua && new Date(p.jusqua) > now) return { etat: p.etat, fin: new Date(p.jusqua), manuel: true, message: p.message };
+  var c = creneauEnCours('coach');
+  if (c) return { etat: 'coach', fin: c.fin, auto: true };
+  return { etat: 'ferme', prochain: prochainCreneau('coach') };
+}
 function estEquipe() { return S.user && S.roles.length > 0; }
 function remplirPresence() {
   var box = $('presence'); if (!box || !sb) return;
   chargerPresence().then(function (p) {
     if (!$('presence')) return;
-    var e = etatEffectif(p), E = ETATS[e];
+    var A = etatAffiche(p), E = ETATS[A.etat], ch = creneauEnCours('clubhouse');
     var h = '<section class="card stack" style="gap:6px"><div style="display:flex;gap:10px;align-items:center"><span class="dot" style="width:14px;height:14px;background:' + E.c + ';box-shadow:0 0 0 4px ' + E.c + '33"></span>' +
-      '<b>' + E.t + (e !== 'ferme' && p.jusqua ? ' jusqu\'à ' + fmtH(new Date(p.jusqua)) : '') + '</b></div>' +
-      '<span class="mut small">' + E.d + '</span>' + (e !== 'ferme' && p.message ? '<span class="small">' + esc(p.message) + '</span>' : '') +
-      (p && p.maj_le ? '<span class="mut xs">Mis à jour ' + (isoJour(new Date(p.maj_le)) === isoJour(new Date()) ? 'à ' + fmtH(new Date(p.maj_le)) : 'le ' + esc(fmtCourt(new Date(p.maj_le)))) + '</span>' : '') +
-      (estEquipe() ? '<button class="btn ghost" id="pres-edit" style="margin-top:4px">Je mets à jour</button>' : '') + '</section>';
-    box.innerHTML = h;
-    if ($('pres-edit')) $('pres-edit').onclick = function () { editerPresence(box, p, e); };
+      '<b>' + E.t + (A.fin ? ' jusqu\'à ' + fmtH(A.fin) : '') + '</b></div>' +
+      '<span class="mut small">' + E.d + (A.etat === 'ferme' && A.prochain ? ' Prochain créneau : ' + quandTexte(A.prochain) + '.' : '') + '</span>' +
+      (A.message ? '<span class="small">' + esc(A.message) + '</span>' : '') +
+      (A.etat === 'coach' && ch ? '<span class="mut xs">Le club house ouvre normalement à cette heure : l\'accueil le confirmera ici.</span>' : '') +
+      (A.manuel && p.maj_le ? '<span class="mut xs">Mis à jour à ' + fmtH(new Date(p.maj_le)) + '</span>' : A.auto ? '<span class="mut xs">D\'après les horaires des cours</span>' : '');
+    if (estEquipe()) {
+      var finCh = ch ? ch.fin : new Date(Date.now() + 2 * 3600e3);
+      h += A.etat === 'ouvert' && A.manuel
+        ? '<button class="btn line" id="pres-fermer" style="margin-top:4px">Je ferme le club house</button>'
+        : '<button class="btn" id="pres-ouvrir" style="margin-top:4px;background:#1f8a4c">J\'ouvre le club house' + (ch ? ' jusqu\'à ' + fmtH(ch.fin) : '') + '</button>';
+      h += '<button class="btn ghost" id="pres-edit">Autre mise à jour</button>';
+    }
+    box.innerHTML = h + '</section>';
+    var maj = function (row, msg) { q(sb.from('club_presence').update(row).eq('id', 1)).then(function () { toast(msg); return chargerPresence(true); }).then(remplirPresence).catch(function () { toast('Mise à jour impossible'); }); };
+    if ($('pres-ouvrir')) $('pres-ouvrir').onclick = function () { if (!ch) finCh.setMinutes(Math.ceil(finCh.getMinutes() / 15) * 15, 0, 0); maj({ etat: 'ouvert', jusqua: finCh.toISOString(), message: null }, 'Club house ouvert'); };
+    if ($('pres-fermer')) $('pres-fermer').onclick = function () { maj({ etat: 'ferme', jusqua: null, message: null }, 'Club house fermé'); };
+    if ($('pres-edit')) $('pres-edit').onclick = function () { editerPresence(box, p, A.etat); };
   }).catch(function () { box.innerHTML = ''; });
 }
 function editerPresence(box, p, e) {
@@ -1151,18 +1194,18 @@ function editerPresence(box, p, e) {
     box.innerHTML = '<section class="card stack" style="gap:10px"><b>Qui est au club ?</b>' + ['ouvert', 'coach', 'ferme'].map(function (k) {
       return '<button type="button" class="pick' + (choix === k ? ' on' : '') + '" data-pres="' + k + '" style="width:100%;text-align:left;background:' + (choix === k ? 'var(--sun)' : 'var(--card)') + '"><span class="dot" style="background:' + ETATS[k].c + ';margin-right:10px"></span>' + ETATS[k].t + '</button>';
     }).join('') +
-      (choix !== 'ferme' ? '<label class="f">Jusqu\'à<input class="f" type="time" id="pres-h" value="' + heure + '" step="900"></label><label class="f">Message (facultatif)<input class="f" id="pres-m" maxlength="120" value="' + esc(p && p.message || '') + '" placeholder="Ex. raquettes à récupérer au bureau"></label>' : '') +
+      '<label class="f">Jusqu\'à<input class="f" type="time" id="pres-h" value="' + heure + '" step="900"></label>' +
+      (choix !== 'ferme' ? '<label class="f">Message (facultatif)<input class="f" id="pres-m" maxlength="120" value="' + esc(p && p.message || '') + '" placeholder="Ex. raquettes à récupérer au bureau"></label>' : '<span class="mut xs">Exemple : cours annulé, personne au club jusqu\'à l\'heure indiquée.</span>') +
+      '<button class="btn line" id="pres-auto">Revenir aux horaires habituels</button>' +
       '<div class="grid2"><button class="btn line" id="pres-annul">Annuler</button><button class="btn" id="pres-ok">Enregistrer</button></div></section>';
-    Array.prototype.forEach.call(box.querySelectorAll('[data-pres]'), function (b) { b.onclick = function () { if ($('pres-h')) heure = $('pres-h').value; choix = b.dataset.pres; dessiner(); }; });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-pres]'), function (b) { b.onclick = function () { heure = $('pres-h').value; choix = b.dataset.pres; dessiner(); }; });
+    var envoyer = function (row, msg) { q(sb.from('club_presence').update(row).eq('id', 1)).then(function () { toast(msg); return chargerPresence(true); }).then(remplirPresence).catch(function () { toast('Mise à jour impossible'); }); };
     $('pres-annul').onclick = remplirPresence;
+    $('pres-auto').onclick = function () { envoyer({ etat: 'ferme', jusqua: null, message: null }, 'Horaires habituels rétablis'); };
     $('pres-ok').onclick = function () {
-      var row = { etat: choix, jusqua: null, message: null };
-      if (choix !== 'ferme') {
-        var hm = ($('pres-h').value || '').split(':'); if (hm.length < 2) return toast('Indique jusqu\'à quelle heure');
-        var j = new Date(); j.setHours(+hm[0], +hm[1], 0, 0); if (j <= new Date()) return toast('L\'heure doit être après maintenant');
-        row.jusqua = j.toISOString(); row.message = ($('pres-m').value || '').trim() || null;
-      }
-      q(sb.from('club_presence').update(row).eq('id', 1)).then(function () { toast('Présence mise à jour'); return chargerPresence(true); }).then(remplirPresence).catch(function () { toast('Mise à jour impossible'); });
+      var hm = ($('pres-h').value || '').split(':'); if (hm.length < 2) return toast('Indique jusqu\'à quelle heure');
+      var j = new Date(); j.setHours(+hm[0], +hm[1], 0, 0); if (j <= new Date()) return toast('L\'heure doit être après maintenant');
+      envoyer({ etat: choix, jusqua: j.toISOString(), message: choix !== 'ferme' ? (($('pres-m').value || '').trim() || null) : null }, 'Présence mise à jour');
     };
   };
   dessiner();
