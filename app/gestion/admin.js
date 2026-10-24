@@ -25,7 +25,7 @@ var MODULES = [
 ];
 var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', coach: 'Coach', responsable: 'Responsable' };
 var TYPES_EVT = { seance: 'Séance', stage: 'Stage', tournoi: 'Tournoi', animation: 'Animation', reunion: 'Réunion', autre: 'Autre' };
-var TYPES_GRP = { niveau: 'Niveaux CLOC\'ARENA', activite: 'Activités', cours: 'Cours', profil: 'Profils', evenement: 'Événements', autre: 'Autres' };
+var TYPES_GRP = { niveau: 'Niveaux CLOC\'ARENA', creneau: 'Créneaux de cours', activite: 'Activités', cours: 'Formules ADOC', profil: 'Profils', evenement: 'Événements', autre: 'Autres' };
 var A = { user: null, roles: [], mods: [], groupes: [], pers: null, view: 'accueil' };
 
 // ---------- Outils ----------
@@ -77,7 +77,12 @@ document.addEventListener('keydown', function (e) { if (e.key === 'Escape') ferm
 function chargerGroupes(force) {
   if (A.groupes.length && !force) return Promise.resolve(A.groupes);
   var ORDRE = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
-  var rang = function (g) { var i = ORDRE.indexOf(String(g.nom).replace("CLOC'ARENA ", '')); return g.type === 'niveau' && i >= 0 ? i : 99; };
+  var JRS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+  var rang = function (g) {
+    if (g.type === 'niveau') { var i = ORDRE.indexOf(String(g.nom).replace("CLOC'ARENA ", '')); return i >= 0 ? i : 99; }
+    if (g.type === 'creneau') { var m = String(g.nom).toLowerCase().match(/^(\w+)\s+(\d+)h(\d*)/); if (m && JRS.indexOf(m[1]) >= 0) return JRS.indexOf(m[1]) * 10000 + (+m[2]) * 100 + (+m[3] || 0); }
+    return 99999;
+  };
   return q(sb.from('groupes').select('id, nom, type, couleur, actif, description').order('type').order('nom')).then(function (l) {
     A.groupes = (l || []).sort(function (a, b) { return a.type === b.type ? (rang(a) - rang(b)) || a.nom.localeCompare(b.nom, 'fr') : (a.type < b.type ? -1 : 1); });
     return A.groupes;

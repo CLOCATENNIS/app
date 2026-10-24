@@ -152,7 +152,7 @@ function mesItems(du, au) {
       if (!qui.length) continue;
       var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
       var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var f = new Date(j); f.setHours(+b[0], +b[1], 0, 0);
-      items.push({ d: d, f: f, titre: cr.groupes ? cr.groupes.nom : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [] });
+      items.push({ d: d, f: f, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [] });
     }
   });
   items.sort(function (x, y) { return x.d - y.d; });

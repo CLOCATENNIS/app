@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       while (((premier.getUTCDay() || 7) as number) !== c.jour_semaine) premier.setUTCDate(premier.getUTCDate() + 1);
       const jour = premier.toISOString().slice(0, 10);
       const noms = (parGroupe[c.groupe_id] || []).map((p) => prenom[p]).filter(Boolean);
-      const g = (c.groupes as unknown as { nom: string } | null)?.nom || "Cours";
+      const g = ((c.groupes as unknown as { nom: string } | null)?.nom || "Cours").replace(/^.*?·\s*/, "").replace(/\s*\([^)]*\)\s*$/, "");
       L.push("BEGIN:VEVENT", "UID:cours-" + c.id + "@clocatennis.fr", "DTSTAMP:" + stamp,
         "DTSTART;TZID=Europe/Paris:" + local(jour, c.heure_debut), "DTEND;TZID=Europe/Paris:" + local(jour, c.heure_fin),
         "RRULE:FREQ=WEEKLY;BYDAY=" + JOURS[c.jour_semaine] + (c.au ? ";UNTIL=" + c.au.replace(/-/g, "") + "T235959Z" : ""),
