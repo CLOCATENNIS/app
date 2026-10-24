@@ -62,7 +62,7 @@ function charger(c,user){
   var fin=new Date(debut); fin.setDate(fin.getDate()+28);
   Promise.all([
     c.from("comptes").select("foyer_id,personne_id,email").eq("user_id",user.id).maybeSingle(),
-    c.from("personnes").select("id,prenom,nom,profil,niveau_arena,groupe_membres(groupe_id,groupes(nom,couleur,type))").order("prenom"),
+    c.from("personnes").select("id,prenom,nom,profil,niveau_arena,foyer_id,groupe_membres(groupe_id,groupes(nom,couleur,type))").order("prenom"),
     c.from("evenements").select("id,titre,description,debut,fin,lieu,encadrant,statut,groupe_id,inscription_ouverte,places_max,groupes!evenements_groupe_id_fkey(nom,couleur)").gte("debut",debut.toISOString()).lte("debut",fin.toISOString()).order("debut"),
     c.from("creneaux").select("id,groupe_id,jour_semaine,heure_debut,heure_fin,lieu,encadrant,du,au,groupes(nom,couleur)"),
     c.from("inscriptions").select("evenement_id,personne_id,statut,paye"),
@@ -71,8 +71,11 @@ function charger(c,user){
     var err=res.filter(function(x){return x.error})[0];
     if(err){box.innerHTML='<div class="card">Impossible de charger ton espace pour le moment.</div>';return}
     var compte=res[0].data, pers=res[1].data||[], evts=res[2].data||[], cren=res[3].data||[], insc=res[4].data||[], roles=res[5].data||[];
+    // Seulement sa propre famille (la direction peut lire toutes les fiches)
+    pers=pers.filter(function(p){return compte&&(p.id===compte.personne_id||(compte.foyer_id&&p.foyer_id===compte.foyer_id))});
     var moi=pers.filter(function(p){return compte&&p.id===compte.personne_id})[0];
-    setTile(moi?moi.prenom:(pers[0]?"famille "+pers[0].nom:""));
+    var dir=roles.some(function(r){return r.role==="direction"});
+    setTile(moi?moi.prenom:(pers[0]?"famille "+pers[0].nom:(dir?"Direction sportive":"")));
     if(!compte||(!compte.foyer_id&&!compte.personne_id)){
       box.innerHTML='<div class="card"><div class="wk">Adresse pas encore reconnue</div><p class="mut">Tu es bien connecté avec '+e(user.email)+', mais cette adresse n\'est pas encore rattachée à un adhérent. Contacte le club pour qu\'il l\'ajoute à ta fiche.</p></div>';
       return;
