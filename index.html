@@ -11,409 +11,136 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="CLOCA Tennis">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#f7f4ef;--card:#fff;--tx:#12304a;--mut:#6a7784;--ac:#b85c33;--bd:#e6e0d8}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1923;--card:#16252f;--tx:#eef3f7;--mut:#9aabb8;--ac:#c4693f;--bd:#26394a}}
-:root[data-theme="dark"]{--bg:#0e1923;--card:#16252f;--tx:#eef3f7;--mut:#9aabb8;--ac:#c4693f;--bd:#26394a}
+:root{
+  --bg:#f5f2ec;--card:#ffffff;--bd:#e7e1d7;--line:#efe9df;--tx:#12304a;--mut:#5d6b78;
+  --navy:#102f4a;--navy2:#1b3f5f;--ac:#b4532a;--ac-d:#8f3f1e;--peach:#e9a37f;--ok:#1f6f4a;--ko:#9b2c24;
+  --sun:#fbe3d8;--soft:#f1ece3;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--disp:'Barlow Condensed','Arial Narrow',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1923;--card:#16252f;--bd:#26394a;--line:#22323f;--tx:#eef3f7;--mut:#a3b3c0;--soft:#1d2d39;--ac:#d06a3c;--ac-d:#e2865c;--ok:#2f9a68;--ko:#d0553f;
+}}
+:root[data-theme="dark"]{--bg:#0e1923;--card:#16252f;--bd:#26394a;--line:#22323f;--tx:#eef3f7;--mut:#a3b3c0;--soft:#1d2d39;--ac:#d06a3c;--ac-d:#e2865c;--ok:#2f9a68;--ko:#d0553f}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{background:linear-gradient(135deg,#102f4a,#1f5a85);color:#fff;padding:20px 0 22px;border-radius:0 0 22px 22px;border-bottom:4px solid #c4693f;margin-bottom:8px}
-.hw{max-width:640px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:12px}
-#logo{display:none;width:54px;height:54px;border-radius:50%;object-fit:cover;background:#fff;flex:none}
-h1{margin:0;font-size:24px;color:#fff}
-header p{margin:3px 0 0;color:rgba(255,255,255,.88);font-size:14px}
-.news{overflow:hidden}
-.nimg{display:block;width:100%;border-radius:10px;margin-bottom:10px}
-.nd{font-size:12px;color:var(--mut)}
-.nt{font-weight:700;font-size:16px;margin:2px 0}
-.ntx{white-space:pre-line;margin-top:4px}
-.nl{display:inline-block;margin-top:8px;color:var(--ac);font-weight:600;text-decoration:none}
-nav{display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
-nav button{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font:inherit;font-size:14px}
-nav button.on{background:var(--ac);border-color:var(--ac);color:#fff}
-main{padding:4px 12px 32px;max-width:640px;margin:0 auto}
-section{display:none}section.on{display:block}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin:10px 0}
-.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.wk{font-weight:600}
-.badge{color:#fff;font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px}
-.row{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--bd);font-size:15px}
-.row span:last-child{color:var(--mut)}
-.btn{display:block;text-align:center;background:var(--ac);color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600;margin:10px 0}
-.mut{color:var(--mut);font-size:14px}
-.tile{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:10px 0;color:var(--tx);text-decoration:none;font:inherit;font-size:18px;font-weight:600}
-.tile small{display:block;font-weight:400;color:var(--mut);font-size:14px;margin-top:2px}
-nav[hidden]{display:none}
-.alert{border-radius:14px;padding:14px 16px;margin:10px 0;font-weight:600;line-height:1.35;color:#fff;background:#b85c33}
-.alert.urgent{background:#c62f2f}
-.alert a{color:#fff;display:inline-block;margin-top:6px;font-weight:700}
-.info .lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
-.info .big{font-size:17px;font-weight:700;margin:2px 0}
-.info .btn{margin:10px 0 0}
-.info .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.info .two .btn{padding:12px 6px;font-size:14px}
-.info .alt{background:transparent;border:1px solid var(--ac);color:var(--ac)}
-.mrow{padding:9px 0;border-top:1px solid var(--bd);font-size:15px}
-.mrow:first-child{border-top:0}
-.mrow .sc{color:var(--mut);font-size:13px}
-.pod{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--bd);font-size:15px}
-.pod:first-of-type{border-top:0}
-.pod span:last-child{color:var(--mut)}
-.done{opacity:.65}
-.fm label{display:block;font-size:13px;font-weight:600;margin:14px 0 4px}
-.fm input,.fm select,.fm textarea{width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font:inherit;font-size:16px}
-.fm .chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:13px;line-height:1.35}
-.fm .chk input{width:auto;margin-top:3px}
-.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-.pr{background:var(--ac);color:#fff;font-size:13px;font-weight:700;padding:3px 10px;border-radius:12px;display:inline-block}
-.part{margin:26px 4px 4px;text-align:center}
-.part .pt{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
-.part .pl{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
-.part a{font-size:13px;color:var(--mut);text-decoration:none;border:1px solid var(--bd);padding:7px 14px;border-radius:16px;background:var(--card)}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.chips button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font:inherit;font-size:14px}
-.chips button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 var(--font);-webkit-text-size-adjust:100%}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+a{color:var(--ac)}
+button{font:inherit;color:inherit}
+h1,h2,h3{margin:0}
+.wrap{max-width:640px;margin:0 auto}
+.disp{font-family:var(--disp);font-weight:700;letter-spacing:.3px}
+.mut{color:var(--mut)}
+.small{font-size:13px}
+.xs{font-size:12px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
+
+/* En-têtes */
+.hero{background:var(--navy);color:#fff;padding:calc(18px + env(safe-area-inset-top,0px)) 16px 16px;border-radius:0 0 24px 24px}
+.hero .mut{color:#c9d6e2}
+.hero-row{display:flex;align-items:center;gap:12px}
+.logo{width:46px;height:46px;border-radius:50%;background:#fff;object-fit:cover;flex:none}
+.hello{font-size:13px;color:#c9d6e2}
+.hello-name{font-family:var(--disp);font-weight:700;font-size:26px;line-height:1.05}
+.pagehead{padding:calc(18px + env(safe-area-inset-top,0px)) 16px 8px}
+.pagehead h1{font-family:var(--disp);font-weight:700;font-size:32px}
+.darkhead{background:var(--navy);color:#fff;padding:calc(16px + env(safe-area-inset-top,0px)) 16px 16px}
+.darkhead h1{font-family:var(--disp);font-weight:700;font-size:34px;line-height:1.05}
+.kicker{font-size:12px;font-weight:700;letter-spacing:1px;color:var(--peach)}
+.back{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:inherit;text-decoration:none;font-weight:500;background:none;border:0;padding:0;cursor:pointer}
+
+main{padding:12px 16px 0;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:14px 16px}
+.card.tight{padding:4px 16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.stack{display:flex;flex-direction:column;gap:3px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tile{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px;text-decoration:none;color:var(--tx);text-align:left;cursor:pointer;min-height:44px}
+.tile b{font-size:15px}
+.tile svg{color:var(--ac)}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 6px;display:flex;flex-direction:column;align-items:center}
+.stat b{font-family:var(--disp);font-size:28px;line-height:1.1}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:14px;border:0;background:var(--ac);color:#fff;font-weight:600;font-size:15px;text-decoration:none;cursor:pointer;padding:0 16px;width:100%}
+.btn.navy{background:var(--navy)}
+.btn.ghost{background:var(--soft);color:var(--tx)}
+.btn.line{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+.btn:disabled{opacity:.55}
+.alert{background:var(--ac);color:#fff;border-radius:14px;padding:12px 14px;display:flex;gap:10px}
+.alert.urgent{background:#a3261c}
+.alert a{color:#fff;font-weight:700}
+
+.badge{display:inline-flex;align-items:center;font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px;white-space:nowrap}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:13px;font-weight:500;flex:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
+.hero .chip{background:transparent;border-color:#2c4e6b;color:#fff}
+.hero .chip.on{background:#fff;color:var(--navy);border-color:#fff}
+.seg{display:flex;gap:6px;background:var(--soft);border-radius:12px;padding:4px}
+.seg button{flex:1;height:38px;border:0;border-radius:9px;background:transparent;color:var(--mut);font-size:14px;cursor:pointer}
+.seg button.on{background:var(--card);color:var(--tx);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.darkhead .seg{background:var(--navy2)}
+.darkhead .seg button{color:#dbe4ec}
+.darkhead .seg button.on{background:#fff;color:var(--navy)}
+
+/* Rendez-vous et agenda */
+.rdv{display:flex;gap:14px;align-items:center}
+.datebox{width:62px;height:62px;border-radius:14px;background:var(--navy);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}
+.datebox span{font-size:11px;color:#c9d6e2;text-transform:uppercase}
+.datebox b{font-family:var(--disp);font-size:28px;line-height:1}
+.ev{display:flex;gap:12px;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;text-decoration:none;color:var(--tx)}
+.ev .bar{width:4px;border-radius:2px;flex:none}
+.ev.off{opacity:.65}
+.ev.off .t{text-decoration:line-through}
+.dayhead{font-size:13px;font-weight:600;color:var(--mut);margin:4px 2px -4px}
+
+/* Classement */
+.podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end;padding-top:16px;padding-bottom:0}
+.podium .p{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
+.podium .p b{font-size:14px}
+.podium .blk{width:100%;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:30px}
+.rk{display:grid;grid-template-columns:34px minmax(0,1fr) 54px 54px;align-items:center;padding:11px 0;border-top:1px solid var(--line);font-size:15px}
+.rk.h{font-size:12px;font-weight:600;color:var(--mut);border-top:0}
+.rk.me{background:var(--sun);margin:2px -8px;padding:11px 8px;border-radius:10px;border-top:0;font-weight:700;color:#12304a}
+.rk .n{text-align:right}
+.rk a{color:inherit;text-decoration:none}
+
+/* Formulaires */
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+input.f,select.f,textarea.f{width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--tx);font:16px var(--font)}
+textarea.f{min-height:80px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;min-height:44px;padding:6px 0}
+.check input{width:20px;height:20px;margin-top:1px;accent-color:var(--ac);flex:none}
+.pick{display:flex;align-items:center;gap:12px;min-height:50px;padding:0 12px;border-radius:12px;border:1px solid var(--bd);font-weight:600;cursor:pointer}
+.pick.on{border:2px solid var(--ac);background:var(--sun);color:#12304a}
+
+.empty{text-align:center;padding:22px 10px;color:var(--mut)}
+.skel{height:64px;border-radius:14px;background:linear-gradient(90deg,var(--soft),var(--card),var(--soft));background-size:200% 100%;animation:sk 1.2s infinite}
+@keyframes sk{to{background-position:-200% 0}}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;z-index:30;max-width:90%;text-align:center}
+.partners{text-align:center;margin:14px 0 4px}
+.partners a{display:inline-block;font-size:13px;color:var(--mut);text-decoration:none;border:1px solid var(--bd);padding:7px 14px;border-radius:16px;background:var(--card);margin:4px}
+
+/* Barre de navigation */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);padding:0 6px env(safe-area-inset-bottom,0px);z-index:20}
+nav.tabs .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));height:72px}
+nav.tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-decoration:none;color:var(--mut);font-size:11px;font-weight:500}
+nav.tabs a.on{color:var(--ac);font-weight:600}
+.sr{position:absolute;left:-9999px}
+@media (min-width:700px){.hero,.darkhead{border-radius:0 0 24px 24px}}
 </style>
 </head>
 <body>
-<header><div class="hw"><img id="logo" src="logo.png" alt="" onload="this.style.display='block';document.getElementById('emo').style.display='none'"><div><h1><span id="emo">🎾 </span>CLOCA Tennis</h1><p id="sub">Bienvenue au club</p></div></div></header>
-<nav id="nav" hidden></nav>
-<main>
-<section id="home">
-<div id="annonce"></div>
-<div id="today" class="card" style="display:none"></div>
-<button class="tile" onclick="show('moi')">👤 Mon espace<small id="m_tile_sub">Se connecter · agenda, inscriptions</small></button>
-<button class="tile" onclick="show('arena')">🏆 CLOC'ARENA<small>Classement, programmation, fiche joueur</small></button>
-<a class="tile" id="adoc" href="#" target="_blank" rel="noopener">📅 Réservation<small>Réserver un court sur Ten'Up</small></a>
-<button class="tile" onclick="show('evt')">🎉 Événements<small>En cours, à venir, passés</small></button>
-<button class="tile" onclick="show('ann')">🛍️ Petites annonces<small>Vente de matériel, recherche de partenaire</small></button>
-<button class="tile" onclick="show('infos')">ℹ️ Infos pratiques<small>Adresse, horaires, contacts</small></button>
-<div id="actus"></div>
-<div class="part"><div class="pt">Nos partenaires</div><div class="pl"><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></div>
-</section>
-<section id="arena">
-<button class="tile" onclick="show('clas')">🥇 Classement</button>
-<button class="tile" onclick="show('prog')">🗓️ Programmation</button>
-<button class="tile" onclick="show('res')">📊 Résultats récents</button>
-<button class="tile" onclick="show('pal')">🏅 Palmarès</button>
-<button class="tile" onclick="window.open(FICHE_URL,'_blank')">👤 Fiche joueur</button>
-<button class="tile" onclick="show('home')">← Accueil</button>
-</section>
-<section id="clas"><div id="clist"></div><p class="mut" id="cmsg"></p><button class="tile" onclick="show('arena')">← Retour</button></section>
-<section id="fiche"><div class="card"><div class="wk">Fiche joueur</div><p class="mut">Bientôt disponible.</p></div><button class="tile" onclick="show('arena')">← Retour</button></section>
-<section id="prog"><button class="tile" onclick="show('arena')">← Retour</button><p class="mut">Choisis ton niveau :</p><div id="lv" class="chips"></div><button class="tile" onclick="openProg()">📅 Voir la programmation</button><button class="tile" onclick="openCal()">🔔 Ajouter mon niveau à mon agenda</button><button class="tile" onclick="openCal('Miss Cup')">👧 Ajouter l'agenda Miss Cup</button><div id="list"></div></section>
-<section id="moi"><button class="tile" onclick="show('home')">← Accueil</button>
-<div id="m_login"><div class="card fm"><div class="wk">Connexion</div><p class="mut" style="margin:4px 0 0">Entre l'adresse mail que tu as donnée au club. Tu recevras un code, sans mot de passe à retenir.</p>
-<div id="m_step1"><label for="m_email">Adresse mail</label><input id="m_email" type="email" autocomplete="email" inputmode="email" placeholder="prenom.nom@exemple.fr" onkeydown="if(event.key==='Enter')espaceEnvoyer()">
-<button class="btn" id="m_send" style="width:100%;border:0;font:inherit;font-weight:600;font-size:16px" onclick="espaceEnvoyer()">Recevoir mon code</button></div>
-<div id="m_step2" style="display:none"><label for="m_code">Code reçu par mail</label><input id="m_code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')espaceValider()">
-<button class="btn" id="m_ok" style="width:100%;border:0;font:inherit;font-weight:600;font-size:16px" onclick="espaceValider()">Me connecter</button>
-<button class="tile" style="font-size:15px;padding:12px" onclick="espaceRetour()">← Changer d'adresse</button></div>
-<p class="mut" id="m_msg" style="margin:8px 0 0"></p></div></div>
-<div id="m_espace" style="display:none"><div id="m_contenu"></div><button class="tile" style="font-size:15px" onclick="espaceDeconnexion()">Se déconnecter</button></div>
-</section>
-<section id="evt"><button class="tile" onclick="show('home')">← Accueil</button><div id="evlist"><p class="mut">Chargement…</p></div></section>
-<section id="infos" class="info">
-<button class="tile" onclick="show('home')">← Accueil</button>
-<div class="card"><div class="lbl">📍 Le club</div><div class="big">CLOCA Tennis</div><div class="mut">81 Rue de Saint-Germain<br>78260 Achères</div>
-<a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=81+Rue+de+Saint-Germain+78260+Ach%C3%A8res">🗺️ Itinéraire</a></div>
-<div class="card"><div class="lbl">🏠 Club House</div><div class="big">Ouvert le mercredi et le samedi</div><div class="mut">9h30 – 12h et 14h – 16h30</div>
-<a class="btn" href="tel:+33139116947">📞 01 39 11 69 47</a></div>
-<div class="card"><div class="lbl">🎾 Coordinateur sportif</div><div class="big">Dorian</div><div class="mut">06 62 48 80 87</div>
-<a class="btn" target="_blank" rel="noopener" href="https://wa.me/33662488087">💬 WhatsApp</a>
-<div class="two" style="margin-top:8px"><a class="btn alt" href="tel:+33662488087">📞 Appeler</a><a class="btn alt" href="sms:+33662488087">✉️ SMS</a></div></div>
-<div class="card"><div class="lbl">✉️ Nous contacter</div><div class="mut">tennis@cloca.fr</div>
-<a class="btn" href="mailto:tennis@cloca.fr">✉️ Nous contacter</a></div>
-<div class="card"><div class="lbl">📲 Installer l'appli</div>
-<button class="btn" id="install" style="display:none;width:100%;border:0;font:inherit;font-weight:600;font-size:16px" onclick="installApp()">📲 Ajouter à l'écran d'accueil</button>
-<p class="mut" style="margin:6px 0 0"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l'écran d'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».</p></div>
-<p class="mut" style="text-align:center;margin:18px 0 0"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p>
-</section>
-<section id="res"><button class="tile" onclick="show('arena')">← Retour</button><div id="reslist"><p class="mut">Chargement…</p></div></section>
-<section id="pal"><button class="tile" onclick="show('arena')">← Retour</button><div id="pallist"><p class="mut">Chargement…</p></div></section>
-<section id="ann"><button class="tile" onclick="show('home')">← Accueil</button>
-<button class="tile" onclick="show('vente')">🛒 Vente<small>Matériel à vendre</small></button>
-<button class="tile" onclick="show('part')">🤝 Recherche de partenaire<small>Trouve quelqu'un avec qui jouer</small></button></section>
-<section id="vente"><button class="tile" onclick="show('ann')">← Retour</button><div id="vlist"><p class="mut">Chargement…</p></div></section>
-<section id="part"><button class="tile" onclick="show('ann')">← Retour</button>
-<button class="tile" onclick="togglePartForm()">➕ Déposer une demande</button>
-<form id="pform" class="card fm" style="display:none" onsubmit="return sendPart(event)">
-<div class="wk">Ma demande de partenaire</div>
-<label for="p_prenom">Prénom</label><input id="p_prenom" maxlength="30" autocomplete="given-name" required>
-<label for="p_niveau">Niveau</label><select id="p_niveau" required><option value="">Choisir…</option><option>Blanc</option><option>Violet</option><option>Rouge</option><option>Orange</option><option>Vert</option><option>Jaune</option><option>Adulte / autre</option></select>
-<label for="p_dispo">Mes disponibilités</label><input id="p_dispo" maxlength="120" placeholder="Ex : mercredi après-midi, samedi matin" required>
-<label for="p_msg">Message (facultatif)</label><textarea id="p_msg" maxlength="200" rows="3" placeholder="Ex : je cherche quelqu'un pour m'entraîner"></textarea>
-<label for="p_tel">Téléphone ou WhatsApp <span class="mut">(jamais affiché dans l'appli)</span></label><input id="p_tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" required>
-<label for="p_qui">Qui remplit ce formulaire ?</label><select id="p_qui"><option value="Majeur">Je suis majeur(e)</option><option value="Mineur">Je suis mineur(e) : le numéro est celui d'un parent</option></select>
-<div class="hp" aria-hidden="true"><input id="p_site" tabindex="-1" autocomplete="off"></div>
-<label class="chk"><input type="checkbox" id="p_ok" required><span>J'accepte que mon prénom, mon niveau, mes disponibilités et mon message soient publiés dans l'appli après validation par le club. Mon numéro n'est jamais publié : le club fait la mise en relation. <a href="confidentialite.html" style="color:var(--ac)">En savoir plus</a></span></label>
-<button class="btn" type="submit" id="p_btn" style="width:100%;border:0;font:inherit;font-weight:600;font-size:16px">Envoyer ma demande</button>
-<p class="mut" id="p_out"></p></form>
-<div id="plist"><p class="mut">Chargement…</p></div></section>
-<section id="social">
-<a class="tile" id="insta" href="#" target="_blank" rel="noopener">📸 Instagram</a>
-<a class="tile" id="fb" href="#" target="_blank" rel="noopener">👍 Facebook</a>
-<button class="tile" onclick="show('home')">← Accueil</button>
-</section>
-</main>
-<script>
-// À MODIFIER : niveaux (dans l'ordre de rotation), date du premier lundi, lien Ten'Up
-var NIVEAUX=[["Blanc","#9aa39c"],["Violet","#8e4ec6"],["Rouge","#e5484d"],["Orange","#f76b15"],["Vert","#30a46c"],["Jaune","#d4a20a"]];
-var DEBUT=new Date(2026,9,19); // lundi 19 octobre 2026
-var ADOC_URL="https://tenup.fft.fr/club/57780019/reservations";
-var INSTAGRAM_URL="https://www.instagram.com/cloc.acheres.tennis?cplk=Mnd4OTkwdWFjdGZz";
-var FACEBOOK_URL="https://www.facebook.com/ClocaTennis/";
-var SEANCES=[[0,"Lundi","17h30 – 18h30"],[4,"Vendredi","17h30 – 18h30"],[5,"Samedi","14h30 – 16h00"]];
-
-var fmt=function(d){return d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})};
-var today=new Date();today.setHours(0,0,0,0);
-var CHOIX="";try{CHOIX=localStorage.getItem("niveau")||""}catch(e){}
-function render(){
-var html="",shown=0,SEMAINES=0; // 0 = programmation masquée
-for(var i=0;i<SEMAINES&&shown<10;i++){
-  var lundi=new Date(DEBUT);lundi.setDate(lundi.getDate()+7*i);
-  var sam=new Date(lundi);sam.setDate(sam.getDate()+5);
-  if(sam<today)continue;
-  var n=NIVEAUX[i%NIVEAUX.length];
-  if(CHOIX&&n[0]!==CHOIX)continue;
-  html+='<div class="card"><div class="top"><span class="wk">Semaine du '+fmt(lundi)+'</span><span class="badge" style="background:'+n[1]+'">'+n[0]+'</span></div>';
-  SEANCES.forEach(function(s){
-    var d=new Date(lundi);d.setDate(d.getDate()+s[0]);
-    html+='<div class="row"><span>'+s[1]+' '+d.getDate()+'</span><span>'+s[2]+'</span></div>';
-  });
-  html+='</div>';shown++;
-}
-document.getElementById("list").innerHTML=html||'';
-var lv=document.getElementById("lv");lv.innerHTML="";
-[["","Tous"]].concat(NIVEAUX.map(function(n){return [n[0],n[0]]})).forEach(function(o){
-  var b=document.createElement("button");b.textContent=o[1];b.className=CHOIX===o[0]?"on":"";
-  b.onclick=function(){CHOIX=o[0];try{localStorage.setItem("niveau",CHOIX)}catch(e){}render()};lv.appendChild(b)});
-}
-render();
-document.getElementById("adoc").href=ADOC_URL;
-document.getElementById("insta").href=INSTAGRAM_URL;
-document.getElementById("fb").href=FACEBOOK_URL;
-
-var tabs=[["home","← Accueil"],["prog","Programme"],["evt","Événements"],["res","Résultats"]];
-var FICHE_URL="https://script.google.com/macros/s/AKfycbzSAt9Pgom2zNLD8zzkMqKC7gg-e01nwVGnnbZTCWkzl9ihrhDL7aXSkU3sChnVOsfvrg/exec";
-var PROG_URL="https://script.google.com/macros/s/AKfycbw1SHjhfBL1mLDN9weJ1dJOR0RkSIoMF7TPUhIv5A20_Pkt0LJpvz2KdeWQALGjPRGz/exec";
-function openProg(){window.open(PROG_URL+(CHOIX?"?niveau="+encodeURIComponent(CHOIX):""),"_blank")}
-// À REMPLIR : lien partageable de chaque agenda Google (un par niveau + Miss Cup)
-var CAL_LINKS={
-"Blanc":"https://calendar.google.com/calendar/u/0?cid=ZjRhMjg3MDNhMzA4MTA1NzFjYjE0ZGRlMzRiMDZhNjA1NGNlNGFiNjM5ZDRkM2EyNDExM2UzMTg1MjQ5NTdlOEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
-"Violet":"https://calendar.google.com/calendar/u/0?cid=Njc3NGZmYTdkNDUyNmM2ODkwMjQ4YTBiNzI4YzY5MWI0ZGI1MjRlYzlmZmQ1NjNlYzRjMTZmY2Q5ZGZiZTU3ZkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
-"Rouge":"https://calendar.google.com/calendar/u/0?cid=NGIxMjMzNTYxNzk3NjdhZTZkNWNjNmZkYjUxZWY0MGUwZDMxYjI4NzczZTZjNjU4OWUyNjNkMTc5OTZiNGMxY0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
-"Orange":"https://calendar.google.com/calendar/u/0?cid=MjBmNTE5ZmU3ZjhmOWE2ZTRlZmQ4NDM4YzNjM2Q1NjU5YmU2MjI3MjE2NmFlNzE5ZjBhYjIyYjcyMGIwNjc2YUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
-"Vert":"https://calendar.google.com/calendar/u/0?cid=YmQwNmVkNjVhNzUzZjEzYTE5YzEyZTA3NjE4OGIwNmE1MDk1ZDgxMTAxMGZkOWZlYTE2MTdlMWY0NjBiZTBiYUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
-"Jaune":"https://calendar.google.com/calendar/u/0?cid=ZDA2Y2UzY2I2ZjBlYWM3MjBiYWRmMWU0MWIzYjM2MGFjMGFjZTk2YmFiY2VkNDhkNTkwOWIxYjQxYjlmNTdmMUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
-"Miss Cup":"https://calendar.google.com/calendar/u/0?cid=NDQ3MGZkNzc5MmNjYzZkZGJiZGVlYTc4NmE4YWZjMzc0ZDljZmNjMzIxOGVjNzZiNjg0MzMzYzkwMDBmNDllMEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t"};
-function openCal(k){var key=k||CHOIX;var l=CAL_LINKS[key];var m=document.getElementById("list");
-  if(!key){m.innerHTML='<div class="card">Choisis d\'abord ton niveau.</div>'}
-  else if(!l){m.innerHTML='<div class="card">Agenda '+key+' bientôt disponible.</div>'}
-  else{window.open(l,"_blank")}}
-// À REMPLIR : lien Google Sheets (publié sur le web) de chaque classement
-var CLASSEMENTS=[["Général","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1815896277&single=true"],["Filles","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1132488567&single=true"],["Garçons","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1624443513&single=true"],["Blanc","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=993258424&single=true"],["Violet","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1354815220&single=true"],["Rouge","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1557042492&single=true"],["Orange","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=783162423&single=true"],["Vert","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1839420530&single=true"],["Jaune","https://docs.google.com/spreadsheets/d/e/2PACX-1vT7ziBjjzC8Gjj7v7caChbN5T18hpTHZLoUk26wXAhgm4o0hU6rAhWpFTVUxXzvuWxZpyVmdqbCDrzp/pubhtml?gid=1110696610&single=true"]];
-CLASSEMENTS.forEach(function(c){var b=document.createElement("button");b.className="tile";b.textContent=c[0];
-  b.onclick=function(){if(c[1]){window.open(c[1],"_blank")}else{document.getElementById("cmsg").textContent="Classement "+c[0]+" bientôt disponible."}};
-  document.getElementById("clist").appendChild(b)});
-var ALL=["moi","home","arena","clas","prog","fiche","evt","infos","res","pal","ann","vente","part","social"];
-var nav=document.getElementById("nav");
-function show(id){
-  ALL.forEach(function(s){document.getElementById(s).classList.toggle("on",s===id)});
-  nav.hidden=true;
-  if(id==="evt")loadEvents();
-  if(id==="res")loadResultats();
-  if(id==="vente")loadVente();
-  if(id==="part")loadPartenaires();
-  if(id==="pal")loadPalmares();
-  if(id==="moi"&&window.espaceOuvrir)espaceOuvrir();
-  window.scrollTo(0,0);
-  document.getElementById("sub").textContent=id==="home"?"Bienvenue au club":id==="moi"?"Mon espace":id==="social"?"Nos réseaux":id==="evt"?"Événements du club":id==="infos"?"Infos pratiques":id==="ann"?"Petites annonces":id==="vente"?"Vente de matériel":id==="part"?"Recherche de partenaire":id==="res"?"CLOC'ARENA · résultats récents":id==="pal"?"CLOC'ARENA · palmarès":"CLOC'ARENA · le tournoi des jeunes";
-  Array.prototype.forEach.call(nav.children,function(b){b.classList.toggle("on",b.dataset.id===id)});
-}
-tabs.forEach(function(t){var b=document.createElement("button");b.textContent=t[1];b.dataset.id=t[0];b.onclick=function(){show(t[0])};nav.appendChild(b)});
-function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]})}
-function renderToday(list){
-  var box=document.getElementById("today");
-  {
-    var d=new Date(),t=("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2);
-    var today=list.filter(function(s){return s.date===t});
-    var items=today.length?today:list.slice(0,1);
-    if(!items.length){box.style.display="none";return}
-    var h='<div class="wk">'+(today.length?"\ud83d\udcc5 Aujourd'hui \u00b7 CLOC'ARENA":"\ud83d\udcc5 Prochain rdv CLOC'ARENA")+'</div>';
-    items.forEach(function(s){
-      var b=s.filles?'<span class="badge" style="background:#d94f8a">100% filles</span> ':'';
-      s.niveaux.forEach(function(n){
-        var c=NIVEAUX.filter(function(x){return x[0]===n})[0];
-        b+='<span class="badge" style="background:'+(c?c[1]:"#667068")+'">'+esc(n)+'</span> ';
-      });
-      h+='<div style="margin-top:8px"><b>'+esc(s.format||(s.filles?"Miss Cup":"S\u00e9ance"))+'</b>'+
-        '<div class="mut">'+esc(s.jour)+' '+esc(s.date)+' \u00b7 '+esc(s.debut)+(s.duree?' \u00b7 '+esc(s.duree):'')+(s.lieu?' \u00b7 '+esc(s.lieu):'')+'</div>'+
-        '<div style="margin-top:6px">'+b+'</div></div>';
-    });
-    box.innerHTML=h;box.style.display="block";
-  }
-}
-function swr(url){
-  var o={cb:null,
-    then:function(cb){o.cb=cb;return o},
-    catch:function(fail){
-      var k="c:"+url,c=null;
-      try{c=JSON.parse(localStorage.getItem(k))}catch(e){}
-      if(c!==null&&c!==undefined){try{o.cb(c)}catch(e){}}
-      fetch(url).then(function(r){return r.json()}).then(function(d){
-        try{localStorage.setItem(k,JSON.stringify(d))}catch(e){}
-        o.cb(d);
-      }).catch(function(){if(c===null||c===undefined)fail()});
-    }};
-  return o;
-}
-function safeUrl(u){return /^https?:\/\//i.test(u||"")?u:""}
-function followCard(){
-  return '<div class="card"><div class="wk">\ud83d\udce3 Suivez-nous</div><p class="mut">Retrouvez toutes les actualit\u00e9s du club sur nos r\u00e9seaux.</p>'+
-    '<a class="btn" target="_blank" rel="noopener" href="'+FACEBOOK_URL+'">\ud83d\udc4d Facebook</a>'+
-    '<a class="btn" target="_blank" rel="noopener" href="'+INSTAGRAM_URL+'">\ud83d\udcf8 Instagram</a></div>';
-}
-function newsFallback(){
-  document.getElementById("actus").innerHTML=followCard();
-}
-function renderActus(list){
-  {
-    if(!list||!list.length){newsFallback();return}
-    var h='<div class="wk" style="margin:18px 4px 6px">\ud83d\udce3 Derni\u00e8res infos</div>';
-    list.forEach(function(a){
-      var img=safeUrl(a.image),link=safeUrl(a.lien);
-      h+='<div class="card news">'+
-        (img?'<img class="nimg" src="'+esc(img)+'" alt="" loading="lazy" onerror="this.remove()">':'')+
-        (a.date?'<div class="nd">'+esc(a.date)+'</div>':'')+
-        '<div class="nt">'+esc(a.titre)+'</div>'+
-        (a.texte?'<div class="mut ntx">'+esc(a.texte)+'</div>':'')+
-        (link?'<a class="nl" href="'+esc(link)+'" target="_blank" rel="noopener">En savoir plus \u2192</a>':'')+
-        '</div>';
-    });
-    document.getElementById("actus").innerHTML=h+followCard();
-  }
-}
-function evCard(e,done){
-  var img=safeUrl(e.image),link=safeUrl(e.lien),b='';
-  if(!done&&e.inscription==="ouvertes")b='<span class="badge" style="background:#30a46c">Inscriptions ouvertes</span>';
-  if(!done&&e.inscription==="fermees")b='<span class="badge" style="background:#667068">Inscriptions closes</span>';
-  var lbl=(!done&&e.inscription==="ouvertes")?"S'inscrire":"En savoir plus";
-  return '<div class="card news'+(done?' done':'')+'">'+
-    (img?'<img class="nimg" src="'+esc(img)+'" alt="" loading="lazy" onerror="this.remove()">':'')+
-    '<div class="nd">'+esc(e.dates)+'</div>'+
-    '<div class="nt">'+esc(e.titre)+'</div>'+
-    (e.description?'<div class="mut ntx">'+esc(e.description)+'</div>':'')+
-    (b?'<div style="margin-top:8px">'+b+'</div>':'')+
-    (link?'<a class="nl" href="'+esc(link)+'" target="_blank" rel="noopener">'+lbl+' \u2192</a>':'')+
-    '</div>';
-}
-function loadEvents(){
-  var box=document.getElementById("evlist");
-  swr(PROG_URL+"?format=events").then(function(d){
-    var h="";
-    [["encours","\ud83d\udfe2 En cours",false],["avenir","\ud83d\udcc5 \u00c0 venir",false],["termines","\u2705 Termin\u00e9s",true]].forEach(function(g){
-      var l=d[g[0]]||[];
-      if(!l.length)return;
-      h+='<div class="wk" style="margin:18px 4px 6px">'+g[1]+'</div>'+l.map(function(e){return evCard(e,g[2])}).join("");
-    });
-    box.innerHTML=h||'<div class="card"><p class="mut">Aucun \u00e9v\u00e9nement pour le moment.</p></div>';
-  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les \u00e9v\u00e9nements pour le moment.</p></div>'});
-}
-function renderAnnonce(a){
-  {
-    if(!a||!a.message){document.getElementById("annonce").innerHTML="";return}
-    var link=safeUrl(a.lien);
-    document.getElementById("annonce").innerHTML='<div class="alert'+(a.type==="urgent"?' urgent':'')+'">'+(a.type==="urgent"?'\u26a0\ufe0f ':'\ud83d\udce2 ')+esc(a.message)+
-      (link?'<br><a href="'+esc(link)+'" target="_blank" rel="noopener">En savoir plus \u2192</a>':'')+'</div>';
-  }
-}
-function loadHome(){
-  swr(PROG_URL+"?format=accueil").then(function(d){
-    renderAnnonce(d.annonce);renderToday(d.seances||[]);renderActus(d.actus||[]);
-  }).catch(newsFallback);
-}
-function loadResultats(){
-  var box=document.getElementById("reslist");
-  swr(FICHE_URL+"?format=resultats").then(function(days){
-    if(!days.length){box.innerHTML='<div class="card"><p class="mut">Pas encore de r\u00e9sultats.</p></div>';return}
-    box.innerHTML=days.map(function(d){
-      return '<div class="wk" style="margin:18px 4px 6px">\ud83d\udcc5 '+esc(d.date)+'</div><div class="card">'+d.matchs.map(function(m){
-        var c=NIVEAUX.filter(function(x){return x[0]===m.niveau})[0];
-        var dot=c?'<span class="badge" style="background:'+c[1]+';font-size:11px;padding:2px 8px;margin-left:6px">'+esc(m.niveau)+'</span>':'';
-        return '<div class="mrow">'+(m.nul?esc(m.gagnant)+' = '+esc(m.perdant):'\ud83c\udfc6 <b>'+esc(m.gagnant)+'</b> bat '+esc(m.perdant))+dot+
-          (m.score?'<div class="sc">'+esc(m.score)+'</div>':'')+'</div>';
-      }).join('')+'</div>';
-    }).join('');
-  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les r\u00e9sultats pour le moment.</p></div>'});
-}
-function loadPalmares(){
-  var box=document.getElementById("pallist");
-  swr(FICHE_URL+"?format=palmares").then(function(cats){
-    if(!cats.length){box.innerHTML='<div class="card"><p class="mut">Pas encore de classement.</p></div>';return}
-    var med=["\ud83e\udd47","\ud83e\udd48","\ud83e\udd49"];
-    box.innerHTML='<p class="mut" style="margin:10px 4px">Leaders actuels de chaque classement.</p>'+cats.map(function(c){
-      return '<div class="card"><div class="wk" style="margin-bottom:6px">'+esc(c.titre)+'</div>'+c.podium.map(function(p,i){
-        return '<div class="pod"><span>'+med[i]+' '+esc(p.nom)+'</span><span>'+esc(p.points)+' pts</span></div>';
-      }).join('')+'</div>';
-    }).join('');
-  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger le palmar\u00e8s pour le moment.</p></div>'});
-}
-var DEFERRED=null;
-window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();DEFERRED=e;document.getElementById("install").style.display="block"});
-function installApp(){if(!DEFERRED)return;DEFERRED.prompt();DEFERRED=null;document.getElementById("install").style.display="none"}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
-var WA_CLUB="33662488087";
-function waLink(n,t){return "https://wa.me/"+encodeURIComponent(n)+"?text="+encodeURIComponent(t)}
-function val(id){return document.getElementById(id).value}
-function loadVente(){
-  var box=document.getElementById("vlist");
-  swr(PROG_URL+"?format=vente").then(function(l){
-    if(!l||!l.length){box.innerHTML='<div class="card"><p class="mut">Aucun article \u00e0 vendre pour le moment.</p></div>';return}
-    box.innerHTML=l.map(function(v){
-      var img=safeUrl(v.image);
-      return '<div class="card news">'+(img?'<img class="nimg" src="'+esc(img)+'" alt="" loading="lazy" onerror="this.remove()">':'')+
-        '<div class="nt">'+esc(v.titre)+'</div>'+
-        (v.prix?'<div style="margin:4px 0"><span class="pr">'+esc(v.prix)+'</span></div>':'')+
-        (v.description?'<div class="mut ntx">'+esc(v.description)+'</div>':'')+
-        '<a class="btn" target="_blank" rel="noopener" href="'+esc(waLink(v.wa||WA_CLUB,"Bonjour, je suis int\u00e9ress\u00e9(e) par : "+v.titre))+'">\ud83d\udcac Contacter sur WhatsApp</a></div>';
-    }).join("");
-  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les annonces pour le moment.</p></div>'});
-}
-function loadPartenaires(){
-  var box=document.getElementById("plist");
-  swr(PROG_URL+"?format=partenaires").then(function(l){
-    if(!l||!l.length){box.innerHTML='<div class="card"><p class="mut">Aucune demande pour le moment. Sois le premier \u00e0 en d\u00e9poser une !</p></div>';return}
-    box.innerHTML='<div class="wk" style="margin:18px 4px 6px">\ud83e\udd1d Ils cherchent un partenaire</div>'+l.map(function(p){
-      var c=NIVEAUX.filter(function(x){return x[0]===p.niveau})[0];
-      var badge='<span class="badge" style="background:'+(c?c[1]:"#667068")+'">'+esc(p.niveau)+'</span>';
-      return '<div class="card"><div class="top"><span class="wk">'+esc(p.prenom)+'</span>'+badge+'</div>'+
-        '<div class="mut">\ud83d\udcc5 '+esc(p.dispo)+'</div>'+
-        (p.message?'<div class="ntx" style="margin-top:6px">'+esc(p.message)+'</div>':'')+
-        '<a class="btn" target="_blank" rel="noopener" href="'+esc(waLink(WA_CLUB,"Bonjour, je suis int\u00e9ress\u00e9(e) par la demande de partenaire n\u00b0"+p.ref+" ("+p.prenom+", "+p.niveau+"). Pouvez-vous nous mettre en relation ?"))+'">\ud83d\udcac Me mettre en relation</a></div>';
-    }).join("");
-  }).catch(function(){box.innerHTML='<div class="card"><p class="mut">Impossible de charger les demandes pour le moment.</p></div>'});
-}
-function togglePartForm(){var f=document.getElementById("pform");f.style.display=f.style.display==="none"?"block":"none"}
-function sendPart(ev){
-  ev.preventDefault();
-  var btn=document.getElementById("p_btn"),out=document.getElementById("p_out");
-  var body={prenom:val("p_prenom"),niveau:val("p_niveau"),dispo:val("p_dispo"),message:val("p_msg"),contact:val("p_tel"),qui:val("p_qui"),site:val("p_site"),accord:document.getElementById("p_ok").checked};
-  btn.disabled=true;out.textContent="Envoi en cours\u2026";
-  fetch(PROG_URL,{method:"POST",body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(d){
-    if(d&&d.ok){out.textContent="\u2705 Merci ! Ta demande sera visible apr\u00e8s validation par le club.";document.getElementById("pform").reset()}
-    else{out.textContent="\u26a0\ufe0f "+((d&&d.error)||"Envoi impossible.")}
-    btn.disabled=false;
-  }).catch(function(){out.textContent="\u26a0\ufe0f Envoi impossible pour le moment. R\u00e9essaie, ou contacte le club.";btn.disabled=false});
-  return false;
-}
-show("home");
-loadHome();
-</script>
+<div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
+<nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="in" id="tabs-in"></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="espace.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

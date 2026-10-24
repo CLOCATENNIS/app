@@ -6,12 +6,11 @@
 // ---------- Réglages ----------
 var SUPA_URL = 'https://ccvfdsriogqerdcopuuv.supabase.co';
 var SUPA_KEY = 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM';
-var LEGACY_URL = 'https://script.google.com/macros/s/AKfycbw1SHjhfBL1mLDN9weJ1dJOR0RkSIoMF7TPUhIv5A20_Pkt0LJpvz2KdeWQALGjPRGz/exec'; // petites annonces (encore sur Google)
 var ADOC_URL = 'https://tenup.fft.fr/club/57780019/reservations';
 var INSTAGRAM_URL = 'https://www.instagram.com/cloc.acheres.tennis?cplk=Mnd4OTkwdWFjdGZz';
 var FACEBOOK_URL = 'https://www.facebook.com/ClocaTennis/';
 var WA_CLUB = '33662488087';
-var LOGO = '../logo.png';
+var LOGO = 'logo.png';
 var NIVEAUX = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
 var NIV = {
   Blanc: { bg: '#e4e8eb', fg: '#2b3943' }, Violet: { bg: '#7b4fa0', fg: '#fff' }, Rouge: { bg: '#c62f2f', fg: '#fff' },
@@ -462,31 +461,120 @@ function clubInfos() {
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Coordinateur sportif</span><b>Dorian</b><a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + WA_CLUB + '">WhatsApp</a>' +
     '<div class="grid2"><a class="btn line" href="tel:+' + WA_CLUB + '">Appeler</a><a class="btn line" href="sms:+' + WA_CLUB + '">SMS</a></div></section>' +
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Installer l\'appli</span><span class="small"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l\'écran d\'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Installer l\'application ».</span></section>' +
-    suivre() + '<p class="mut xs" style="text-align:center"><a href="../confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p>';
+    suivre() + '<p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p>';
 }
-// Petites annonces : encore servies par le tableau Google, le temps de les migrer
+// Petites annonces : recherche de partenaire et matériel à vendre, validées par le club
+var AN = { liste: null, type: 'partenaire', form: null, f: {} };
+function photoUrl(p) { return p ? SUPA_URL + '/storage/v1/object/public/annonces/' + p.split('/').map(encodeURIComponent).join('/') : ''; }
+function chargerAnnonces() {
+  return q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false }))
+    .then(function (l) { AN.liste = l || []; return AN.liste; });
+}
+function carteAnnonce(a, opts) {
+  var wa = function (t) { return 'https://wa.me/' + WA_CLUB + '?text=' + encodeURIComponent(t); };
+  var h = '<section class="card stack" style="gap:6px">';
+  if (a.type === 'vente') {
+    if (a.image_path) h += '<img src="' + esc(photoUrl(a.image_path)) + '" alt="" loading="lazy" style="width:100%;max-height:260px;object-fit:cover;border-radius:12px" onerror="this.remove()">';
+    h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b>' + esc(a.titre) + '</b>' + (a.prix ? '<span class="badge" style="background:var(--ac);color:#fff">' + esc(a.prix) + '</span>' : '') + '</div>' +
+      (a.description ? '<span class="mut small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
+  } else {
+    h += '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(a.prenom) + '</b>' + (NIV[a.niveau] ? niveauBadge(a.niveau) : '<span class="badge" style="background:var(--soft);color:var(--tx)">' + esc(a.niveau) + '</span>') + '</div>' +
+      '<span class="mut small">' + esc(a.dispo) + '</span>' + (a.description ? '<span class="small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
+  }
+  h += '<span class="mut xs">Annonce n°' + a.num + ' · ' + esc(fmtCourt(new Date(a.created_at))) + '</span>';
+  if (opts.statut) h += '<span><span class="badge" style="background:' + (a.statut === 'attente' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (a.statut === 'attente' ? 'var(--tx)' : '#fff') + '">' + (a.statut === 'attente' ? 'En attente de validation' : 'Publiée jusqu\'au ' + esc(fmtCourt(new Date(a.expire_le + 'T12:00:00')))) + '</span></span>';
+  if (opts.contact && !opts.staff) h += '<a class="btn" target="_blank" rel="noopener" href="' + esc(wa(a.type === 'vente' ? 'Bonjour, je suis intéressé(e) par l\'annonce n°' + a.num + ' : ' + a.titre + '. Pouvez-vous me mettre en relation ?' : 'Bonjour, je suis intéressé(e) par la demande de partenaire n°' + a.num + ' (' + a.prenom + ', ' + a.niveau + '). Pouvez-vous nous mettre en relation ?')) + '">Me mettre en relation</a>';
+  if (opts.staff) h += '<div class="stack" style="gap:8px" data-ancontact="' + a.id + '"><button class="btn ghost" data-anvoir="' + a.id + '">Voir le numéro de l\'auteur</button></div>' +
+    (a.statut === 'attente' ? '<div class="grid2"><button class="btn line" data-anstat="' + a.id + '|refusee">Refuser</button><button class="btn" data-anstat="' + a.id + '|publiee">Publier</button></div>' : '<button class="btn line" data-anstat="' + a.id + '|close">Retirer l\'annonce</button>');
+  else if (opts.retirer) h += '<button class="btn line" data-anstat="' + a.id + '|close">Retirer mon annonce</button>';
+  return h + '</section>';
+}
 function clubAnnonces(box) {
+  if (AN.form) return formAnnonce(box);
   box.innerHTML = '<div class="skel"></div>';
-  Promise.all([
-    fetch(LEGACY_URL + '?format=vente').then(function (r) { return r.json(); }).catch(function () { return null; }),
-    fetch(LEGACY_URL + '?format=partenaires').then(function (r) { return r.json(); }).catch(function () { return null; })
-  ]).then(function (r) {
-    var vente = r[0] || [], part = r[1] || [];
-    var wa = function (t) { return 'https://wa.me/' + WA_CLUB + '?text=' + encodeURIComponent(t); };
-    var h = '<div class="dayhead">Recherche de partenaire</div>' + (part.length ? part.map(function (p) {
-      return '<section class="card stack" style="gap:6px"><div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(p.prenom) + '</b>' + (NIV[p.niveau] ? niveauBadge(p.niveau) : '<span class="badge" style="background:var(--soft)">' + esc(p.niveau) + '</span>') + '</div>' +
-        '<span class="mut small">' + esc(p.dispo) + '</span>' + (p.message ? '<span class="small">' + esc(p.message) + '</span>' : '') +
-        '<a class="btn" target="_blank" rel="noopener" href="' + esc(wa('Bonjour, je suis intéressé(e) par la demande de partenaire n°' + p.ref + ' (' + p.prenom + ', ' + p.niveau + '). Pouvez-vous nous mettre en relation ?')) + '">Me mettre en relation</a></section>';
-    }).join('') : '<section class="card empty">Aucune demande pour le moment.</section>') +
-      '<a class="btn line" href="../">Déposer une demande (sur l\'appli actuelle)</a>' +
-      '<div class="dayhead">Matériel à vendre</div>' + (vente.length ? vente.map(function (v) {
-        return '<section class="card stack" style="gap:6px"><b>' + esc(v.titre) + '</b>' + (v.prix ? '<span class="badge" style="background:var(--ac);color:#fff;align-self:flex-start">' + esc(v.prix) + '</span>' : '') +
-          (v.description ? '<span class="mut small">' + esc(v.description) + '</span>' : '') +
-          '<a class="btn" target="_blank" rel="noopener" href="' + esc('https://wa.me/' + encodeURIComponent(v.wa || WA_CLUB) + '?text=' + encodeURIComponent('Bonjour, je suis intéressé(e) par : ' + v.titre)) + '">Contacter sur WhatsApp</a></section>';
-      }).join('') : '<section class="card empty">Aucun article à vendre pour le moment.</section>') +
-      '<p class="mut xs" style="text-align:center">Les numéros ne sont jamais affichés : le club fait la mise en relation.</p>';
+  chargerAnnonces().then(function (l) {
+    var staff = S.user && S.isStaff, moi = S.user ? S.user.id : null;
+    var pub = l.filter(function (a) { return a.statut === 'publiee' && a.type === AN.type; });
+    var h = '';
+    var att = staff ? l.filter(function (a) { return a.statut === 'attente'; }) : [];
+    if (att.length) h += '<div class="dayhead">À valider (' + att.length + ')</div>' + att.map(function (a) { return carteAnnonce(a, { staff: true }); }).join('');
+    var mes = moi ? l.filter(function (a) { return a.cree_par === moi && !(staff && a.statut === 'attente'); }) : [];
+    if (mes.length) h += '<div class="dayhead">Mes annonces</div>' + mes.map(function (a) { return carteAnnonce(a, { statut: true, retirer: true }); }).join('');
+    h += '<div class="chips" style="margin-top:6px"><button class="chip ' + (AN.type === 'partenaire' ? 'on' : '') + '" data-antype="partenaire">Recherche de partenaire</button><button class="chip ' + (AN.type === 'vente' ? 'on' : '') + '" data-antype="vente">Matériel à vendre</button></div>';
+    h += pub.length ? pub.map(function (a) { return carteAnnonce(a, { contact: a.cree_par !== moi, staff: staff && a.cree_par !== moi }); }).join('')
+      : '<section class="card empty">' + (AN.type === 'vente' ? 'Aucun article à vendre pour le moment.' : 'Aucune demande pour le moment. Sois le premier à en déposer une !') + '</section>';
+    h += '<button class="btn" id="an-new">' + (AN.type === 'vente' ? 'Vendre du matériel' : 'Déposer une demande de partenaire') + '</button>' +
+      '<p class="mut xs" style="text-align:center">Les numéros ne sont jamais affichés : le club fait la mise en relation. Les annonces restent en ligne 2 mois.</p>';
     box.innerHTML = h;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-antype]'), function (b) { b.onclick = function () { AN.type = b.dataset.antype; clubAnnonces(box); }; });
+    $('an-new').onclick = function () { if (!S.user) return go('#/profil'); AN.form = AN.type; AN.f = {}; clubAnnonces(box); };
+    Array.prototype.forEach.call(box.querySelectorAll('[data-anstat]'), function (b) {
+      b.onclick = function () {
+        var x = b.dataset.anstat.split('|');
+        if (x[1] === 'close' && !confirm('Retirer cette annonce ?')) return;
+        q(sb.from('annonces').update({ statut: x[1] }).eq('id', x[0])).then(function () { toast({ publiee: 'Annonce publiée', refusee: 'Annonce refusée', close: 'Annonce retirée' }[x[1]]); clubAnnonces(box); }).catch(function () { toast('Action impossible'); });
+      };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-anvoir]'), function (b) {
+      b.onclick = function () {
+        q(sb.rpc('annonce_contact', { a: b.dataset.anvoir })).then(function (r) {
+          var c = r && r[0], w = c && telWa(c.contact);
+          box.querySelector('[data-ancontact="' + b.dataset.anvoir + '"]').innerHTML = c ? '<span class="small"><b>' + esc(c.contact || '—') + '</b>' + (c.email ? ' · ' + esc(c.email) : '') + '</span>' +
+            '<div class="grid2">' + (c.contact ? '<a class="btn line" href="tel:' + esc(String(c.contact).replace(/\s/g, '')) + '">Appeler</a>' : '<span></span>') + (w ? '<a class="btn line" target="_blank" rel="noopener" href="https://wa.me/' + w + '">WhatsApp</a>' : '') + '</div>' : '<span class="mut small">Numéro introuvable.</span>';
+        }).catch(function () { toast('Action impossible'); });
+      };
+    });
+  }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les annonces pour le moment.</section>'; });
+}
+function reduirePhoto(fichier) {
+  return new Promise(function (ok, ko) {
+    var img = new Image(), url = URL.createObjectURL(fichier);
+    img.onload = function () {
+      var r = Math.min(1, 1200 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(function (b) { b ? ok(b) : ko(new Error('photo')); }, 'image/jpeg', 0.82);
+    };
+    img.onerror = function () { ko(new Error('photo')); };
+    img.src = url;
   });
+}
+function formAnnonce(box) {
+  var v = AN.form === 'vente', F = AN.f;
+  var champ = function (k, label, attrs, ta) { return '<label class="f">' + label + (ta ? '<textarea class="f" data-anf="' + k + '" ' + attrs + '>' + esc(F[k] || '') + '</textarea>' : '<input class="f" data-anf="' + k + '" ' + attrs + ' value="' + esc(F[k] || '') + '">') + '</label>'; };
+  box.innerHTML = '<section class="card stack" style="gap:12px"><b style="font-size:17px">' + (v ? 'Vendre du matériel' : 'Chercher un partenaire') + '</b>' +
+    (v ? champ('titre', 'Quoi ?', 'maxlength="80" placeholder="Ex. Raquette Babolat Pure Drive 26"') + champ('prix', 'Prix', 'maxlength="30" placeholder="Ex. 40 €"') +
+      champ('description', 'Description (facultatif)', 'maxlength="600" placeholder="État, taille, tension…"', true) +
+      '<label class="f">Photo (facultatif)<input class="f" type="file" accept="image/*" id="an-photo"></label>'
+      : champ('prenom', 'Prénom', 'maxlength="40" autocomplete="given-name"') +
+      '<label class="f">Niveau<select class="f" data-anf="niveau"><option value="">Choisir…</option>' + NIVEAUX.concat(['Adulte / autre']).map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+      champ('dispo', 'Mes disponibilités', 'maxlength="140" placeholder="Ex. mercredi après-midi, samedi matin"') +
+      champ('description', 'Message (facultatif)', 'maxlength="600" placeholder="Ex. je cherche quelqu\'un pour m\'entraîner"', true)) +
+    champ('contact', 'Téléphone ou WhatsApp <span class="mut">(jamais affiché)</span>', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="06 12 34 56 78"') +
+    '<label class="check"><input type="checkbox" id="an-ok"><span>J\'accepte que mon annonce soit publiée dans l\'appli après validation par le club. Mon numéro n\'est jamais publié : le club fait la mise en relation. Pour un mineur, le numéro est celui d\'un parent.</span></label>' +
+    '<button class="btn" id="an-go">Envoyer</button><button class="btn line" id="an-back">Annuler</button></section>';
+  Array.prototype.forEach.call(box.querySelectorAll('[data-anf]'), function (i) { i.oninput = i.onchange = function () { F[i.dataset.anf] = i.value; }; });
+  $('an-back').onclick = function () { AN.form = null; clubAnnonces(box); };
+  $('an-go').onclick = function () {
+    var t = function (k) { return String(F[k] || '').trim(); };
+    if (v && !t('titre')) return toast('Indique ce que tu vends');
+    if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
+    if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
+    if (!$('an-ok').checked) return toast('Coche la case d\'accord');
+    var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
+    $('an-go').disabled = true;
+    var fichier = v && $('an-photo').files && $('an-photo').files[0];
+    var photo = fichier ? reduirePhoto(fichier).then(function (blob) {
+      var chemin = S.user.id + '/' + Date.now() + '.jpg';
+      return sb.storage.from('annonces').upload(chemin, blob, { contentType: 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; row.image_path = chemin; });
+    }) : Promise.resolve();
+    photo.then(function () { return q(sb.from('annonces').insert(row)); }).then(function () {
+      AN.form = null; AN.type = row.type;
+      toast(S.isStaff ? 'Annonce enregistrée' : 'Merci ! Ton annonce sera visible après validation par le club.');
+      clubAnnonces(box);
+    }).catch(function () { toast('Envoi impossible, réessaie'); $('an-go').disabled = false; });
+  };
 }
 
 // ---------- Événement ----------
@@ -573,7 +661,7 @@ function pageProfil() {
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
   h += blocPush();
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
-    '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="../confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
+    '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
   setTimeout(function () { lierPush(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
@@ -983,7 +1071,7 @@ function blocPush(compact) {
 function localStorageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
 function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
-function swEnregistrer() { return navigator.serviceWorker.register('../sw.js', { scope: '../' }); }
+function swEnregistrer() { return navigator.serviceWorker.register('sw.js', { scope: './' }); }
 function activerPush() {
   return Notification.requestPermission().then(function (perm) {
     if (perm !== 'granted') throw new Error('refus');

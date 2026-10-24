@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const message = JSON.stringify({
       title: "Raquette prête 🎾",
       body: `La raquette de ${p?.prenom || d.nom} est cordée. Elle t'attend au club house` + (d.prix != null ? ` (${euros(d.prix)}).` : "."),
-      url: "/app/v2/#/cordage/pretes",
+      url: "/app/#/cordage/pretes",
       tag: "cordage-" + d.id,
     });
     let envoyes = 0;
