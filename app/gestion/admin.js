@@ -76,7 +76,12 @@ document.addEventListener('keydown', function (e) { if (e.key === 'Escape') ferm
 // ---------- Données partagées ----------
 function chargerGroupes(force) {
   if (A.groupes.length && !force) return Promise.resolve(A.groupes);
-  return q(sb.from('groupes').select('id, nom, type, couleur, actif, description').order('type').order('nom')).then(function (l) { A.groupes = l || []; return A.groupes; });
+  var ORDRE = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
+  var rang = function (g) { var i = ORDRE.indexOf(String(g.nom).replace("CLOC'ARENA ", '')); return g.type === 'niveau' && i >= 0 ? i : 99; };
+  return q(sb.from('groupes').select('id, nom, type, couleur, actif, description').order('type').order('nom')).then(function (l) {
+    A.groupes = (l || []).sort(function (a, b) { return a.type === b.type ? (rang(a) - rang(b)) || a.nom.localeCompare(b.nom, 'fr') : (a.type < b.type ? -1 : 1); });
+    return A.groupes;
+  });
 }
 function chargerPers(force) {
   if (A.pers && !force) return Promise.resolve(A.pers);
