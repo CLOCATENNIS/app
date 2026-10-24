@@ -684,10 +684,10 @@ function pageProfil() {
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
     (S.gere.length || S.isDir ? '<a class="btn ghost" href="#/gestion">Saisie CLOC\'ARENA</a>' : '') +
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
-  h += blocPush();
+  h += blocInstaller() + blocPush();
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
     '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
-  setTimeout(function () { lierPush(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
+  setTimeout(function () { lierPush(); lierInstaller(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
 function lierLogin() {
@@ -1103,6 +1103,17 @@ function cordReglages(box) {
 function pushPossible() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
 function estIos() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 function estInstallee() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+// Installation de l'appli (Android / Chrome) : la notification affiche alors « CLOCA Tennis » au lieu de l'adresse du site
+var INSTALL = null;
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); INSTALL = e; });
+function blocInstaller() {
+  if (estInstallee() || !INSTALL) return '';
+  return '<section class="card stack" style="gap:8px"><b>Installer l\'appli sur ce téléphone</b><span class="mut small">Elle s\'ouvre comme une vraie appli, et les notifications s\'affichent au nom de « CLOCA Tennis ».</span><button class="btn navy" id="install-go">Installer CLOCA Tennis</button></section>';
+}
+function lierInstaller() {
+  var b = $('install-go'); if (!b) return;
+  b.onclick = function () { INSTALL.prompt(); INSTALL.userChoice.then(function (r) { INSTALL = null; if (r.outcome === 'accepted') toast('Appli installée'); render(); }); };
+}
 function blocPush(compact) {
   if (!S.user) return '';
   if (pushPossible() && Notification.permission === 'granted' && localStorageGet('cloca-push') === S.user.id) return compact ? '' : '<section class="card"><span class="small" style="color:var(--ok)">✓ Les notifications sont activées sur cet appareil.</span></section>';
