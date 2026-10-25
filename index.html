@@ -199,7 +199,7 @@ footer h3{color:#fff;font-size:22px;margin-bottom:8px}
     var t = E[etat][1] + (fin ? ' jusqu\'à ' + fmtH(fin) : '');
     document.getElementById('live').innerHTML = '<span class="dot" style="background:' + E[etat][0] + ';box-shadow:0 0 0 4px ' + E[etat][0] + '44"></span><span>' + t + '</span>';
     document.getElementById('pres').innerHTML = '<p style="display:flex;gap:10px;align-items:center;margin:0 0 6px;color:var(--tx)"><span class="dot" style="background:' + E[etat][0] + '"></span><b>' + t + '</b></p>' +
-      (etat === 'coach' ? 'Le coach est sur le terrain : il n\'est pas toujours disponible à l\'accueil.' : etat === 'ferme' ? (pz ? esc(pz.libelle) + ' : pas de cours, le club est fermé.' : 'Personne n\'est présent pour le moment.') : 'Quelqu\'un vous accueille au club house.') + (etat !== 'ferme' && p && p.message && fin && p.jusqua ? '<br>' + esc(p.message) : '');
+      (etat === 'coach' ? 'Le coach est sur le terrain : il n\'est pas toujours disponible à l\'accueil.' : etat === 'ferme' ? (pz ? esc(pz.libelle) + ' : pas de cours collectifs et le club house est fermé.' : 'Personne n\'est présent pour le moment.') : 'Quelqu\'un vous accueille au club house.') + (etat !== 'ferme' && p && p.message && fin && p.jusqua ? '<br>' + esc(p.message) : '');
   }).catch(function () { document.getElementById('live').style.display = 'none'; document.getElementById('pres').textContent = 'Information indisponible pour le moment.'; });
   // Prochains rendez-vous publics
   get('evenements?select=id,titre,debut,lieu,type,statut,inscription_ouverte&public=eq.true&statut=neq.annule&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&order=debut.asc&limit=4').then(function (l) {

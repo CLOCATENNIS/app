@@ -1312,7 +1312,7 @@ function remplirPresence() {
     var A = etatAffiche(p), E = ETATS[A.etat], ch = creneauEnCours('clubhouse');
     var h = '<section class="card stack" style="gap:6px"><div style="display:flex;gap:10px;align-items:center"><span class="dot" style="width:14px;height:14px;background:' + E.c + ';box-shadow:0 0 0 4px ' + E.c + '33"></span>' +
       '<b>' + E.t + (A.fin ? ' jusqu\'à ' + fmtH(A.fin) : '') + '</b></div>' +
-      '<span class="mut small">' + (A.pause ? esc(A.pause.libelle) + ' : pas de cours, le club est fermé.' + (A.prochain ? ' Reprise ' + quandTexte(A.prochain) + '.' : '') : E.d + (A.etat === 'ferme' && A.prochain ? ' Prochain créneau : ' + quandTexte(A.prochain) + '.' : '')) + '</span>' +
+      '<span class="mut small">' + (A.pause ? esc(A.pause.libelle) + ' : pas de cours collectifs et le club house est fermé.' + (A.prochain ? ' Reprise ' + quandTexte(A.prochain) + '.' : '') : E.d + (A.etat === 'ferme' && A.prochain ? ' Prochain créneau : ' + quandTexte(A.prochain) + '.' : '')) + '</span>' +
       (A.message ? '<span class="small">' + esc(A.message) + '</span>' : '') +
       (A.etat === 'coach' && ch ? '<span class="mut xs">Le club house ouvre normalement à cette heure : l\'accueil le confirmera ici.</span>' : '') +
       (A.manuel && p.maj_le ? '<span class="mut xs">Mis à jour à ' + fmtH(new Date(p.maj_le)) + '</span>' : A.auto ? '<span class="mut xs">D\'après les horaires des cours</span>' : '');
