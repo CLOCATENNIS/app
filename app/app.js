@@ -239,44 +239,102 @@ function pageAccueil() {
 }
 
 // ---------- Agenda ----------
+function enteteSemaine(l) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center">' +
+    '<button class="back" aria-label="Semaine précédente" id="wk-prev" style="width:44px;justify-content:center">' + ic('back', 20) + '</button>' +
+    '<b>' + (S.week === 0 ? 'Cette semaine' : S.week === 1 ? 'Semaine prochaine' : S.week === -1 ? 'Semaine dernière' : 'Semaine du ' + fmtCourt(l)) + '</b>' +
+    '<button class="back" aria-label="Semaine suivante" id="wk-next" style="width:44px;justify-content:center">' + ic('next', 20) + '</button></div>';
+}
+function blocPause(pauses, l, f) {
+  var pause = (pauses || []).slice().sort(function (x, y) { return (y.fin > y.debut) - (x.fin > x.debut); }).filter(function (v) { return v.debut <= isoJour(new Date(f.getTime() - 864e5)) && v.fin >= isoJour(l); })[0];
+  if (!pause) return '';
+  return '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">' + (pause.debut === pause.fin ? 'Pas de cours collectifs ce jour-là (' + esc(fmtJour(new Date(pause.debut + 'T12:00:00')).toLowerCase()) + ').' : 'Pas de cours collectifs du ' + esc(fmtCourt(new Date(pause.debut + 'T12:00:00'))) + ' au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.') + '</span></section>';
+}
+function carteAgenda(it, couleur, quiHtml) {
+  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : '';
+  var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
+  return '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
+    '<span class="mut small">' + det.join(' · ') + '</span>' + (it.objectif ? '<span class="mut small">' + esc(it.objectif) + '</span>' : '') + (quiHtml || '') +
+    '</div></' + (it.id ? 'a' : 'div') + '>';
+}
+function couleurGroupes(gs) { var n = gs[0] && String(gs[0].nom).replace("CLOC'ARENA ", ''); return NIV[n] ? NIV[n].bg : '#1f5a85'; }
 function pageAgenda() {
-  var h = '<div class="pagehead wrap"><h1>Mon agenda</h1></div><main>';
-  if (!S.user) return h + '<section class="card stack" style="gap:10px"><b>Connecte-toi pour voir ton agenda</b><span class="mut small">Tes cours, tes séances CLOC\'ARENA et tes événements, au même endroit.</span><a class="btn" href="#/profil">Me connecter</a></section></main>';
-  if (!S.pers.length) return h + '<section class="card empty">Ton adresse n\'est rattachée à aucun adhérent pour l\'instant.</section></main>';
+  var perso = S.user && S.pers.length;
+  if (!perso) S.agVue = 'club';
+  var vue = S.agVue || 'moi';
   var l = lundi(new Date()); l.setDate(l.getDate() + 7 * S.week);
   var f = new Date(l); f.setDate(f.getDate() + 7);
+  var h = '<div class="pagehead wrap"><h1>' + (vue === 'club' ? 'Agenda du club' : 'Mon agenda') + '</h1></div><main>';
+  if (perso) h += '<div class="seg"><button data-agv="moi" class="' + (vue === 'moi' ? 'on' : '') + '">Mon agenda</button><button data-agv="club" class="' + (vue === 'club' ? 'on' : '') + '">Tout le club</button></div>';
+  if (vue === 'club') {
+    var fl = S.agFiltre || 'tout';
+    h += '<div class="chips">' + [['tout', 'Tout'], ['cours', 'Cours'], ['arena', 'CLOC\'ARENA'], ['evt', 'Événements']].map(function (x) { return '<button class="chip ' + (fl === x[0] ? 'on' : '') + '" data-agf="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      enteteSemaine(l) + '<div id="club-ag" style="display:flex;flex-direction:column;gap:12px"><div class="skel"></div></div>' +
+      (!S.user ? '<section class="card stack" style="gap:10px"><b>Ton agenda personnel</b><span class="mut small">Connecte-toi pour ne voir que les cours et séances de ta famille, et les ajouter à ton téléphone.</span><a class="btn" href="#/profil">Me connecter</a></section>' : '') + '</main>';
+    setTimeout(function () { lierAgenda(); agendaClub(l, f); });
+    return h;
+  }
   var items = mesItems(l, f);
-  h += (S.pers.length > 1 ? selFamille() : '') +
-    '<div style="display:flex;justify-content:space-between;align-items:center">' +
-    '<button class="back" aria-label="Semaine précédente" id="wk-prev" style="width:44px;justify-content:center">' + ic('back', 20) + '</button>' +
-    '<b>' + (S.week === 0 ? 'Cette semaine' : S.week === 1 ? 'Semaine prochaine' : 'Semaine du ' + fmtCourt(l)) + '</b>' +
-    '<button class="back" aria-label="Semaine suivante" id="wk-next" style="width:44px;justify-content:center">' + ic('next', 20) + '</button></div>';
-  var pause = (AG && AG.pauses || []).slice().sort(function (x, y) { return (y.fin > y.debut) - (x.fin > x.debut); }).filter(function (v) { return v.debut <= isoJour(new Date(f.getTime() - 864e5)) && v.fin >= isoJour(l); })[0];
-  if (pause) h += '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">' + (pause.debut === pause.fin ? 'Pas de cours collectifs ce jour-là (' + esc(fmtJour(new Date(pause.debut + 'T12:00:00')).toLowerCase()) + ').' : 'Pas de cours collectifs du ' + esc(fmtCourt(new Date(pause.debut + 'T12:00:00'))) + ' au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.') + '</span></section>';
+  h += (S.pers.length > 1 ? selFamille() : '') + enteteSemaine(l) + blocPause(AG && AG.pauses, l, f);
   if (!items.length) h += '<section class="card empty">Rien de prévu cette semaine.</section>';
   var jour = '';
-  items.forEach(function (it, k) {
+  items.forEach(function (it) {
     var jl = fmtJour(it.d);
     if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
-    var c = it.qui.length === 1 ? S.couleur[it.qui[0].id] : (it.gs[0] && NIV[String(it.gs[0].nom).replace("CLOC'ARENA ", '')] ? NIV[String(it.gs[0].nom).replace("CLOC'ARENA ", '')].bg : '#1f5a85');
-    var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : '';
-    var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
-    h += '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + '"><span class="bar" style="background:' + c + '"></span><div class="stack" style="flex:1;min-width:0">' +
-      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
-      '<span class="mut small">' + det.join(' · ') + '</span>' +
-      (it.objectif ? '<span class="mut small">' + esc(it.objectif) + '</span>' : '') +
-      (S.pers.length > 1 ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') +
-      '</div></' + (it.id ? 'a' : 'div') + '>';
+    var c = it.qui.length === 1 ? S.couleur[it.qui[0].id] : couleurGroupes(it.gs);
+    h += carteAgenda(it, c, S.pers.length > 1 ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '');
   });
   h += blocSynchro() + '</main>';
-  setTimeout(function () {
-    $('wk-prev').onclick = function () { S.week--; render(); };
-    $('wk-next').onclick = function () { S.week++; render(); };
-    if ($('ics-semaine')) $('ics-semaine').onclick = function () { telechargerIcs(items, 'agenda-cloca-tennis.ics'); };
-    lierSynchro();
-    lierSel();
-  });
+  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); });
   return h;
+}
+function lierAgenda() {
+  $('wk-prev').onclick = function () { S.week--; render(); };
+  $('wk-next').onclick = function () { S.week++; render(); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-agv]'), function (b) { b.onclick = function () { S.agVue = b.dataset.agv; render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-agf]'), function (b) { b.onclick = function () { S.agFiltre = b.dataset.agf; render(); }; });
+}
+// Agenda de tout le club : cours de la semaine, séances CLOC'ARENA et événements
+var CLUBAG = null;
+function agendaClub(l, f) {
+  var box = $('club-ag');
+  (CLUBAG ? Promise.resolve(CLUBAG) : Promise.all([
+    q(sb.from('creneaux').select('jour_semaine, heure_debut, heure_fin, lieu, encadrant, du, au, groupes(nom, type)')),
+    q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; })
+  ]).then(function (r) { CLUBAG = { cren: r[0] || [], pauses: r[1] || [] }; return CLUBAG; })).then(function (C) {
+    if (!$('club-ag')) return;
+    var fl = S.agFiltre || 'tout', items = [];
+    if (fl === 'tout' || fl === 'cours') {
+      C.cren.forEach(function (cr) {
+        for (var j = new Date(l); j < f; j.setDate(j.getDate() + 1)) {
+          var js = j.getDay() === 0 ? 7 : j.getDay(), iso = isoJour(j);
+          if (cr.jour_semaine !== js || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
+          if (C.pauses.some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
+          var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
+          var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var fi = new Date(j); fi.setHours(+b[0], +b[1], 0, 0);
+          items.push({ d: d, f: fi, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, c: '#5d6b78', type: 'cours' });
+        }
+      });
+    }
+    (S.evts || []).forEach(function (e) {
+      var d = new Date(e.debut); if (d < l || d >= f) return;
+      var arena = e.type === 'seance';
+      if (fl === 'cours' || (fl === 'arena' && !arena) || (fl === 'evt' && arena)) return;
+      var gs = evGroupes(e).gs;
+      items.push({ d: d, f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, statut: e.statut, objectif: e.objectif, id: e.id, c: arena ? couleurGroupes(gs) : 'var(--ac)', gs: gs });
+    });
+    items.sort(function (x, y) { return x.d - y.d; });
+    var h = blocPause(C.pauses, l, f);
+    if (!items.length) h += '<section class="card empty">Rien au programme cette semaine.</section>';
+    var jour = '';
+    items.forEach(function (it) {
+      var jl = fmtJour(it.d);
+      if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
+      h += carteAgenda(it, it.c, it.gs && it.gs.length ? '<span>' + it.gs.map(groupeBadge).join(' ') + '</span>' : '');
+    });
+    box.innerHTML = h;
+  }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger l\'agenda du club.</section>'; });
 }
 
 // Abonnement : l'agenda du club se met à jour tout seul dans le téléphone
