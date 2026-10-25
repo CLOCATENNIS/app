@@ -261,16 +261,16 @@ function carteAgenda(it, couleur, quiHtml) {
 function couleurGroupes(gs) { var n = gs[0] && String(gs[0].nom).replace("CLOC'ARENA ", ''); return NIV[n] ? NIV[n].bg : '#1f5a85'; }
 function pageAgenda() {
   var perso = S.user && S.pers.length;
-  if (!perso) S.agVue = 'club';
-  var vue = S.agVue || 'moi';
+  var tab = S.agTab || (perso ? 'moi' : 'tout');
+  if (!perso && tab === 'moi') tab = 'tout';
+  var vue = tab === 'moi' ? 'moi' : 'club';
   var l = lundi(new Date()); l.setDate(l.getDate() + 7 * S.week);
   var f = new Date(l); f.setDate(f.getDate() + 7);
   var h = '<div class="pagehead wrap"><h1>' + (vue === 'club' ? 'Agenda du club' : 'Mon agenda') + '</h1></div><main>';
-  if (perso) h += '<div class="seg"><button data-agv="moi" class="' + (vue === 'moi' ? 'on' : '') + '">Mon agenda</button><button data-agv="club" class="' + (vue === 'club' ? 'on' : '') + '">Tout le club</button></div>';
+  h += '<div class="chips">' + (perso ? [['moi', 'Mon agenda']] : []).concat([['cours', 'Cours'], ['arena', 'CLOC\'ARENA'], ['evt', 'Événements'], ['tout', 'Tout le club']]).map(function (x) { return '<button class="chip ' + (tab === x[0] ? 'on' : '') + '" data-agf="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
   if (vue === 'club') {
-    var fl = S.agFiltre || 'tout';
-    h += '<div class="chips">' + [['tout', 'Tout'], ['cours', 'Cours'], ['arena', 'CLOC\'ARENA'], ['evt', 'Événements']].map(function (x) { return '<button class="chip ' + (fl === x[0] ? 'on' : '') + '" data-agf="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
-      enteteSemaine(l) + '<div id="club-ag" style="display:flex;flex-direction:column;gap:12px"><div class="skel"></div></div>' +
+    S.agFiltre = tab;
+    h += enteteSemaine(l) + '<div id="club-ag" style="display:flex;flex-direction:column;gap:12px"><div class="skel"></div></div>' +
       (!S.user ? '<section class="card stack" style="gap:10px"><b>Ton agenda personnel</b><span class="mut small">Connecte-toi pour ne voir que les cours et séances de ta famille, et les ajouter à ton téléphone.</span><a class="btn" href="#/profil">Me connecter</a></section>' : '') + '</main>';
     setTimeout(function () { lierAgenda(); agendaClub(l, f); });
     return h;
@@ -292,8 +292,7 @@ function pageAgenda() {
 function lierAgenda() {
   $('wk-prev').onclick = function () { S.week--; render(); };
   $('wk-next').onclick = function () { S.week++; render(); };
-  Array.prototype.forEach.call(document.querySelectorAll('[data-agv]'), function (b) { b.onclick = function () { S.agVue = b.dataset.agv; render(); }; });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-agf]'), function (b) { b.onclick = function () { S.agFiltre = b.dataset.agf; render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-agf]'), function (b) { b.onclick = function () { S.agTab = b.dataset.agf; render(); }; });
 }
 // Agenda de tout le club : cours de la semaine, séances CLOC'ARENA et événements
 var CLUBAG = null;
