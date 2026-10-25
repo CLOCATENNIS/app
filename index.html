@@ -190,14 +190,16 @@ footer h3{color:#fff;font-size:22px;margin-bottom:8px}
   var H = { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] };
   var E = { ouvert: ['#1f8a4c', 'Club house ouvert'], coach: ['#d9822b', 'Un coach est au club'], ferme: ['#c62f2f', 'Personne au club'] };
   function at(hm) { var d = new Date(), t = hm.split(':'); d.setHours(+t[0], +t[1], 0, 0); return d; }
-  get('club_presence?select=etat,jusqua,message&id=eq.1').then(function (r) {
-    var p = r[0], now = new Date(), etat = 'ferme', fin = null;
+  function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  Promise.all([get('club_presence?select=etat,jusqua,message&id=eq.1'), get('periodes_sans_cours?select=debut,fin,libelle').catch(function () { return []; })]).then(function (rr) {
+    var r = rr[0], p = r[0], now = new Date(), etat = 'ferme', fin = null, i = iso(now);
+    var pz = rr[1].filter(function (v) { return i >= v.debut && i <= v.fin; }).sort(function (a, b) { return (b.fin > b.debut) - (a.fin > a.debut); })[0];
     if (p && p.jusqua && new Date(p.jusqua) > now) { etat = p.etat; fin = new Date(p.jusqua); }
-    else { var c = (H[now.getDay() || 7] || []).filter(function (x) { return now >= at(x[0]) && now < at(x[1]); })[0]; if (c) { etat = 'coach'; fin = at(c[1]); } }
+    else if (!pz) { var c = (H[now.getDay() || 7] || []).filter(function (x) { return now >= at(x[0]) && now < at(x[1]); })[0]; if (c) { etat = 'coach'; fin = at(c[1]); } }
     var t = E[etat][1] + (fin ? ' jusqu\'à ' + fmtH(fin) : '');
     document.getElementById('live').innerHTML = '<span class="dot" style="background:' + E[etat][0] + ';box-shadow:0 0 0 4px ' + E[etat][0] + '44"></span><span>' + t + '</span>';
     document.getElementById('pres').innerHTML = '<p style="display:flex;gap:10px;align-items:center;margin:0 0 6px;color:var(--tx)"><span class="dot" style="background:' + E[etat][0] + '"></span><b>' + t + '</b></p>' +
-      (etat === 'coach' ? 'Le coach est sur le terrain : il n\'est pas toujours disponible à l\'accueil.' : etat === 'ferme' ? 'Personne n\'est présent pour le moment.' : 'Quelqu\'un vous accueille au club house.') + (etat !== 'ferme' && p && p.message && fin && p.jusqua ? '<br>' + esc(p.message) : '');
+      (etat === 'coach' ? 'Le coach est sur le terrain : il n\'est pas toujours disponible à l\'accueil.' : etat === 'ferme' ? (pz ? esc(pz.libelle) + ' : pas de cours, le club est fermé.' : 'Personne n\'est présent pour le moment.') : 'Quelqu\'un vous accueille au club house.') + (etat !== 'ferme' && p && p.message && fin && p.jusqua ? '<br>' + esc(p.message) : '');
   }).catch(function () { document.getElementById('live').style.display = 'none'; document.getElementById('pres').textContent = 'Information indisponible pour le moment.'; });
   // Prochains rendez-vous publics
   get('evenements?select=id,titre,debut,lieu,type,statut,inscription_ouverte&public=eq.true&statut=neq.annule&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&order=debut.asc&limit=4').then(function (l) {

@@ -1253,7 +1253,9 @@ function lierPush() {
 }
 
 // ---------- Présence au club (rouge / orange / vert) ----------
-var PRES = null, PRES_T = 0;
+var PRES = null, PRES_T = 0, PAUSES = null;
+// Vacances, trêve, jours fériés : pas de cours, donc personne au club par défaut
+function pauseDu(j) { var iso = isoJour(j); return (PAUSES || []).filter(function (v) { return iso >= v.debut && iso <= v.fin; }).sort(function (a, b) { return (b.fin > b.debut) - (a.fin > a.debut); })[0] || null; }
 var ETATS = {
   ouvert: { c: '#1f8a4c', t: 'Club house ouvert', d: 'Quelqu\'un est à l\'accueil pour te rendre ta raquette.' },
   coach: { c: '#d9822b', t: 'Un coach est au club', d: 'Il est sur le terrain : pas toujours disponible pour rendre une raquette.' },
@@ -1261,24 +1263,30 @@ var ETATS = {
 };
 function chargerPresence(force) {
   if (!force && PRES && Date.now() - PRES_T < 60e3) return Promise.resolve(PRES);
-  return q(sb.from('club_presence').select('etat, jusqua, message, maj_le').eq('id', 1).maybeSingle()).then(function (p) { PRES = p; PRES_T = Date.now(); return p; });
+  return Promise.all([
+    q(sb.from('club_presence').select('etat, jusqua, message, maj_le').eq('id', 1).maybeSingle()),
+    PAUSES ? Promise.resolve(PAUSES) : q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; })
+  ]).then(function (r) { PRES = r[0]; PAUSES = r[1] || []; PRES_T = Date.now(); return PRES; });
 }
 // Horaires habituels (jour : 1 = lundi … 7 = dimanche)
 var HORAIRES = {
   clubhouse: { 3: [['09:30', '12:00'], ['14:00', '16:30']], 6: [['09:30', '12:00'], ['14:00', '16:30']] },
   coach: { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] }
 };
+var MOIS_P = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 var JOURS = ['', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
 function aHeure(j, hm) { var x = new Date(j), t = hm.split(':'); x.setHours(+t[0], +t[1], 0, 0); return x; }
 function creneauEnCours(type, now) {
   now = now || new Date(); var js = now.getDay() || 7;
+  if (pauseDu(now)) return null;
   var l = (HORAIRES[type][js] || []).map(function (c) { return { debut: aHeure(now, c[0]), fin: aHeure(now, c[1]) }; });
   return l.filter(function (c) { return now >= c.debut && now < c.fin; })[0] || null;
 }
 function prochainCreneau(type) {
   var now = new Date();
-  for (var k = 0; k < 8; k++) {
+  for (var k = 0; k < 60; k++) {
     var j = new Date(now); j.setDate(j.getDate() + k); var js = j.getDay() || 7;
+    if (pauseDu(j)) continue;
     var c = (HORAIRES[type][js] || []).map(function (x) { return aHeure(j, x[0]); }).filter(function (d) { return d > now; })[0];
     if (c) return c;
   }
@@ -1286,7 +1294,7 @@ function prochainCreneau(type) {
 }
 function quandTexte(d) {
   var auj = debutJour(new Date()), dj = debutJour(d), n = Math.round((dj - auj) / 864e5);
-  return (n === 0 ? 'aujourd\'hui' : n === 1 ? 'demain' : JOURS[d.getDay() || 7]) + ' à ' + fmtH(d);
+  return (n === 0 ? 'aujourd\'hui' : n === 1 ? 'demain' : JOURS[d.getDay() || 7] + (n > 6 ? ' ' + d.getDate() + ' ' + MOIS_P[d.getMonth()] : '')) + ' à ' + fmtH(d);
 }
 // Ce qu'on affiche : la mise à jour manuelle tant qu'elle court, sinon les horaires des cours
 function etatAffiche(p) {
@@ -1294,7 +1302,7 @@ function etatAffiche(p) {
   if (p && p.jusqua && new Date(p.jusqua) > now) return { etat: p.etat, fin: new Date(p.jusqua), manuel: true, message: p.message };
   var c = creneauEnCours('coach');
   if (c) return { etat: 'coach', fin: c.fin, auto: true };
-  return { etat: 'ferme', prochain: prochainCreneau('coach') };
+  return { etat: 'ferme', prochain: prochainCreneau('coach'), pause: pauseDu(now) };
 }
 function estEquipe() { return S.user && S.roles.length > 0; }
 function remplirPresence() {
@@ -1304,7 +1312,7 @@ function remplirPresence() {
     var A = etatAffiche(p), E = ETATS[A.etat], ch = creneauEnCours('clubhouse');
     var h = '<section class="card stack" style="gap:6px"><div style="display:flex;gap:10px;align-items:center"><span class="dot" style="width:14px;height:14px;background:' + E.c + ';box-shadow:0 0 0 4px ' + E.c + '33"></span>' +
       '<b>' + E.t + (A.fin ? ' jusqu\'à ' + fmtH(A.fin) : '') + '</b></div>' +
-      '<span class="mut small">' + E.d + (A.etat === 'ferme' && A.prochain ? ' Prochain créneau : ' + quandTexte(A.prochain) + '.' : '') + '</span>' +
+      '<span class="mut small">' + (A.pause ? esc(A.pause.libelle) + ' : pas de cours, le club est fermé.' + (A.prochain ? ' Reprise ' + quandTexte(A.prochain) + '.' : '') : E.d + (A.etat === 'ferme' && A.prochain ? ' Prochain créneau : ' + quandTexte(A.prochain) + '.' : '')) + '</span>' +
       (A.message ? '<span class="small">' + esc(A.message) + '</span>' : '') +
       (A.etat === 'coach' && ch ? '<span class="mut xs">Le club house ouvre normalement à cette heure : l\'accueil le confirmera ici.</span>' : '') +
       (A.manuel && p.maj_le ? '<span class="mut xs">Mis à jour à ' + fmtH(new Date(p.maj_le)) + '</span>' : A.auto ? '<span class="mut xs">D\'après les horaires des cours</span>' : '');

@@ -812,14 +812,18 @@ var HORAIRES = {
 };
 var ETATS = { ouvert: ['#1f8a4c', 'Club house ouvert'], coach: ['#d9822b', 'Un coach est au club'], ferme: ['#c62f2f', 'Personne au club'] };
 function aHeure(j, hm) { var x = new Date(j), t = hm.split(':'); x.setHours(+t[0], +t[1], 0, 0); return x; }
-function creneau(type) { var n = new Date(), js = n.getDay() || 7; return (HORAIRES[type][js] || []).map(function (c) { return { d: aHeure(n, c[0]), f: aHeure(n, c[1]) }; }).filter(function (c) { return n >= c.d && n < c.f; })[0] || null; }
+var PAUSES_P = null;
+function isoJ(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function pauseAuj() { var i = isoJ(new Date()); return (PAUSES_P || []).filter(function (v) { return i >= v.debut && i <= v.fin; })[0] || null; }
+function creneau(type) { var n = new Date(), js = n.getDay() || 7; if (pauseAuj()) return null; return (HORAIRES[type][js] || []).map(function (c) { return { d: aHeure(n, c[0]), f: aHeure(n, c[1]) }; }).filter(function (c) { return n >= c.d && n < c.f; })[0] || null; }
 function presenceWidget(box) {
   if (!box) return;
-  q(sb.from('club_presence').select('etat, jusqua, message, maj_le').eq('id', 1).maybeSingle()).then(function (p) {
+  Promise.all([q(sb.from('club_presence').select('etat, jusqua, message, maj_le').eq('id', 1).maybeSingle()), PAUSES_P ? Promise.resolve(PAUSES_P) : q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; })]).then(function (r) {
+    var p = r[0]; PAUSES_P = r[1] || []; var pz = pauseAuj();
     var now = new Date(), manuel = p && p.jusqua && new Date(p.jusqua) > now, c = creneau('coach'), ch = creneau('clubhouse');
     var etat = manuel ? p.etat : c ? 'coach' : 'ferme', fin = manuel ? new Date(p.jusqua) : c ? c.f : null;
     box.innerHTML = '<div class="card stack"><div class="sect" style="margin:0">Présence au club</div><div style="display:flex;gap:10px;align-items:center"><span class="dot" style="width:14px;height:14px;background:' + ETATS[etat][0] + '"></span><b>' + ETATS[etat][1] + (fin ? ' jusqu\'à ' + fmtH(fin) : '') + '</b></div>' +
-      (manuel && p.message ? '<span class="small">' + esc(p.message) + '</span>' : '') + '<span class="mut xs">' + (manuel ? 'Mis à jour à ' + fmtH(new Date(p.maj_le)) : 'D\'après les horaires habituels') + '</span>' +
+      (manuel && p.message ? '<span class="small">' + esc(p.message) + '</span>' : '') + '<span class="mut xs">' + (manuel ? 'Mis à jour à ' + fmtH(new Date(p.maj_le)) : pz ? esc(pz.libelle) + ' : pas de cours, rouge par défaut' : 'D\'après les horaires habituels') + '</span>' +
       '<div class="chips">' + (etat === 'ouvert' && manuel ? '<button class="btn line" data-pr="ferme">Je ferme le club house</button>' : '<button class="btn ok" data-pr="ouvert">J\'ouvre le club house' + (ch ? ' jusqu\'à ' + fmtH(ch.f) : '') + '</button>') +
       (manuel ? '<button class="btn ghost" data-pr="auto">Revenir aux horaires</button>' : '') + '</div></div>';
     all('[data-pr]', box).forEach(function (b) {
