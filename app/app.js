@@ -233,7 +233,7 @@ function pageAccueil() {
   else if (!S.pers.length && !S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
 
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
-  if (actu) h += '<a class="card stack" href="#/club" style="text-decoration:none;color:var(--tx)"><span class="eyebrow">Dernière actu</span><b>' + esc(actu.titre) + '</b>' + (actu.texte ? '<span class="mut small">' + esc(actu.texte) + '</span>' : '') + '</a>';
+  if (actu) h += carteActu(actu, 'Dernière actu');
   h += '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></main>';
   return h;
 }
@@ -454,16 +454,34 @@ function pageClub(sous) {
   });
   return h;
 }
+function imgActu(a) { var img = safeUrl(a.image_url); return img && !/drive\.google\.com\/file/.test(img) ? img : ''; }
+// Carte courte : titre, début du texte, et un appel à ouvrir l'actu en entier
+function carteActu(a, sur) {
+  var img = imgActu(a);
+  return '<a class="card stack" href="#/actu/' + a.id + '" style="gap:6px;text-decoration:none;color:var(--tx)">' +
+    (img ? '<img src="' + esc(img) + '" alt="" loading="lazy" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px" onerror="this.remove()">' : '') +
+    '<span class="eyebrow">' + (sur ? esc(sur) + ' · ' : '') + esc(fmtCourt(new Date(a.publie_le))) + (a.epingle ? ' · 📌' : '') + '</span>' +
+    '<b class="disp" style="font-size:22px;line-height:1.1">' + esc(a.titre) + '</b>' +
+    (a.texte ? '<span class="mut small clamp2">' + esc(String(a.texte).replace(/\s+/g, ' ')) + '</span>' : '') +
+    '<span style="font-weight:600;color:var(--ac);margin-top:2px">Voir les infos →</span></a>';
+}
 function clubActus() {
   var l = S.pubs || [];
   if (!l.length) return '<section class="card empty">Pas d\'actu pour le moment.</section>' + suivre();
-  return l.map(function (a) {
-    var img = safeUrl(a.image_url), link = safeUrl(a.lien);
-    return '<article class="card stack" style="gap:6px">' + (img && !/drive\.google\.com\/file/.test(img) ? '<img src="' + esc(img) + '" alt="" loading="lazy" style="width:100%;border-radius:12px" onerror="this.remove()">' : '') +
-      '<span class="mut xs">' + esc(fmtJour(new Date(a.publie_le))) + '</span><b style="font-size:16px">' + esc(a.titre) + '</b>' +
-      (a.texte ? '<span class="mut" style="white-space:pre-line">' + esc(a.texte) + '</span>' : '') +
-      (link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" style="font-weight:600">En savoir plus →</a>' : '') + '</article>';
-  }).join('') + suivre();
+  return l.map(function (a) { return carteActu(a); }).join('') + suivre();
+}
+function pageActu(id) {
+  var a = (S.pubs || []).filter(function (x) { return x.id === id; })[0];
+  if (!a) return '<div class="pagehead">' + backLink('#/club/actus', 'Vie du club') + '</div><main><section class="card empty">Cette actu n\'est plus en ligne.</section></main>';
+  var img = imgActu(a), link = safeUrl(a.lien);
+  // Texte : paragraphes et listes numérotées (1️⃣, 2️⃣…) chacun sur sa ligne
+  var texte = String(a.texte || '').replace(/\s*([0-9]\uFE0F?\u20E3)/g, '\n$1').replace(/^\n+/, '');
+  var paras = texte.split(/\n{2,}/).map(function (p) { return '<p style="margin:0 0 12px;white-space:pre-line">' + esc(p.trim()) + '</p>'; }).join('');
+  return '<div class="darkhead"><div class="wrap">' + backLink('#/club/actus', 'Vie du club', true) +
+    '<div class="kicker" style="margin-top:8px">' + esc(fmtJour(new Date(a.publie_le)).toUpperCase()) + '</div><h1 style="margin-top:6px">' + esc(a.titre) + '</h1></div></div><main>' +
+    (img ? '<img src="' + esc(img) + '" alt="" style="width:100%;border-radius:16px" onerror="this.remove()">' : '') +
+    (paras ? '<section class="card" style="font-size:16px;line-height:1.6">' + paras + '</section>' : '') +
+    (link ? '<a class="btn" href="' + esc(link) + '" target="_blank" rel="noopener">Ouvrir le lien</a>' : '') + '</main>';
 }
 function suivre() {
   return '<section class="card stack" style="gap:10px"><b>Suivez-nous</b><span class="mut small">Photos, moments forts et performances des joueurs.</span><div class="grid2"><a class="btn line" href="' + INSTAGRAM_URL + '" target="_blank" rel="noopener">Instagram</a><a class="btn line" href="' + FACEBOOK_URL + '" target="_blank" rel="noopener">Facebook</a></div></section>';
@@ -1287,6 +1305,7 @@ function render() {
   else if (p === 'fiche') { html = pageFiche(arg); actif = 'arena'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
+  else if (p === 'actu') { html = pageActu(arg); actif = 'club'; }
   else if (p === 'profil') html = pageProfil();
   else if (p === 'gestion') html = pageGestion();
   else if (p === 'cordage') { html = pageCordage(arg); actif = 'accueil'; }

@@ -121,6 +121,7 @@ textarea.f{min-height:80px}
 .pick{display:flex;align-items:center;gap:12px;min-height:50px;padding:0 12px;border-radius:12px;border:1px solid var(--bd);font-weight:600;cursor:pointer}
 .pick.on{border:2px solid var(--ac);background:var(--sun);color:#12304a}
 
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .empty{text-align:center;padding:22px 10px;color:var(--mut)}
 .skel{height:64px;border-radius:14px;background:linear-gradient(90deg,var(--soft),var(--card),var(--soft));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
@@ -141,6 +142,6 @@ nav.tabs a.on{color:var(--ac);font-weight:600}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="in" id="tabs-in"></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202610250107"></script>
+<script src="app.js?v=202610250850"></script>
 </body>
 </html>
