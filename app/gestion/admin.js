@@ -845,26 +845,48 @@ function vuePresence(m) {
 
 // ---------- Accès et rôles ----------
 function vueAcces(m) {
-  m.innerHTML = entete('Accès et rôles', 'Qui peut faire quoi. La personne doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
-    '<div class="two"><div id="ac-l"><div class="skel"></div></div><div class="card stack"><b>Donner un rôle</b><label class="l">Adresse mail<input class="f" id="ac-m" type="email"></label>' +
-    '<label class="l">Rôle<select class="f" id="ac-r"><option value="bureau">Bureau / président (adhérents, actus, événements, annonces)</option><option value="accueil">Accueil (club house, annonces, cordage, inscriptions, actus)</option><option value="cordeur">Cordeur</option><option value="coach">Coach d\'un groupe (propose les scores, voit ses joueurs)</option><option value="responsable">Responsable d\'un groupe</option><option value="direction">Direction sportive (tout)</option></select></label>' +
-    '<label class="l" id="ac-gl" hidden>Groupe<select class="f" id="ac-g"></select></label><button class="btn" id="ac-ok">Ajouter</button>' +
+  var ROLES_AC = [['direction', 'Direction sportive (tout)'], ['bureau', 'Bureau / président (adhérents, actus, événements, annonces)'], ['accueil', 'Accueil (club house, annonces, cordage, inscriptions, actus)'], ['cordeur', 'Cordeur'], ['coach', 'Coach de groupes (propose les scores, voit ses joueurs)'], ['responsable', 'Responsable de groupes']];
+  m.innerHTML = entete('Accès et rôles', 'Qui peut faire quoi. Une même personne peut cumuler plusieurs rôles et plusieurs groupes. Elle doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
+    '<div class="two"><div id="ac-l"><div class="skel"></div></div><div class="card stack"><b>Donner des rôles</b><label class="l">Adresse mail<input class="f" id="ac-m" type="email"></label>' +
+    '<div class="l">Rôles (plusieurs possibles)<div class="stack" style="gap:6px;margin-top:6px">' + ROLES_AC.map(function (r) { return '<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-acrole="' + r[0] + '"> ' + r[1] + '</label>'; }).join('') + '</div></div>' +
+    '<div class="l" id="ac-gl" hidden>Groupes concernés (plusieurs possibles)<input class="f" id="ac-gq" placeholder="Filtrer les groupes…" style="margin-top:6px"><div id="ac-g" class="stack" style="gap:4px;max-height:220px;overflow:auto;margin-top:6px;padding:6px;border:1px solid var(--line);border-radius:10px"></div></div>' +
+    '<button class="btn" id="ac-ok">Ajouter</button>' +
     '<div class="sect">Ce que voit chaque rôle</div><div class="small list">' + ['direction', 'bureau', 'accueil', 'cordeur'].map(function (r) { return '<div class="it"><b>' + NOM_ROLE[r] + '</b><span class="mut xs" style="text-align:right">' + MODULES.filter(function (x) { return x[2].indexOf(r) >= 0; }).map(function (x) { return x[1]; }).join(', ') + '</span></div>'; }).join('') + '</div></div></div>';
   var charger = function () {
     q(sb.rpc('roles_liste')).then(function (l) {
-      $('ac-l').innerHTML = '<div class="tw"><table class="t"><thead><tr><th>Personne</th><th>Rôle</th><th></th></tr></thead><tbody>' + l.map(function (r) {
-        return '<tr><td>' + esc(r.email) + '</td><td>' + esc(NOM_ROLE[r.role] || r.role) + (r.groupe ? ' · ' + esc(r.groupe) : '') + '</td><td class="act"><button class="btn sm ko" data-acr="' + r.id + '">Retirer</button></td></tr>';
-      }).join('') + '</tbody></table></div>';
+      var par = {}, ordre = [];
+      l.forEach(function (r) { if (!par[r.email]) { par[r.email] = []; ordre.push(r.email); } par[r.email].push(r); });
+      $('ac-l').innerHTML = ordre.length ? '<div class="stack">' + ordre.map(function (mail) {
+        return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="small" style="word-break:break-all">' + esc(mail) + '</b><button class="btn sm line" data-acplus="' + esc(mail) + '">+ rôle</button></div><div class="chips" style="flex-wrap:wrap">' +
+          par[mail].map(function (r) { return '<span class="chip" style="display:inline-flex;gap:6px;align-items:center">' + esc(NOM_ROLE[r.role] || r.role) + (r.groupe ? ' · ' + esc(r.groupe) : '') + '<button title="Retirer" data-acr="' + r.id + '" style="border:0;background:none;cursor:pointer;color:var(--ko);font-weight:700;padding:0 2px">×</button></span>'; }).join('') + '</div></div>';
+      }).join('') + '</div>' : '<div class="card empty">Aucun rôle pour le moment.</div>';
       all('[data-acr]').forEach(function (b) { b.onclick = function () { if (confirm('Retirer ce rôle ?')) q(sb.rpc('role_retirer', { r: b.dataset.acr })).then(function () { toast('Rôle retiré'); charger(); }).catch(function (e) { toast(String(e.message || 'Action impossible').indexOf('direction') >= 0 ? 'Il faut garder au moins une personne à la direction' : 'Action impossible'); }); }; });
+      all('[data-acplus]').forEach(function (b) { b.onclick = function () { $('ac-m').value = b.dataset.acplus; $('ac-m').focus(); }; });
     }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les rôles.</div>'; });
   };
-  chargerGroupes().then(function () { $('ac-g').innerHTML = A.groupes.map(function (g) { return '<option value="' + g.id + '">' + esc(g.nom) + '</option>'; }).join(''); });
-  $('ac-r').onchange = function () { $('ac-gl').hidden = ['coach', 'responsable'].indexOf(this.value) < 0; };
+  chargerGroupes().then(function () {
+    $('ac-g').innerHTML = A.groupes.map(function (g) { return '<label class="small" data-gnom="' + esc(String(g.nom).toLowerCase()) + '" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-acg="' + g.id + '"> ' + esc(g.nom) + '</label>'; }).join('');
+  });
+  $('ac-gq').oninput = function () { var v = this.value.toLowerCase(); all('[data-gnom]').forEach(function (x) { x.hidden = v && x.dataset.gnom.indexOf(v) < 0; }); };
+  all('[data-acrole]').forEach(function (c) { c.onchange = function () { $('ac-gl').hidden = !all('[data-acrole]').some(function (x) { return x.checked && ['coach', 'responsable'].indexOf(x.dataset.acrole) >= 0; }); }; });
   $('ac-ok').onclick = function () {
-    var mail = $('ac-m').value.trim(), role = $('ac-r').value; if (!mail) return toast('Indique une adresse');
-    q(sb.rpc('role_ajouter', { mail: mail, le_role: role, groupe: ['coach', 'responsable'].indexOf(role) >= 0 ? $('ac-g').value : null })).then(function (r) {
-      if (r === 'inconnu') toast('Cette personne doit d\'abord se connecter une fois à l\'appli'); else { toast('Rôle ajouté'); $('ac-m').value = ''; charger(); }
-    }).catch(function () { toast('Action impossible'); });
+    var mail = $('ac-m').value.trim();
+    var roles = all('[data-acrole]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.acrole; });
+    var grs = all('[data-acg]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.acg; });
+    if (!mail) return toast('Indique une adresse');
+    if (!roles.length) return toast('Coche au moins un rôle');
+    var parGroupe = roles.filter(function (r) { return ['coach', 'responsable'].indexOf(r) >= 0; });
+    if (parGroupe.length && !grs.length) return toast('Coche au moins un groupe pour le rôle coach ou responsable');
+    var appels = [];
+    roles.forEach(function (r) {
+      if (parGroupe.indexOf(r) >= 0) grs.forEach(function (g) { appels.push({ mail: mail, le_role: r, groupe: g }); });
+      else appels.push({ mail: mail, le_role: r, groupe: null });
+    });
+    $('ac-ok').disabled = true;
+    Promise.all(appels.map(function (a) { return q(sb.rpc('role_ajouter', a)); })).then(function (rs) {
+      if (rs.indexOf('inconnu') >= 0) toast('Cette personne doit d\'abord se connecter une fois à l\'appli');
+      else { toast(appels.length > 1 ? appels.length + ' rôles ajoutés' : 'Rôle ajouté'); all('[data-acrole],[data-acg]').forEach(function (x) { x.checked = false; }); $('ac-gl').hidden = true; charger(); }
+    }).catch(function () { toast('Action impossible'); }).then(function () { $('ac-ok').disabled = false; });
   };
   charger();
 }
