@@ -260,7 +260,7 @@ function carteAgenda(it, couleur, quiHtml) {
 }
 function couleurGroupes(gs) { var n = gs[0] && String(gs[0].nom).replace("CLOC'ARENA ", ''); return NIV[n] ? NIV[n].bg : '#1f5a85'; }
 function pageAgenda() {
-  var perso = S.user && S.pers.length;
+  var perso = !!S.user;
   var tab = S.agTab || (perso ? 'moi' : 'tout');
   if (!perso && tab === 'moi') tab = 'tout';
   var vue = tab === 'moi' ? 'moi' : 'club';
@@ -273,6 +273,13 @@ function pageAgenda() {
     h += enteteSemaine(l) + '<div id="club-ag" style="display:flex;flex-direction:column;gap:12px"><div class="skel"></div></div>' +
       (!S.user ? '<section class="card stack" style="gap:10px"><b>Ton agenda personnel</b><span class="mut small">Connecte-toi pour ne voir que les cours et séances de ta famille, et les ajouter à ton téléphone.</span><a class="btn" href="#/profil">Me connecter</a></section>' : '') + '</main>';
     setTimeout(function () { lierAgenda(); agendaClub(l, f); });
+    return h;
+  }
+  if (!S.pers.length) {
+    // Compte sans famille (direction, coach, accueil) : ses cours et séances à lui
+    var nom = coachNom();
+    h += '<div id="coach-nom"></div>' + enteteSemaine(l) + '<div id="club-ag" style="display:flex;flex-direction:column;gap:12px"><div class="skel"></div></div></main>';
+    setTimeout(function () { lierAgenda(); agendaClub(l, f, nom || '?'); });
     return h;
   }
   var items = mesItems(l, f);
@@ -296,20 +303,36 @@ function lierAgenda() {
 }
 // Agenda de tout le club : cours de la semaine, séances CLOC'ARENA et événements
 var CLUBAG = null;
-function agendaClub(l, f) {
+function coachNom() { try { return localStorage.getItem('coachNom') || ''; } catch (e) { return ''; } }
+function nomsEncadrants(t) { return String(t || '').split(/\s*(?:,|\bet\b|&|\+|\/)\s*/).map(function (x) { return x.trim(); }).filter(Boolean); }
+function encadrePar(t, nom) { return nomsEncadrants(t).some(function (x) { return x.toLowerCase() === nom.toLowerCase(); }); }
+function choixCoach(C, nom) {
+  var box = $('coach-nom'); if (!box) return;
+  var noms = [];
+  C.cren.forEach(function (cr) { nomsEncadrants(cr.encadrant).forEach(function (n) { if (noms.indexOf(n) < 0) noms.push(n); }); });
+  noms.sort(function (a, b) { return a.localeCompare(b, 'fr'); });
+  box.innerHTML = '<section class="card stack" style="gap:8px"><b>' + (nom === '?' ? 'Qui es-tu ?' : 'Mes cours en tant que') + '</b>' +
+    (nom === '?' ? '<span class="mut small">Choisis ton prénom pour voir tes cours et séances.</span>' : '') +
+    '<div class="chips" style="flex-wrap:wrap">' + noms.map(function (n) { return '<button class="chip ' + (n === nom ? 'on' : '') + '" data-coach="' + esc(n) + '">' + esc(n) + '</button>'; }).join('') + '</div></section>';
+  Array.prototype.forEach.call(box.querySelectorAll('[data-coach]'), function (b) { b.onclick = function () { try { localStorage.setItem('coachNom', b.dataset.coach); } catch (e) {} S.coachNomMem = b.dataset.coach; render(); }; });
+}
+function agendaClub(l, f, coach) {
   var box = $('club-ag');
   (CLUBAG ? Promise.resolve(CLUBAG) : Promise.all([
-    q(sb.from('creneaux').select('jour_semaine, heure_debut, heure_fin, lieu, encadrant, du, au, groupes(nom, type)')),
+    q(sb.from('creneaux').select('groupe_id, jour_semaine, heure_debut, heure_fin, lieu, encadrant, du, au, groupes(nom, type)')),
     q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; })
   ]).then(function (r) { CLUBAG = { cren: r[0] || [], pauses: r[1] || [] }; return CLUBAG; })).then(function (C) {
     if (!$('club-ag')) return;
-    var fl = S.agFiltre || 'tout', items = [];
+    if (coach === '?' && S.coachNomMem) coach = S.coachNomMem;
+    if (coach) { choixCoach(C, coach); if (coach === '?') { box.innerHTML = ''; return; } }
+    var fl = coach ? 'tout' : (S.agFiltre || 'tout'), items = [];
     if (fl === 'tout' || fl === 'cours') {
       C.cren.forEach(function (cr) {
         for (var j = new Date(l); j < f; j.setDate(j.getDate() + 1)) {
           var js = j.getDay() === 0 ? 7 : j.getDay(), iso = isoJour(j);
           if (cr.jour_semaine !== js || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
           if (C.pauses.some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
+          if (coach && !encadrePar(cr.encadrant, coach) && S.gere.indexOf(cr.groupe_id) < 0) continue;
           var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
           var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var fi = new Date(j); fi.setHours(+b[0], +b[1], 0, 0);
           items.push({ d: d, f: fi, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, c: '#5d6b78', type: 'cours' });
@@ -320,7 +343,8 @@ function agendaClub(l, f) {
       var d = new Date(e.debut); if (d < l || d >= f) return;
       var arena = e.type === 'seance';
       if (fl === 'cours' || (fl === 'arena' && !arena) || (fl === 'evt' && arena)) return;
-      var gs = evGroupes(e).gs;
+      var eg = evGroupes(e), gs = eg.gs;
+      if (coach && !encadrePar(e.encadrant, coach) && !eg.ids.some(function (g) { return S.gere.indexOf(g) >= 0; })) return;
       items.push({ d: d, f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, statut: e.statut, objectif: e.objectif, id: e.id, c: arena ? couleurGroupes(gs) : 'var(--ac)', gs: gs });
     });
     items.sort(function (x, y) { return x.d - y.d; });
