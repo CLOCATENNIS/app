@@ -259,11 +259,20 @@ function vueEvenements(m, arg) {
         var gs = groupesEvt(e).map(function (g) { return esc(nomGroupe(g).replace("CLOC'ARENA ", '')); }).join(', ');
         return '<tr class="click" data-e="' + e.id + '"><td class="small" style="white-space:nowrap"><b>' + esc(fmtJ(d)) + '</b><br>' + fmtH(d) + (e.fin ? ' – ' + fmtH(new Date(e.fin)) : '') + '</td>' +
           '<td><b>' + esc(e.titre) + '</b><div class="mut xs">' + TYPES_EVT[e.type] + (e.lieu ? ' · ' + esc(e.lieu) : '') + (e.encadrant ? ' · ' + esc(e.encadrant) : '') + '</div></td><td class="small">' + (gs || (e.public ? 'Public' : '—')) + '</td>' +
-          '<td class="small">' + (e.inscription_ouverte || n ? '<a href="#/inscriptions/' + e.id + '">' + n + (e.places_max ? ' / ' + e.places_max : '') + '</a>' : '—') + '</td>' +
+          '<td class="small" style="white-space:nowrap">' + (e.inscription_ouverte ? '<a href="#/inscriptions/' + e.id + '">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</a><br><label class="xs mut" style="display:inline-flex;gap:4px;align-items:center">sur <input class="f" type="number" min="1" data-epl="' + e.id + '" value="' + esc(e.places_max) + '" placeholder="∞" title="Nombre de places (vide = illimité)" style="width:64px;min-height:32px;padding:2px 6px"> places</label>' : n ? '<a href="#/inscriptions/' + e.id + '">' + n + '</a>' : '—') + '</td>' +
           '<td>' + (e.statut === 'annule' ? '<span class="badge b-ko">Annulé</span>' : e.statut === 'deplace' ? '<span class="badge b-warn">Déplacé</span>' : '<span class="badge b-ok">Prévu</span>') + '</td>' +
           '<td class="act"><button class="btn sm line" data-edup="' + e.id + '" title="Copier à la même heure la semaine suivante">+ 7 jours</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun événement.</div>';
-      all('[data-e]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('[data-edup],a')) return; formEvt(EV.filter(function (x) { return x.id === tr.dataset.e; })[0]); }; });
+      all('[data-epl]').forEach(function (inp) {
+        inp.onchange = function () {
+          var v = inp.value ? parseInt(inp.value, 10) : null;
+          if (v !== null && !(v > 0)) { toast('Nombre de places invalide'); return; }
+          q(sb.from('evenements').update({ places_max: v }).eq('id', inp.dataset.epl).select('id').single()).then(function () {
+            EV.forEach(function (x) { if (x.id === inp.dataset.epl) x.places_max = v; }); toast(v ? v + ' places enregistrées' : 'Places illimitées');
+          }).catch(function () { toast('Enregistrement impossible'); });
+        };
+      });
+      all('[data-e]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('[data-edup],a,[data-epl],label')) return; formEvt(EV.filter(function (x) { return x.id === tr.dataset.e; })[0]); }; });
       all('[data-edup]').forEach(function (b) { b.onclick = function () { dupliquer(EV.filter(function (x) { return x.id === b.dataset.edup; })[0]); }; });
     }).catch(function () { $('e-l').innerHTML = '<div class="card empty">Impossible de charger les événements.</div>'; });
   };
