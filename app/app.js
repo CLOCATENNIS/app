@@ -115,6 +115,7 @@ function chargerUtilisateur() {
     S.gere = S.roles.filter(function (x) { return x.groupe_id; }).map(function (x) { return x.groupe_id; });
     var cible = S.apercu && S.isDir ? { foyer_id: S.apercu.foyer, personne_id: null } : S.compte;
     if (!S.isDir) S.apercu = null;
+    if (S.apercu) { S.roles = []; S.isStaff = false; S.isDir = false; S.gere = []; } // l'appli exactement comme un parent
     if (!cible || (!cible.foyer_id && !cible.personne_id)) return;
     var f = sb.from('personnes').select('id, prenom, nom, sexe, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))').order('prenom');
     f = cible.foyer_id ? f.or('foyer_id.eq.' + cible.foyer_id + (cible.personne_id ? ',id.eq.' + cible.personne_id : '')) : f.eq('id', cible.personne_id);
