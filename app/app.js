@@ -325,7 +325,7 @@ function blocPause(pauses, l, f) {
   return '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">' + (pause.debut === pause.fin ? 'Pas de cours collectifs ce jour-là (' + esc(fmtJour(new Date(pause.debut + 'T12:00:00')).toLowerCase()) + ').' : 'Pas de cours collectifs du ' + esc(fmtCourt(new Date(pause.debut + 'T12:00:00'))) + ' au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.') + '</span></section>';
 }
 function carteAgenda(it, couleur, quiHtml) {
-  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : it.possible ? '<span class="badge" style="background:var(--sun);color:#12304a">Sur inscription</span>' : it.inscrit ? '<span class="badge" style="background:var(--ok);color:#fff">Inscrit</span>' : '';
+  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : it.possible || it.surInsc ? '<span class="badge" style="background:var(--sun);color:#12304a">Sur inscription</span>' : it.inscrit ? '<span class="badge" style="background:var(--ok);color:#fff">Inscrit</span>' : '';
   var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
   return '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + (it.possible ? ' possible' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
@@ -421,7 +421,7 @@ function agendaClub(l, f, coach) {
       if (fl === 'cours' || (fl === 'arena' && !arena) || (fl === 'evt' && arena)) return;
       var eg = evGroupes(e), gs = eg.gs;
       if (coach && !encadrePar(e.encadrant, coach) && !eg.ids.some(function (g) { return S.gere.indexOf(g) >= 0; })) return;
-      items.push({ d: d, f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, statut: e.statut, objectif: e.objectif, id: e.id, c: arena ? couleurGroupes(gs) : 'var(--ac)', gs: gs });
+      items.push({ d: d, f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, statut: e.statut, objectif: e.objectif, id: e.id, c: arena ? couleurGroupes(gs) : 'var(--ac)', gs: gs, surInsc: e.inscription_ouverte });
     });
     items.sort(function (x, y) { return x.d - y.d; });
     var h = blocPause(C.pauses, l, f);
