@@ -249,11 +249,11 @@ function mesItems(du, au) {
 
 // ---------- Mise en page commune ----------
 function tabs(actif) {
-  var showArena = !S.user || !S.pers.length || S.pers.some(function (p) { return p.niveau_arena; }) || S.isStaff;
+  var showArena = !S.user || !S.pers.length || S.pers.some(function (p) { return p.niveau_arena; }) || (S.isStaff && !S.apercu);
   var t = [['accueil', 'home', 'Accueil'], ['agenda', 'cal', 'Agenda']];
   if (showArena) t.push(['arena', 'trophy', 'Arena']);
   t.push(['club', 'club', 'Club']);
-  t.push(S.isStaff || S.gere.length ? ['gestion', 'tool', 'Gestion'] : ['profil', 'user', 'Profil']);
+  t.push(!S.apercu && (S.isStaff || S.gere.length) ? ['gestion', 'tool', 'Gestion'] : ['profil', 'user', 'Profil']);
   $('tabs-in').style.setProperty('--n', t.length);
   $('tabs-in').innerHTML = t.map(function (x) {
     return '<a href="#/' + x[0] + '" class="' + (actif === x[0] ? 'on' : '') + '"' + (actif === x[0] ? ' aria-current="page"' : '') + '>' + ic(x[1], 24) + x[2] + '</a>';
@@ -815,7 +815,7 @@ function pageEvenement(id) {
     else if (S.pers.length) h += '<section class="card"><span class="mut small">Inscription réservée aux joueurs des niveaux concernés' + (evGroupes(e).gs.length ? ' : ' + evGroupes(e).gs.map(function (g) { return esc(String(g.nom).replace("CLOC'ARENA ", '')); }).join(', ') : '') + '.</span></section>';
   }
   if (peutRepondre(e) && eligibles(e).length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Ta présence</span><span class="mut small">Préviens le coach à l\'avance : ça l\'aide à préparer la séance.</span>' + boutonsPart(e, eligibles(e)) + '</section>';
-  if (S.isStaff || evGroupes(e).ids.some(function (g) { return S.gere.indexOf(g) >= 0; })) h += '<section class="card stack" style="gap:8px" id="coach-vue"><span class="eyebrow">Pour les coachs</span><span class="mut small">Chargement…</span></section>';
+  if (!S.apercu && (S.isStaff || evGroupes(e).ids.some(function (g) { return S.gere.indexOf(g) >= 0; }))) h += '<section class="card stack" style="gap:8px" id="coach-vue"><span class="eyebrow">Pour les coachs</span><span class="mut small">Chargement…</span></section>';
   h += '<button class="btn line" id="ics-evt">' + ic('dl', 18) + 'Ajouter à mon agenda</button></main>';
   setTimeout(function () {
     $('ics-evt').onclick = function () { telechargerIcs([{ id: e.id, d: d, f: fin, titre: e.titre, lieu: e.lieu, statut: e.statut, qui: [] }], 'cloca-tennis.ics'); };
