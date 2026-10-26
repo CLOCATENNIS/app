@@ -98,7 +98,7 @@ function chargerUtilisateur() {
     S.isStaff = S.roles.some(function (x) { return ['direction', 'bureau', 'accueil'].indexOf(x.role) >= 0 && !x.groupe_id; });
     S.gere = S.roles.filter(function (x) { return x.groupe_id; }).map(function (x) { return x.groupe_id; });
     if (!S.compte || (!S.compte.foyer_id && !S.compte.personne_id)) return;
-    var f = sb.from('personnes').select('id, prenom, nom, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))').order('prenom');
+    var f = sb.from('personnes').select('id, prenom, nom, sexe, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))').order('prenom');
     f = S.compte.foyer_id ? f.or('foyer_id.eq.' + S.compte.foyer_id + (S.compte.personne_id ? ',id.eq.' + S.compte.personne_id : '')) : f.eq('id', S.compte.personne_id);
     return q(f).then(function (pers) {
       S.pers = pers || [];
@@ -136,14 +136,58 @@ function eligibles(ev) {
 function inscOuverte(ev) { return ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date(); }
 function monInsc(ev, p) { return ((AG && AG.insc) || []).filter(function (i) { return i.evenement_id === ev.id && i.personne_id === p.id && i.statut !== 'annule'; })[0]; }
 
-var AG = null; // cache agenda : {creneaux, insc}
+// Une seule séance CLOC'ARENA sur inscription à venir par joueur : la prochaine se réserve une fois celle-ci passée
+function seanceAVenir(p, sauf) {
+  var now = new Date();
+  return ((AG && AG.insc) || []).map(function (i) {
+    if (i.personne_id !== p.id || i.evenement_id === sauf || (i.statut !== 'inscrit' && i.statut !== 'attente')) return null;
+    var e = (S.evts || []).filter(function (x) { return x.id === i.evenement_id; })[0];
+    return e && e.type === 'seance' && e.statut !== 'annule' && new Date(e.fin || (new Date(e.debut).getTime() + 3600e3)) > now ? e : null;
+  }).filter(Boolean)[0] || null;
+}
+function blocage(ev, p) {
+  if (ev.type !== 'seance') return '';
+  var x = seanceAVenir(p, ev.id);
+  return x ? 'Déjà inscrit' + (p.sexe === 'F' ? 'e' : '') + ' le ' + fmtJour(new Date(x.debut)).toLowerCase() + ' : une séance à la fois' : '';
+}
+// « Je participe » pour les séances sans inscription
+function maReponse(ev, p) { var r = ((AG && AG.part) || []).filter(function (x) { return x.evenement_id === ev.id && x.personne_id === p.id; })[0]; return r ? r.reponse : null; }
+function peutRepondre(ev) { return S.user && !ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date() && evGroupes(ev).ids.length; }
+function boutonsPart(ev, qui) {
+  if (!peutRepondre(ev)) return '';
+  return '<span class="stack" style="gap:6px;margin-top:4px">' + qui.map(function (p) {
+    var r = maReponse(ev, p);
+    return '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + (qui.length > 1 || S.pers.length > 1 ? '<b class="small" style="min-width:56px;color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>' : '') +
+      '<button class="chip' + (r === 'oui' ? ' on' : '') + '" data-part="oui|' + ev.id + '|' + p.id + '" style="min-height:36px">' + (r === 'oui' ? '✓ Je participe' : 'Je participe') + '</button>' +
+      '<button class="chip' + (r === 'non' ? ' on' : '') + '" data-part="non|' + ev.id + '|' + p.id + '" style="min-height:36px">' + (r === 'non' ? '✗ Absent' + (p.sexe === 'F' ? 'e' : '') : 'Absent' + (p.sexe === 'F' ? 'e' : '')) + '</button></span>';
+  }).join('') + '</span>';
+}
+function lierPart() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-part]'), function (b) {
+    b.onclick = function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var x = b.dataset.part.split('|'), deja = (AG.part || []).filter(function (r) { return r.evenement_id === x[1] && r.personne_id === x[2]; })[0];
+      var op = deja && deja.reponse === x[0] ? sb.from('participations').delete().eq('evenement_id', x[1]).eq('personne_id', x[2])
+        : sb.from('participations').upsert({ evenement_id: x[1], personne_id: x[2], reponse: x[0], maj_le: new Date().toISOString() });
+      b.disabled = true;
+      q(op).then(function () {
+        AG.part = (AG.part || []).filter(function (r) { return !(r.evenement_id === x[1] && r.personne_id === x[2]); });
+        if (!(deja && deja.reponse === x[0])) AG.part.push({ evenement_id: x[1], personne_id: x[2], reponse: x[0] });
+        toast(deja && deja.reponse === x[0] ? 'Réponse retirée' : x[0] === 'oui' ? 'Présence confirmée' : 'Absence signalée'); render();
+      }).catch(function () { toast('Réponse impossible pour le moment'); b.disabled = false; });
+    };
+  });
+}
+
+var AG = null; // cache agenda : {creneaux, insc, part}
 function chargerAgenda() {
   if (!S.user || !S.pers.length) return Promise.resolve(AG = { creneaux: [], insc: [] });
   return Promise.all([
     q(sb.from('creneaux').select('*, groupes(nom,couleur)')).catch(function () { return []; }),
     q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye')).catch(function () { return []; }),
-    q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; })
-  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [] }; return AG; });
+    q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; }),
+    q(sb.from('participations').select('evenement_id, personne_id, reponse')).catch(function () { return []; })
+  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [] }; return AG; });
 }
 
 function mesItems(du, au) {
@@ -223,7 +267,7 @@ function pageAccueil() {
       '<div class="stack"><span class="disp" style="font-size:22px;line-height:1.1">' + esc(prochain.titre) + '</span>' +
       '<span class="mut small">' + fmtH(prochain.d) + (prochain.f ? ' – ' + fmtH(prochain.f) : '') + (prochain.lieu ? ' · ' + esc(prochain.lieu) : '') + '</span>' +
       (prochain.enc || prochain.qui.length ? '<span class="mut small">' + (prochain.enc ? 'Avec ' + esc(prochain.enc) : '') + (prochain.enc && prochain.qui.length ? ' · ' : '') + prochain.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') +
-      '</div></div><a class="btn ghost" href="#/' + (S.user ? 'agenda' : 'arena') + '">' + (S.user ? 'Voir tout mon agenda' : 'Voir la programmation') + '</a></section>';
+      '</div></div>' + (prochain.id ? boutonsPart((S.evts || []).filter(function (x) { return x.id === prochain.id; })[0] || {}, prochain.qui) : '') + '<a class="btn ghost" href="#/' + (S.user ? 'agenda' : 'arena') + '">' + (S.user ? 'Voir tout mon agenda' : 'Voir la programmation') + '</a></section>';
   }
 
   // Raccourcis
@@ -303,10 +347,11 @@ function pageAgenda() {
     var jl = fmtJour(it.d);
     if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
     var c = it.qui.length === 1 ? S.couleur[it.qui[0].id] : couleurGroupes(it.gs);
-    h += carteAgenda(it, c, S.pers.length > 1 ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '');
+    var evo = it.id && !it.possible ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
+    h += carteAgenda(it, c, (S.pers.length > 1 && !(evo && peutRepondre(evo)) ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') + (evo ? boutonsPart(evo, it.qui) : ''));
   });
   h += blocSynchro() + '</main>';
-  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); });
+  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); lierPart(); });
   return h;
 }
 function lierAgenda() {
@@ -736,6 +781,8 @@ function pageEvenement(id) {
     else if (eligibles(e).length) h += '<section class="card stack" style="gap:10px" id="insc"><span class="mut small">Chargement…</span></section>';
     else if (S.pers.length) h += '<section class="card"><span class="mut small">Inscription réservée aux joueurs des niveaux concernés' + (evGroupes(e).gs.length ? ' : ' + evGroupes(e).gs.map(function (g) { return esc(String(g.nom).replace("CLOC'ARENA ", '')); }).join(', ') : '') + '.</span></section>';
   }
+  if (peutRepondre(e) && eligibles(e).length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Ta présence</span><span class="mut small">Préviens le coach à l\'avance : ça l\'aide à préparer la séance.</span>' + boutonsPart(e, eligibles(e)) + '</section>';
+  if (S.isStaff || evGroupes(e).ids.some(function (g) { return S.gere.indexOf(g) >= 0; })) h += '<section class="card stack" style="gap:8px" id="coach-vue"><span class="eyebrow">Pour les coachs</span><span class="mut small">Chargement…</span></section>';
   h += '<button class="btn line" id="ics-evt">' + ic('dl', 18) + 'Ajouter à mon agenda</button></main>';
   setTimeout(function () {
     $('ics-evt').onclick = function () { telechargerIcs([{ id: e.id, d: d, f: fin, titre: e.titre, lieu: e.lieu, statut: e.statut, qui: [] }], 'cloca-tennis.ics'); };
@@ -745,6 +792,17 @@ function pageEvenement(id) {
         '<div style="height:8px;border-radius:4px;background:var(--soft);overflow:hidden"><div style="height:8px;width:' + Math.min(100, Math.round(n / e.places_max * 100)) + '%;background:var(--ac)"></div></div>';
     }).catch(function () { $('places').remove(); });
     if ($('insc')) blocInscription(e);
+    lierPart();
+    if ($('coach-vue')) vueCoach(e);
+    if (e.inscription_ouverte) q(sb.rpc('places_niveaux', { evts: [e.id] })).then(function (l) {
+      if (!l || !l.length || !$('places') && !$('insc')) return;
+      var html = '<div class="stack" style="gap:4px">' + l.map(function (x) {
+        var g = evGroupes(e).gs[evGroupes(e).ids.indexOf(x.groupe_id)], r = Math.max(0, x.places - x.n);
+        return '<div style="display:flex;justify-content:space-between" class="small"><span>' + (g ? groupeBadge(g) : 'Niveau') + '</span><b style="color:' + (r ? 'var(--ok)' : 'var(--ac)') + '">' + x.n + '/' + x.places + (r ? ' · ' + r + ' place' + (r > 1 ? 's' : '') : ' · complet') + '</b></div>';
+      }).join('') + '</div>';
+      var box = $('places');
+      if (box) box.insertAdjacentHTML('beforeend', html); else $('insc').insertAdjacentHTML('beforebegin', '<section class="card stack" style="gap:6px"><span class="eyebrow">Places par niveau</span>' + html + '</section>');
+    }).catch(function () { });
   });
   return h;
 }
@@ -758,6 +816,7 @@ function blocInscription(e) {
         var i = ins.filter(function (x) { return x.personne_id === p.id; })[0];
         if (i) h += '<div class="pick"><span class="dot" style="background:' + S.couleur[p.id] + '"></span>' + esc(p.prenom) + '<span class="small" style="margin-left:auto;color:var(--ok)">' + (i.statut === 'attente' ? 'liste d\'attente' : i.statut === 'annule' ? 'annulé' : 'inscrit' + (i.paye ? ' · payé' : '')) + '</span>' +
           (!i.paye ? '<button class="chip" data-desins="' + p.id + '">Annuler</button>' : '') + '</div>';
+        else if (blocage(e, p)) h += '<div class="pick" style="cursor:default"><span class="dot" style="background:' + S.couleur[p.id] + '"></span>' + esc(p.prenom) + '<span class="small mut" style="margin-left:auto;text-align:right">' + esc(blocage(e, p)) + '</span></div>';
         else h += '<label class="pick ' + (choix[p.id] ? 'on' : '') + '"><input type="checkbox" data-ins="' + p.id + '" ' + (choix[p.id] ? 'checked' : '') + ' style="width:20px;height:20px;accent-color:var(--ac)">' + esc(p.prenom) + '</label>';
       });
       var n = Object.keys(choix).filter(function (k) { return choix[k]; }).length;
@@ -777,6 +836,33 @@ function blocInscription(e) {
     };
     dessiner();
   }).catch(function () { box.innerHTML = '<span class="mut small">Impossible de charger les inscriptions.</span>'; });
+}
+
+// Vue coach d'une séance : qui vient, qui est absent, qui n'a pas répondu (ou les inscrits)
+function vueCoach(e) {
+  var box = $('coach-vue'), ids = evGroupes(e).ids;
+  Promise.all([
+    ids.length ? q(sb.from('groupe_membres').select('personne_id, personnes(prenom, nom)').in('groupe_id', ids)).catch(function () { return []; }) : Promise.resolve([]),
+    q(sb.from('participations').select('personne_id, reponse').eq('evenement_id', e.id)).catch(function () { return []; }),
+    q(sb.from('inscriptions').select('personne_id, statut, personnes(prenom, nom)').eq('evenement_id', e.id)).catch(function () { return []; })
+  ]).then(function (r) {
+    var nom = function (p) { return p ? esc(p.prenom + ' ' + (p.nom || '').charAt(0) + '.') : '?'; };
+    var h = '<span class="eyebrow">Pour les coachs</span>';
+    if (e.inscription_ouverte) {
+      var ins = r[2].filter(function (i) { return i.statut === 'inscrit'; }), att = r[2].filter(function (i) { return i.statut === 'attente'; });
+      h += '<b>' + ins.length + ' inscrit' + (ins.length > 1 ? 's' : '') + '</b><span class="small">' + (ins.map(function (i) { return nom(i.personnes); }).join(', ') || '—') + '</span>' +
+        (att.length ? '<span class="small mut">Liste d\'attente : ' + att.map(function (i) { return nom(i.personnes); }).join(', ') + '</span>' : '');
+    } else {
+      var vus = {}, mb = r[0].filter(function (m) { if (vus[m.personne_id]) return false; vus[m.personne_id] = 1; return true; });
+      var rep = {}; r[1].forEach(function (x) { rep[x.personne_id] = x.reponse; });
+      var oui = mb.filter(function (m) { return rep[m.personne_id] === 'oui'; }), non = mb.filter(function (m) { return rep[m.personne_id] === 'non'; }), sans = mb.filter(function (m) { return !rep[m.personne_id]; });
+      h += '<div style="display:flex;gap:14px;flex-wrap:wrap"><b style="color:var(--ok)">✓ ' + oui.length + ' présent' + (oui.length > 1 ? 's' : '') + '</b><b style="color:var(--ko)">✗ ' + non.length + ' absent' + (non.length > 1 ? 's' : '') + '</b><b class="mut">? ' + sans.length + ' sans réponse</b></div>' +
+        (oui.length ? '<span class="small"><b>Présents :</b> ' + oui.map(function (m) { return nom(m.personnes); }).join(', ') + '</span>' : '') +
+        (non.length ? '<span class="small"><b>Absents :</b> ' + non.map(function (m) { return nom(m.personnes); }).join(', ') + '</span>' : '') +
+        (sans.length ? '<span class="small mut"><b>Sans réponse :</b> ' + sans.map(function (m) { return nom(m.personnes); }).join(', ') + '</span>' : '');
+    }
+    box.innerHTML = h;
+  });
 }
 
 // ---------- Inscriptions : tout ce qui est ouvert, au même endroit ----------
@@ -805,6 +891,22 @@ function pageInscriptions() {
         if (!rest) Array.prototype.forEach.call(document.querySelectorAll('[data-qins^="in|' + e.id + '|"]'), function (b) { b.textContent = 'Liste d\'attente'; });
       });
     }).catch(function () { });
+    if (ids.length) q(sb.rpc('places_niveaux', { evts: ids })).then(function (r) {
+      var par = {};
+      (r || []).forEach(function (x) { (par[x.evenement_id] = par[x.evenement_id] || []).push(x); });
+      Object.keys(par).forEach(function (id) {
+        var e = l.filter(function (y) { return y.id === id; })[0], box = document.querySelector('[data-pl="' + id + '"]'); if (!e || !box) return;
+        var nl = box.querySelector('.mut'); if (nl) nl.remove();
+        box.insertAdjacentHTML('beforeend', '<span style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' + par[id].map(function (x) {
+          var g = evGroupes(e).gs[evGroupes(e).ids.indexOf(x.groupe_id)], rr = Math.max(0, x.places - x.n);
+          return '<span class="xs"><b>' + esc(g ? String(g.nom).replace("CLOC'ARENA ", '') : 'Niveau') + '</b> ' + (rr ? rr + ' place' + (rr > 1 ? 's' : '') : '<b style="color:var(--ac)">complet</b>') + '</span>';
+        }).join('') + '</span>');
+        par[id].forEach(function (x) {
+          if (x.n < x.places) return;
+          Array.prototype.forEach.call(document.querySelectorAll('[data-qins^="in|' + id + '|"]'), function (b) { if (b.dataset.qins.split('|')[3].split(',').indexOf(x.groupe_id) >= 0) b.textContent = 'Liste d\'attente'; });
+        });
+      });
+    }).catch(function () { });
     Array.prototype.forEach.call(document.querySelectorAll('[data-qins]'), function (b) {
       b.onclick = function (ev) {
         ev.preventDefault(); b.disabled = true;
@@ -826,7 +928,8 @@ function carteInsc(e) {
     var i = monInsc(e, p);
     h += '<div class="pick" style="cursor:default"><span class="dot" style="background:' + S.couleur[p.id] + '"></span>' + esc(p.prenom) +
       (i ? '<span class="small" style="margin-left:auto;color:' + (i.statut === 'attente' ? 'var(--ac)' : 'var(--ok)') + '">' + (i.statut === 'attente' ? 'Liste d\'attente' : 'Inscrit') + '</span>' + (!i.paye ? '<button class="chip" data-qins="out|' + e.id + '|' + p.id + '">Annuler</button>' : '')
-        : '<button class="chip on" style="margin-left:auto" data-qins="in|' + e.id + '|' + p.id + '">Inscrire</button>') + '</div>';
+        : blocage(e, p) ? '<span class="xs mut" style="margin-left:auto;text-align:right;max-width:60%">' + esc(blocage(e, p)) + '</span>'
+        : '<button class="chip on" style="margin-left:auto" data-qins="in|' + e.id + '|' + p.id + '|' + evGroupes(e).ids.filter(function (g) { return (S.groupesDe[g] || []).indexOf(p) >= 0; }).join(',') + '">Inscrire</button>') + '</div>';
   });
   return h + '</section>';
 }
@@ -1465,7 +1568,7 @@ function render() {
   else if (p === 'profil') html = pageProfil();
   else if (p === 'gestion') html = pageGestion();
   else if (p === 'cordage') { html = pageCordage(arg); actif = 'accueil'; }
-  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); }); }
+  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); }); }
   $('app').innerHTML = html;
   tabs(actif);
   window.scrollTo(0, 0);

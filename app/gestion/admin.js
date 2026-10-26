@@ -248,7 +248,7 @@ function vueEvenements(m, arg) {
   $('e-new').onclick = function () { formEvt(null); };
   var EV = [];
   var charger = function () {
-    var r = sb.from('evenements').select('*, evenement_groupes(groupe_id), inscriptions(count)');
+    var r = sb.from('evenements').select('*, evenement_groupes(groupe_id), inscriptions(count), participations(reponse), evenement_quotas(groupe_id, places)');
     var now = new Date().toISOString();
     r = EVF.quand === 'avenir' ? r.gte('debut', new Date(Date.now() - 864e5).toISOString()).order('debut') : r.lt('debut', now).order('debut', { ascending: false }).limit(100);
     if (EVF.type) r = r.eq('type', EVF.type);
@@ -259,7 +259,7 @@ function vueEvenements(m, arg) {
         var gs = groupesEvt(e).map(function (g) { return esc(nomGroupe(g).replace("CLOC'ARENA ", '')); }).join(', ');
         return '<tr class="click" data-e="' + e.id + '"><td class="small" style="white-space:nowrap"><b>' + esc(fmtJ(d)) + '</b><br>' + fmtH(d) + (e.fin ? ' – ' + fmtH(new Date(e.fin)) : '') + '</td>' +
           '<td><b>' + esc(e.titre) + '</b><div class="mut xs">' + TYPES_EVT[e.type] + (e.lieu ? ' · ' + esc(e.lieu) : '') + (e.encadrant ? ' · ' + esc(e.encadrant) : '') + '</div></td><td class="small">' + (gs || (e.public ? 'Public' : '—')) + '</td>' +
-          '<td class="small" style="white-space:nowrap">' + (e.inscription_ouverte ? '<a href="#/inscriptions/' + e.id + '">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</a><br><label class="xs mut" style="display:inline-flex;gap:4px;align-items:center">sur <input class="f" type="number" min="1" data-epl="' + e.id + '" value="' + esc(e.places_max) + '" placeholder="∞" title="Nombre de places (vide = illimité)" style="width:64px;min-height:32px;padding:2px 6px"> places</label>' : n ? '<a href="#/inscriptions/' + e.id + '">' + n + '</a>' : '—') + '</td>' +
+          '<td class="small" style="white-space:nowrap">' + (!e.inscription_ouverte && (e.participations || []).length ? '<span title="Réponses « Je participe »"><b style="color:var(--ok)">✓ ' + e.participations.filter(function (x) { return x.reponse === 'oui'; }).length + '</b> · <span style="color:var(--ko)">✗ ' + e.participations.filter(function (x) { return x.reponse === 'non'; }).length + '</span></span>' : e.inscription_ouverte ? '<a href="#/inscriptions/' + e.id + '">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</a><br><label class="xs mut" style="display:inline-flex;gap:4px;align-items:center">sur <input class="f" type="number" min="1" data-epl="' + e.id + '" value="' + esc(e.places_max) + '" placeholder="∞" title="Nombre de places (vide = illimité)" style="width:64px;min-height:32px;padding:2px 6px"> places</label>' + ((e.evenement_quotas || []).length ? '<div class="xs mut">' + e.evenement_quotas.map(function (x) { return esc(nomGroupe(x.groupe_id).replace("CLOC'ARENA ", '')) + ' ' + x.places; }).join(' · ') + '</div>' : '') : n ? '<a href="#/inscriptions/' + e.id + '">' + n + '</a>' : '—') + '</td>' +
           '<td>' + (e.statut === 'annule' ? '<span class="badge b-ko">Annulé</span>' : e.statut === 'deplace' ? '<span class="badge b-warn">Déplacé</span>' : '<span class="badge b-ok">Prévu</span>') + '</td>' +
           '<td class="act"><button class="btn sm line" data-edup="' + e.id + '" title="Copier à la même heure la semaine suivante">+ 7 jours</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun événement.</div>';
@@ -289,6 +289,7 @@ function vueEvenements(m, arg) {
   var formEvt = function (e) {
     var nouveau = !e; e = e || { type: 'seance', statut: 'prevu', public: true };
     var d = e.debut ? new Date(e.debut) : null, f = e.fin ? new Date(e.fin) : null, gsel = e.id ? groupesEvt(e) : [];
+    var quotas = {};
     panneau(nouveau ? 'Nouvel événement' : 'Modifier l\'événement', '<div class="stack">' +
       '<label class="l">Titre<input class="f" id="v-t" maxlength="120" value="' + esc(e.titre) + '" placeholder="Ex. CLOC\'ARENA · Rassemblement"></label>' +
       '<div class="row2"><label class="l">Type<select class="f" id="v-ty">' + Object.keys(TYPES_EVT).map(function (k) { return '<option value="' + k + '"' + (e.type === k ? ' selected' : '') + '>' + TYPES_EVT[k] + '</option>'; }).join('') + '</select></label>' +
@@ -301,10 +302,22 @@ function vueEvenements(m, arg) {
       '<div class="sect">Pour qui ?</div><span class="mut xs">Les familles des groupes choisis le verront dans leur agenda.</span>' + choixGroupes(gsel, 'eg') +
       '<label class="c"><input type="checkbox" id="v-p"' + (e.public ? ' checked' : '') + '>Visible par tout le monde (même sans compte)</label>' +
       '<div class="sect">Inscriptions</div><label class="c"><input type="checkbox" id="v-io"' + (e.inscription_ouverte ? ' checked' : '') + '>Inscriptions ouvertes dans l\'appli</label>' +
-      '<div class="row2"><label class="l">Nombre de places (vide = illimité)<input class="f" type="number" min="1" id="v-pl" value="' + esc(e.places_max) + '"></label><label class="l">Prix en € (facultatif)<input class="f" inputmode="decimal" id="v-pr" value="' + esc(e.prix_euros == null ? '' : String(e.prix_euros).replace('.', ',')) + '"></label></div>' +
+      '<span class="mut xs">Places limitées : soit un total, soit par niveau (ex. 8 Rouge et 8 Violet), soit les deux.</span>' +
+      '<div class="row2"><label class="l">Nombre de places au total (vide = illimité)<input class="f" type="number" min="1" id="v-pl" value="' + esc(e.places_max) + '"></label><label class="l">Prix en € (facultatif)<input class="f" inputmode="decimal" id="v-pr" value="' + esc(e.prix_euros == null ? '' : String(e.prix_euros).replace('.', ',')) + '"></label></div>' +
+      '<div id="v-qt"></div>' +
       '<label class="c"><input type="checkbox" id="v-n">Prévenir les familles concernées par notification</label><input class="f" id="v-nm" placeholder="Message de la notification" hidden>' +
       '<div class="chips"><button class="btn" id="v-ok">Enregistrer</button><button class="btn line" id="v-an">Annuler</button>' + (nouveau ? '' : '<button class="btn ko" id="v-sup">Supprimer</button>') + '</div></div>', function (r) {
       lierChips(r);
+      // Places par niveau : une case par groupe choisi
+      var majQuotas = function () {
+        all('[data-qt]', r).forEach(function (i) { if (i.value) quotas[i.dataset.qt] = i.value; else delete quotas[i.dataset.qt]; });
+        var gs = lus(r, 'eg');
+        $('v-qt').innerHTML = gs.length > 1 ? '<div class="sect" style="margin-top:6px">Places par niveau (facultatif)</div><div class="chips" style="gap:10px">' + gs.map(function (g) {
+          return '<label class="l" style="width:120px">' + esc(nomGroupe(g).replace("CLOC'ARENA ", '')) + '<input class="f" type="number" min="1" data-qt="' + g + '" value="' + esc(quotas[g] || '') + '" placeholder="∞"></label>';
+        }).join('') + '</div>' : '';
+      };
+      r.addEventListener('change', function (ev) { if (ev.target.name === 'eg') majQuotas(); });
+      if (e.id) q(sb.from('evenement_quotas').select('groupe_id, places').eq('evenement_id', e.id)).then(function (l) { (l || []).forEach(function (x) { quotas[x.groupe_id] = String(x.places); }); majQuotas(); }).catch(majQuotas); else majQuotas();
       var majMsg = function () {
         var st = $('v-st').value, t = $('v-t').value.trim(), dd = combine($('v-d').value, $('v-h1').value);
         $('v-nm').value = st === 'annule' ? 'Annulé : ' + t + (dd ? ' du ' + fmtJ(dd) : '') : st === 'deplace' ? 'Changement : ' + t + (dd ? ', maintenant le ' + fmtJ(dd) + ' à ' + fmtH(dd) : '') : 'Nouveau : ' + t + (dd ? ' le ' + fmtJ(dd) + ' à ' + fmtH(dd) : '');
@@ -325,6 +338,9 @@ function vueEvenements(m, arg) {
         if (pl !== null && !(pl > 0)) return toast('Nombre de places invalide');
         if (pr !== null && isNaN(pr)) return toast('Prix invalide');
         var gs = lus(r, 'eg');
+        all('[data-qt]', r).forEach(function (i) { if (i.value) quotas[i.dataset.qt] = i.value; else delete quotas[i.dataset.qt]; });
+        var qts = gs.filter(function (g) { return quotas[g]; }).map(function (g) { return { groupe_id: g, places: parseInt(quotas[g], 10) }; });
+        if (qts.some(function (x) { return !(x.places > 0); })) return toast('Nombre de places par niveau invalide');
         var row = { titre: titre, type: $('v-ty').value, statut: $('v-st').value, debut: deb.toISOString(), fin: fin ? fin.toISOString() : null, lieu: $('v-l').value.trim() || null,
           encadrant: $('v-en').value.trim() || null, objectif: $('v-o').value.trim() || null, description: $('v-x').value.trim() || null, public: $('v-p').checked,
           inscription_ouverte: $('v-io').checked, places_max: pl, prix_euros: pr, groupe_id: null };
@@ -335,6 +351,10 @@ function vueEvenements(m, arg) {
           id = x.id; return q(sb.from('evenement_groupes').delete().eq('evenement_id', id));
         }).then(function () {
           return gs.length ? q(sb.from('evenement_groupes').insert(gs.map(function (g) { return { evenement_id: id, groupe_id: g }; }))) : null;
+        }).then(function () {
+          return q(sb.from('evenement_quotas').delete().eq('evenement_id', id));
+        }).then(function () {
+          return qts.length ? q(sb.from('evenement_quotas').insert(qts.map(function (x) { return { evenement_id: id, groupe_id: x.groupe_id, places: x.places }; }))) : null;
         }).then(function () {
           if ($('v-n').checked) notifier({ titre: row.statut === 'annule' ? 'Séance annulée' : row.statut === 'deplace' ? 'Changement de programme' : 'CLOCA Tennis', texte: $('v-nm').value, evenement_id: id, groupes: gs, url: '/app/#/evenement/' + id });
           toast('Événement enregistré'); fermer(); charger();
