@@ -138,7 +138,7 @@ function concernes(ev, insc) {
   var qui = [];
   if (!ev.inscription_ouverte) evGroupes(ev).ids.forEach(function (g) { (S.groupesDe[g] || []).forEach(function (p) { if (qui.indexOf(p) < 0) qui.push(p); }); });
   (insc || []).forEach(function (i) {
-    if (i.evenement_id !== ev.id || i.statut !== 'inscrit') return;
+    if (i.evenement_id !== ev.id || (i.statut !== 'inscrit' && i.statut !== 'attente')) return;
     var p = S.pers.filter(function (x) { return x.id === i.personne_id; })[0];
     if (p && qui.indexOf(p) < 0) qui.push(p);
   });
@@ -168,6 +168,18 @@ function blocage(ev, p) {
   var x = seanceAVenir(p, ev.id);
   return x ? 'Déjà inscrit' + (p.sexe === 'F' ? 'e' : '') + ' le ' + fmtJour(new Date(x.debut)).toLowerCase() + ' : une séance à la fois' : '';
 }
+// État d'inscription lisible, enfant par enfant
+function etatInsc(ev, qui) {
+  if (!S.user || !qui || !qui.length || !ev.inscription_ouverte || ev.statut === 'annule') return '';
+  var passe = new Date(ev.debut) <= new Date();
+  return '<span class="stack" style="gap:2px">' + qui.map(function (p) {
+    var i = monInsc(ev, p), nom = qui.length > 1 || S.pers.length > 1 ? '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b> : ' : '';
+    if (i && i.statut === 'inscrit') return '<span class="small" style="color:var(--ok);font-weight:600">' + nom + '✓ Inscription confirmée</span>';
+    if (i && i.statut === 'attente') return '<span class="small" style="color:var(--ac);font-weight:600">' + nom + '⏳ En liste d\'attente</span>';
+    return '<span class="small mut">' + nom + (passe ? 'Non inscrit' + (p.sexe === 'F' ? 'e' : '') : 'Pas encore inscrit' + (p.sexe === 'F' ? 'e' : '') + ' · touche pour t\'inscrire') + '</span>';
+  }).join('') + '</span>';
+}
+
 // « Je participe » pour les séances sans inscription
 function maReponse(ev, p) { var r = ((AG && AG.part) || []).filter(function (x) { return x.evenement_id === ev.id && x.personne_id === p.id; })[0]; return r ? r.reponse : null; }
 function peutRepondre(ev) { return S.user && !ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date() && evGroupes(ev).ids.length; }
@@ -325,12 +337,11 @@ function blocPause(pauses, l, f) {
   return '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">' + (pause.debut === pause.fin ? 'Pas de cours collectifs ce jour-là (' + esc(fmtJour(new Date(pause.debut + 'T12:00:00')).toLowerCase()) + ').' : 'Pas de cours collectifs du ' + esc(fmtCourt(new Date(pause.debut + 'T12:00:00'))) + ' au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.') + '</span></section>';
 }
 function carteAgenda(it, couleur, quiHtml) {
-  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : it.possible || it.surInsc ? '<span class="badge" style="background:var(--sun);color:#12304a">Sur inscription</span>' : it.inscrit ? '<span class="badge" style="background:var(--ok);color:#fff">Inscrit</span>' : '';
+  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : it.possible || it.surInsc || it.inscrit ? '<span class="badge" style="background:var(--sun);color:#12304a">Sur inscription</span>' : '';
   var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
   return '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + (it.possible ? ' possible' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
     '<span class="mut small">' + det.join(' · ') + '</span>' + (it.objectif ? '<span class="mut small">' + esc(it.objectif) + '</span>' : '') + (quiHtml || '') +
-    (it.possible ? '<span class="small" style="color:var(--ac);font-weight:600">Places limitées · touche pour t\'inscrire</span>' : '') +
     '</div></' + (it.id ? 'a' : 'div') + '>';
 }
 function couleurGroupes(gs) { var n = gs[0] && String(gs[0].nom).replace("CLOC'ARENA ", ''); return NIV[n] ? NIV[n].bg : '#1f5a85'; }
@@ -366,6 +377,8 @@ function pageAgenda() {
     if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
     var c = it.qui.length === 1 ? S.couleur[it.qui[0].id] : couleurGroupes(it.gs);
     var evo = it.id && !it.possible ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
+    var evi = it.id ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
+    if (evi && evi.inscription_ouverte) { h += carteAgenda(it, c, etatInsc(evi, it.possible ? it.qui : eligibles(evi).filter(function (p) { return S.sel === 'all' || p.id === S.sel; }))); return; }
     h += carteAgenda(it, c, (S.pers.length > 1 && !(evo && peutRepondre(evo)) ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') + (evo ? boutonsPart(evo, it.qui) : ''));
   });
   h += blocSynchro() + '</main>';
@@ -430,7 +443,8 @@ function agendaClub(l, f, coach) {
     items.forEach(function (it) {
       var jl = fmtJour(it.d);
       if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
-      h += carteAgenda(it, it.c, it.gs && it.gs.length ? '<span>' + it.gs.map(groupeBadge).join(' ') + '</span>' : '');
+      var evc = it.surInsc ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
+      h += carteAgenda(it, it.c, (it.gs && it.gs.length ? '<span>' + it.gs.map(groupeBadge).join(' ') + '</span>' : '') + (evc && S.pers.length ? etatInsc(evc, eligibles(evc)) : ''));
     });
     box.innerHTML = h;
   }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger l\'agenda du club.</section>'; });
