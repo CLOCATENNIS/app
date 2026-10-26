@@ -35,7 +35,7 @@ var S = {
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function $(id) { return document.getElementById(id); }
 function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
-function toast(t) { var d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 2600); }
+function toast(t) { if (S.apercuT && Date.now() - S.apercuT < 1500 && t.indexOf('Aperçu') < 0) return; var d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 2600); }
 function fmtJour(d) { var s = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1); }
 function fmtCourt(d) { return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); }
 function fmtH(d) { return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h'); }
@@ -76,6 +76,22 @@ function ic(n, size, color) {
 
 // ---------- Données ----------
 function q(p) { return p.then(function (r) { if (r.error) throw r.error; return r.data; }); }
+// Aperçu d'une famille (direction) : on lit ses données, on n'écrit jamais rien
+if (sb) (function () {
+  var from = sb.from.bind(sb), rpc = sb.rpc.bind(sb);
+  var bloque = function () {
+    toast('Aperçu : rien n\'est enregistré'); S.apercuT = Date.now();
+    var f = { then: function (ok, ko) { return Promise.resolve({ data: null, error: { message: 'apercu' } }).then(ok, ko); } };
+    ['eq', 'neq', 'in', 'is', 'match', 'select', 'single', 'maybeSingle', 'order', 'limit'].forEach(function (m) { f[m] = function () { return f; }; });
+    return f;
+  };
+  sb.from = function (t) {
+    var b = from(t);
+    if (S.apercu) ['insert', 'update', 'delete', 'upsert'].forEach(function (m) { b[m] = bloque; });
+    return b;
+  };
+  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|deposer|notifier/.test(n) ? bloque() : rpc(n, a); };
+})();
 
 function chargerPublic() {
   if (!sb) return Promise.resolve();
@@ -97,9 +113,11 @@ function chargerUtilisateur() {
     S.isDir = S.roles.some(function (x) { return x.role === 'direction' && !x.groupe_id; });
     S.isStaff = S.roles.some(function (x) { return ['direction', 'bureau', 'accueil'].indexOf(x.role) >= 0 && !x.groupe_id; });
     S.gere = S.roles.filter(function (x) { return x.groupe_id; }).map(function (x) { return x.groupe_id; });
-    if (!S.compte || (!S.compte.foyer_id && !S.compte.personne_id)) return;
+    var cible = S.apercu && S.isDir ? { foyer_id: S.apercu.foyer, personne_id: null } : S.compte;
+    if (!S.isDir) S.apercu = null;
+    if (!cible || (!cible.foyer_id && !cible.personne_id)) return;
     var f = sb.from('personnes').select('id, prenom, nom, sexe, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))').order('prenom');
-    f = S.compte.foyer_id ? f.or('foyer_id.eq.' + S.compte.foyer_id + (S.compte.personne_id ? ',id.eq.' + S.compte.personne_id : '')) : f.eq('id', S.compte.personne_id);
+    f = cible.foyer_id ? f.or('foyer_id.eq.' + cible.foyer_id + (cible.personne_id ? ',id.eq.' + cible.personne_id : '')) : f.eq('id', cible.personne_id);
     return q(f).then(function (pers) {
       S.pers = pers || [];
       S.pers.forEach(function (p, i) {
@@ -184,9 +202,9 @@ function chargerAgenda() {
   if (!S.user || !S.pers.length) return Promise.resolve(AG = { creneaux: [], insc: [] });
   return Promise.all([
     q(sb.from('creneaux').select('*, groupes(nom,couleur)')).catch(function () { return []; }),
-    q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye')).catch(function () { return []; }),
+    q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
     q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; }),
-    q(sb.from('participations').select('evenement_id, personne_id, reponse')).catch(function () { return []; })
+    q(sb.from('participations').select('evenement_id, personne_id, reponse').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; })
   ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [] }; return AG; });
 }
 
@@ -421,6 +439,7 @@ function agendaClub(l, f, coach) {
 // Abonnement : l'agenda du club se met à jour tout seul dans le téléphone
 function lienAgenda() { return S.compte && S.compte.calendrier_token ? SUPA_URL + '/functions/v1/agenda?t=' + S.compte.calendrier_token : ''; }
 function blocSynchro() {
+  if (S.apercu) return '<section class="card"><span class="mut small">Synchronisation du téléphone : non disponible en aperçu.</span></section>';
   var l = lienAgenda(); if (!l) return '';
   var web = l.replace(/^https:/, 'webcal:'), ouvert = S.synchroOuverte;
   return '<section class="card stack" style="gap:10px"><b>Mon agenda dans mon téléphone</b><span class="mut small">Ajoute-le une seule fois : les séances, stages et annulations s\'y mettent ensuite à jour tout seuls, pour toute la famille.</span>' +
@@ -956,11 +975,38 @@ function pageProfil() {
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
     (S.gere.length || S.isDir ? '<a class="btn ghost" href="#/gestion">Saisie CLOC\'ARENA</a>' : '') +
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
+  if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
+    '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
   h += blocInstaller() + blocPush();
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
     '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
-  setTimeout(function () { lierPush(); lierInstaller(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
+  setTimeout(function () { lierPush(); lierInstaller(); lierApercu(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
+}
+function apercu(foyer, nom) {
+  S.apercu = foyer ? { foyer: foyer, nom: nom } : null; S.sel = 'all'; S.agTab = null; AG = null;
+  chargerUtilisateur().then(chargerAgenda).then(function () { toast(foyer ? 'Aperçu : ' + nom : 'Retour à ton compte'); go('#/accueil'); render(); });
+}
+function lierApercu() {
+  if (!$('ap-q')) return;
+  var nomFoyer = function (p) { return 'Famille ' + p.nom.charAt(0) + p.nom.slice(1).toLowerCase(); };
+  var t;
+  $('ap-q').oninput = function () {
+    clearTimeout(t); var v = this.value.trim(); if (v.length < 2) { $('ap-r').innerHTML = ''; return; }
+    t = setTimeout(function () {
+      q(sb.from('personnes').select('id, prenom, nom, foyer_id, niveau_arena').not('foyer_id', 'is', null).eq('actif', true).or('nom.ilike.%' + v.replace(/[%,()]/g, '') + '%,prenom.ilike.%' + v.replace(/[%,()]/g, '') + '%').order('nom').limit(8)).then(function (l) {
+        $('ap-r').innerHTML = l.length ? l.map(function (p) { return '<button class="pick" data-ap="' + p.foyer_id + '" data-apn="' + esc(nomFoyer(p)) + '">' + esc(p.prenom + ' ' + p.nom) + (p.niveau_arena ? ' <span class="mut small">· ' + esc(p.niveau_arena) + '</span>' : '') + '</button>'; }).join('') : '<span class="mut small">Aucun adhérent trouvé.</span>';
+        Array.prototype.forEach.call(document.querySelectorAll('[data-ap]'), function (b) { b.onclick = function () { apercu(b.dataset.ap, b.dataset.apn); }; });
+      }).catch(function () { $('ap-r').innerHTML = '<span class="mut small">Recherche impossible.</span>'; });
+    }, 250);
+  };
+  $('ap-h').onclick = function () {
+    q(sb.from('personnes').select('foyer_id, nom').not('foyer_id', 'is', null).eq('actif', true).limit(1000)).then(function (l) {
+      l = l.filter(function (p) { return p.foyer_id; });
+      if (!l.length) return toast('Aucune famille');
+      var p = l[Math.floor(Math.random() * l.length)]; apercu(p.foyer_id, nomFoyer(p));
+    });
+  };
 }
 function lierLogin() {
   var msg = function (t, err) { $('lg-msg').textContent = t; $('lg-msg').style.color = err ? 'var(--ko)' : 'var(--mut)'; };
@@ -1569,7 +1615,9 @@ function render() {
   else if (p === 'gestion') html = pageGestion();
   else if (p === 'cordage') { html = pageCordage(arg); actif = 'accueil'; }
   else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); }); }
+  if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   $('app').innerHTML = html;
+  if ($('apercu-x')) $('apercu-x').onclick = function () { apercu(null); };
   tabs(actif);
   window.scrollTo(0, 0);
 }
