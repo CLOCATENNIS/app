@@ -118,15 +118,23 @@ function evGroupes(ev) {
 }
 function concernes(ev, insc) {
   var qui = [];
-  evGroupes(ev).ids.forEach(function (g) { (S.groupesDe[g] || []).forEach(function (p) { if (qui.indexOf(p) < 0) qui.push(p); }); });
+  if (!ev.inscription_ouverte) evGroupes(ev).ids.forEach(function (g) { (S.groupesDe[g] || []).forEach(function (p) { if (qui.indexOf(p) < 0) qui.push(p); }); });
   (insc || []).forEach(function (i) {
-    if (i.evenement_id !== ev.id || i.statut === 'annule') return;
+    if (i.evenement_id !== ev.id || i.statut !== 'inscrit') return;
     var p = S.pers.filter(function (x) { return x.id === i.personne_id; })[0];
     if (p && qui.indexOf(p) < 0) qui.push(p);
   });
   if (S.sel !== 'all') qui = qui.filter(function (p) { return p.id === S.sel; });
   return qui;
 }
+
+// Qui de la famille peut s'inscrire : les membres des groupes visés, ou tout le monde si l'événement n'a pas de groupe
+function eligibles(ev) {
+  var ids = evGroupes(ev).ids;
+  return S.pers.filter(function (p) { return !ids.length || ids.some(function (g) { return (S.groupesDe[g] || []).indexOf(p) >= 0; }); });
+}
+function inscOuverte(ev) { return ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date(); }
+function monInsc(ev, p) { return ((AG && AG.insc) || []).filter(function (i) { return i.evenement_id === ev.id && i.personne_id === p.id && i.statut !== 'annule'; })[0]; }
 
 var AG = null; // cache agenda : {creneaux, insc}
 function chargerAgenda() {
@@ -143,7 +151,11 @@ function mesItems(du, au) {
   (S.evts || []).forEach(function (ev) {
     var d = new Date(ev.debut); if (d < du || d >= au) return;
     var qui = concernes(ev, AG && AG.insc);
-    if (qui.length) items.push({ d: d, f: ev.fin ? new Date(ev.fin) : null, titre: ev.titre, lieu: ev.lieu, enc: ev.encadrant, statut: ev.statut, objectif: ev.objectif, qui: qui, gs: evGroupes(ev).gs, id: ev.id, type: ev.type });
+    if (qui.length) items.push({ d: d, f: ev.fin ? new Date(ev.fin) : null, titre: ev.titre, lieu: ev.lieu, enc: ev.encadrant, statut: ev.statut, objectif: ev.objectif, qui: qui, gs: evGroupes(ev).gs, id: ev.id, type: ev.type, inscrit: ev.inscription_ouverte });
+    else if (inscOuverte(ev) && evGroupes(ev).ids.length) {
+      var pos = eligibles(ev).filter(function (p) { return S.sel === 'all' || p.id === S.sel; });
+      if (pos.length) items.push({ d: d, f: ev.fin ? new Date(ev.fin) : null, titre: ev.titre, lieu: ev.lieu, statut: ev.statut, qui: pos, gs: evGroupes(ev).gs, id: ev.id, type: ev.type, possible: true });
+    }
   });
   (AG ? AG.creneaux : []).forEach(function (cr) {
     for (var j = new Date(du); j < au; j.setDate(j.getDate() + 1)) {
@@ -215,7 +227,7 @@ function pageAccueil() {
   }
 
   // Raccourcis
-  var ouverts = (S.evts || []).filter(function (e) { return e.inscription_ouverte && e.statut !== 'annule' && new Date(e.debut) > now; }).length;
+  var ouverts = (S.evts || []).filter(function (e) { return inscOuverte(e) && (!S.user || !S.pers.length || eligibles(e).length); }).length;
   var arenaTxt = 'Classements et programme';
   if (S.user && S.pers.length && S.classement) {
     var rangs = S.pers.filter(function (p) { return p.niveau_arena; }).map(function (p) {
@@ -225,7 +237,7 @@ function pageAccueil() {
   }
   h += '<div class="grid2">' +
     '<a class="tile" href="#/arena">' + ic('trophy', 24) + '<b>CLOC\'ARENA</b><span class="mut small">' + arenaTxt + '</span></a>' +
-    '<a class="tile" href="#/club/evenements">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
+    '<a class="tile" href="#/inscriptions">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
     '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
     '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
 
@@ -251,11 +263,12 @@ function blocPause(pauses, l, f) {
   return '<section class="card" style="background:var(--sun);border-color:var(--sun)"><b style="color:#12304a">' + esc(pause.libelle) + '</b><span class="small" style="display:block;color:#12304a">' + (pause.debut === pause.fin ? 'Pas de cours collectifs ce jour-là (' + esc(fmtJour(new Date(pause.debut + 'T12:00:00')).toLowerCase()) + ').' : 'Pas de cours collectifs du ' + esc(fmtCourt(new Date(pause.debut + 'T12:00:00'))) + ' au ' + esc(fmtCourt(new Date(pause.fin + 'T12:00:00'))) + ' inclus.') + '</span></section>';
 }
 function carteAgenda(it, couleur, quiHtml) {
-  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : '';
+  var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : it.possible ? '<span class="badge" style="background:var(--sun);color:#12304a">Sur inscription</span>' : it.inscrit ? '<span class="badge" style="background:var(--ok);color:#fff">Inscrit</span>' : '';
   var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
-  return '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
+  return '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + (it.possible ? ' possible' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
     '<span class="mut small">' + det.join(' · ') + '</span>' + (it.objectif ? '<span class="mut small">' + esc(it.objectif) + '</span>' : '') + (quiHtml || '') +
+    (it.possible ? '<span class="small" style="color:var(--ac);font-weight:600">Places limitées · touche pour t\'inscrire</span>' : '') +
     '</div></' + (it.id ? 'a' : 'div') + '>';
 }
 function couleurGroupes(gs) { var n = gs[0] && String(gs[0].nom).replace("CLOC'ARENA ", ''); return NIV[n] ? NIV[n].bg : '#1f5a85'; }
@@ -720,7 +733,8 @@ function pageEvenement(id) {
   if (e.prix_euros) h += '<section class="card"><span class="mut small">Tarif : <b style="color:var(--tx)">' + esc(String(e.prix_euros).replace('.', ',')) + ' €</b> · paiement au club house</span></section>';
   if (e.inscription_ouverte && e.statut !== 'annule') {
     if (!S.user) h += '<section class="card stack" style="gap:10px"><b>Inscriptions ouvertes</b><span class="mut small">Connecte-toi pour inscrire ta famille.</span><a class="btn" href="#/profil">Me connecter</a></section>';
-    else if (S.pers.length) h += '<section class="card stack" style="gap:10px" id="insc"><span class="mut small">Chargement…</span></section>';
+    else if (eligibles(e).length) h += '<section class="card stack" style="gap:10px" id="insc"><span class="mut small">Chargement…</span></section>';
+    else if (S.pers.length) h += '<section class="card"><span class="mut small">Inscription réservée aux joueurs des niveaux concernés' + (evGroupes(e).gs.length ? ' : ' + evGroupes(e).gs.map(function (g) { return esc(String(g.nom).replace("CLOC'ARENA ", '')); }).join(', ') : '') + '.</span></section>';
   }
   h += '<button class="btn line" id="ics-evt">' + ic('dl', 18) + 'Ajouter à mon agenda</button></main>';
   setTimeout(function () {
@@ -740,9 +754,9 @@ function blocInscription(e) {
     var choix = {};
     var dessiner = function () {
       var h = '<span class="eyebrow">Qui inscrire ?</span>';
-      S.pers.forEach(function (p) {
+      eligibles(e).forEach(function (p) {
         var i = ins.filter(function (x) { return x.personne_id === p.id; })[0];
-        if (i) h += '<div class="pick"><span class="dot" style="background:' + S.couleur[p.id] + '"></span>' + esc(p.prenom) + '<span class="small" style="margin-left:auto;color:var(--ok)">' + (i.statut === 'attente' ? 'liste d\'attente' : 'inscrit' + (i.paye ? ' · payé' : '')) + '</span>' +
+        if (i) h += '<div class="pick"><span class="dot" style="background:' + S.couleur[p.id] + '"></span>' + esc(p.prenom) + '<span class="small" style="margin-left:auto;color:var(--ok)">' + (i.statut === 'attente' ? 'liste d\'attente' : i.statut === 'annule' ? 'annulé' : 'inscrit' + (i.paye ? ' · payé' : '')) + '</span>' +
           (!i.paye ? '<button class="chip" data-desins="' + p.id + '">Annuler</button>' : '') + '</div>';
         else h += '<label class="pick ' + (choix[p.id] ? 'on' : '') + '"><input type="checkbox" data-ins="' + p.id + '" ' + (choix[p.id] ? 'checked' : '') + ' style="width:20px;height:20px;accent-color:var(--ac)">' + esc(p.prenom) + '</label>';
       });
@@ -752,17 +766,69 @@ function blocInscription(e) {
       Array.prototype.forEach.call(box.querySelectorAll('[data-ins]'), function (c) { c.onchange = function () { choix[c.dataset.ins] = c.checked; dessiner(); }; });
       Array.prototype.forEach.call(box.querySelectorAll('[data-desins]'), function (b) {
         b.onclick = function () {
-          q(sb.from('inscriptions').delete().eq('evenement_id', e.id).eq('personne_id', b.dataset.desins)).then(function () { toast('Inscription annulée'); render(); }).catch(function () { toast('Annulation impossible'); });
+          q(sb.from('inscriptions').delete().eq('evenement_id', e.id).eq('personne_id', b.dataset.desins)).then(function () { toast('Inscription annulée'); return chargerAgenda(); }).then(render).catch(function () { toast('Annulation impossible'); });
         };
       });
       $('ins-go').onclick = function () {
         var rows = Object.keys(choix).filter(function (k) { return choix[k]; }).map(function (k) { return { evenement_id: e.id, personne_id: k, created_by: S.user.id }; });
         $('ins-go').disabled = true;
-        q(sb.from('inscriptions').insert(rows)).then(function () { toast('Inscription enregistrée'); AG = null; render(); }).catch(function () { toast('Inscription impossible pour le moment'); $('ins-go').disabled = false; });
+        q(sb.from('inscriptions').insert(rows)).then(function () { toast('Inscription enregistrée'); return chargerAgenda(); }).then(render).catch(function () { toast('Inscription impossible pour le moment'); $('ins-go').disabled = false; });
       };
     };
     dessiner();
   }).catch(function () { box.innerHTML = '<span class="mut small">Impossible de charger les inscriptions.</span>'; });
+}
+
+// ---------- Inscriptions : tout ce qui est ouvert, au même endroit ----------
+function pageInscriptions() {
+  var l = (S.evts || []).filter(inscOuverte).sort(function (a, b) { return new Date(a.debut) - new Date(b.debut); });
+  var perso = S.user && S.pers.length;
+  var pourMoi = perso ? l.filter(function (e) { return eligibles(e).length; }) : l.filter(function (e) { return !evGroupes(e).ids.length; });
+  var h = '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1>Inscriptions</h1><p class="mut small" style="margin:4px 0 0">Places limitées : l\'inscription garantit ta place. Au-delà, liste d\'attente, avec une place attribuée automatiquement si quelqu\'un se désiste.</p></div><main>';
+  if (!S.user) h += '<section class="card stack" style="gap:10px"><b>Connecte-toi pour t\'inscrire</b><span class="mut small">Tu verras les séances et stages ouverts pour ta famille.</span><a class="btn" href="#/profil">Me connecter</a></section>';
+  else if (!S.pers.length) h += '<section class="card"><span class="mut small">Ton adresse n\'est rattachée à aucun adhérent : contacte le club pour t\'inscrire.</span></section>';
+  if (perso) {
+    var mes = pourMoi.filter(function (e) { return eligibles(e).some(function (p) { return monInsc(e, p); }); });
+    if (mes.length) h += '<div class="dayhead">Mes inscriptions</div>' + mes.map(function (e) { return carteInsc(e); }).join('');
+    var reste = pourMoi.filter(function (e) { return mes.indexOf(e) < 0; });
+    h += '<div class="dayhead">Ouvertes pour ' + (S.pers.length > 1 ? 'ta famille' : 'toi') + '</div>' + (reste.length ? reste.map(function (e) { return carteInsc(e); }).join('') : '<section class="card empty">Rien d\'autre d\'ouvert pour le moment.</section>');
+  } else if (pourMoi.length) h += '<div class="dayhead">Stages et événements ouverts</div>' + pourMoi.map(function (e) { return carteInsc(e); }).join('');
+  h += '</main>';
+  setTimeout(function () {
+    var ids = pourMoi.map(function (e) { return e.id; });
+    if (ids.length) q(sb.rpc('nb_inscrits_liste', { evts: ids })).then(function (r) {
+      (r || []).forEach(function (x) {
+        var e = l.filter(function (y) { return y.id === x.evenement_id; })[0], box = document.querySelector('[data-pl="' + x.evenement_id + '"]');
+        if (!e || !box || !e.places_max) return;
+        var rest = Math.max(0, e.places_max - x.n);
+        box.innerHTML = rest ? '<b style="color:var(--ok)">' + rest + ' place' + (rest > 1 ? 's' : '') + ' sur ' + e.places_max + '</b>' : '<b style="color:var(--ac)">Complet · liste d\'attente</b>';
+        if (!rest) Array.prototype.forEach.call(document.querySelectorAll('[data-qins^="in|' + e.id + '|"]'), function (b) { b.textContent = 'Liste d\'attente'; });
+      });
+    }).catch(function () { });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-qins]'), function (b) {
+      b.onclick = function (ev) {
+        ev.preventDefault(); b.disabled = true;
+        var x = b.dataset.qins.split('|');
+        var op = x[0] === 'in' ? sb.from('inscriptions').insert({ evenement_id: x[1], personne_id: x[2], created_by: S.user.id }) : sb.from('inscriptions').delete().eq('evenement_id', x[1]).eq('personne_id', x[2]);
+        q(op).then(function () { toast(x[0] === 'in' ? 'Inscription enregistrée' : 'Inscription annulée'); return chargerAgenda(); }).then(render)
+          .catch(function () { toast('Action impossible pour le moment'); b.disabled = false; });
+      };
+    });
+  });
+  return h;
+}
+function carteInsc(e) {
+  var d = new Date(e.debut), fin = e.fin ? new Date(e.fin) : null, gs = evGroupes(e).gs;
+  var h = '<section class="card stack" style="gap:10px"><a href="#/evenement/' + e.id + '" style="display:flex;gap:12px;text-decoration:none;color:inherit"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { weekday: 'short' })) + '</span><b>' + d.getDate() + '</b></div>' +
+    '<div class="stack" style="flex:1;min-width:0;gap:2px"><b>' + esc(e.titre) + '</b><span class="mut small">' + esc(fmtJour(d)) + ' · ' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + (e.lieu ? ' · ' + esc(e.lieu) : '') + '</span>' +
+    (gs.length ? '<span>' + gs.map(groupeBadge).join(' ') + '</span>' : '') + '<span class="small" data-pl="' + e.id + '">' + (e.places_max ? '' : '<span class="mut">Places non limitées</span>') + '</span></div></a>';
+  if (S.user && S.pers.length) eligibles(e).forEach(function (p) {
+    var i = monInsc(e, p);
+    h += '<div class="pick" style="cursor:default"><span class="dot" style="background:' + S.couleur[p.id] + '"></span>' + esc(p.prenom) +
+      (i ? '<span class="small" style="margin-left:auto;color:' + (i.statut === 'attente' ? 'var(--ac)' : 'var(--ok)') + '">' + (i.statut === 'attente' ? 'Liste d\'attente' : 'Inscrit') + '</span>' + (!i.paye ? '<button class="chip" data-qins="out|' + e.id + '|' + p.id + '">Annuler</button>' : '')
+        : '<button class="chip on" style="margin-left:auto" data-qins="in|' + e.id + '|' + p.id + '">Inscrire</button>') + '</div>';
+  });
+  return h + '</section>';
 }
 
 // ---------- Profil et connexion ----------
@@ -1394,6 +1460,7 @@ function render() {
   else if (p === 'fiche') { html = pageFiche(arg); actif = 'arena'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
+  else if (p === 'inscriptions') { html = pageInscriptions(); actif = 'accueil'; }
   else if (p === 'actu') { html = pageActu(arg); actif = 'club'; }
   else if (p === 'profil') html = pageProfil();
   else if (p === 'gestion') html = pageGestion();

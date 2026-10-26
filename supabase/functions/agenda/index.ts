@@ -61,9 +61,9 @@ Deno.serve(async (req) => {
 
   // Les événements : ceux de leurs groupes, leurs inscriptions, et ceux du club ouverts à tous
   const depuis = new Date(Date.now() - 30 * 864e5).toISOString(), jusque = new Date(Date.now() + 270 * 864e5).toISOString();
-  const { data: evts } = await db.from("evenements").select("id, titre, description, objectif, type, debut, fin, lieu, encadrant, statut, public, groupe_id, evenement_groupes(groupe_id)")
+  const { data: evts } = await db.from("evenements").select("id, titre, description, objectif, type, debut, fin, lieu, encadrant, statut, public, groupe_id, inscription_ouverte, evenement_groupes(groupe_id)")
     .gte("debut", depuis).lte("debut", jusque).order("debut");
-  const { data: ins } = ids.length ? await db.from("inscriptions").select("evenement_id, personne_id, statut").in("personne_id", ids).neq("statut", "annule") : { data: [] };
+  const { data: ins } = ids.length ? await db.from("inscriptions").select("evenement_id, personne_id, statut").in("personne_id", ids).eq("statut", "inscrit") : { data: [] };
 
   const L: string[] = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CLOCA Tennis//Agenda//FR", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     "X-WR-CALNAME:" + NOM, "X-WR-TIMEZONE:Europe/Paris", "X-PUBLISHED-TTL:PT3H", "REFRESH-INTERVAL;VALUE=DURATION:PT3H", ...VTZ];
@@ -72,9 +72,10 @@ Deno.serve(async (req) => {
   for (const e of evts || []) {
     const gs = [e.groupe_id, ...(e.evenement_groupes || []).map((x: { groupe_id: string }) => x.groupe_id)].filter(Boolean) as string[];
     const qui = new Set<string>();
-    gs.forEach((g) => (parGroupe[g] || []).forEach((p) => qui.add(p)));
+    // Séance sur inscription (places limitées) : seulement pour les inscrits
+    if (!e.inscription_ouverte) gs.forEach((g) => (parGroupe[g] || []).forEach((p) => qui.add(p)));
     (ins || []).filter((i) => i.evenement_id === e.id).forEach((i) => qui.add(i.personne_id));
-    const pourTous = e.public && !gs.length && e.type !== "seance";
+    const pourTous = e.public && !gs.length && e.type !== "seance" && !e.inscription_ouverte;
     if (!qui.size && !pourTous) continue;
     const noms = [...qui].map((p) => prenom[p]).filter(Boolean);
     const annule = e.statut === "annule";
