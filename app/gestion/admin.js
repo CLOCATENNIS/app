@@ -11,6 +11,7 @@ var sb = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY, { au
 // ---------- Rôles et modules ----------
 var MODULES = [
   ['accueil', 'Tableau de bord', ['direction', 'bureau', 'accueil', 'cordeur']],
+  ['messages', 'Messagerie', ['direction', 'bureau', 'accueil']],
   ['actus', 'Actus', ['direction', 'bureau', 'accueil']],
   ['evenements', 'Événements et séances', ['direction', 'bureau']],
   ['inscriptions', 'Inscriptions', ['direction', 'bureau', 'accueil']],
@@ -57,6 +58,17 @@ function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 function csv(nom, lignes) {
   var t = lignes.map(function (l) { return l.map(function (c) { c = String(c == null ? '' : c); return /[";\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(';'); }).join('\r\n');
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + t], { type: 'text/csv;charset=utf-8' })); a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+}
+// Message dans la messagerie des personnes concernées + notification personnalisée
+function diffuser(o) {
+  return q(sb.rpc('envoyer_message', { p_titre: o.titre, p_texte: o.texte, p_cible: o.cible, p_groupes: o.groupes || null, p_evt: o.evt || null, p_repondre: o.repondre || null, p_lien: o.lien || null, p_source: o.source || 'direct', p_expediteur: o.expediteur || 'CLOCA Tennis' }))
+    .then(function (r) {
+      return sb.functions.invoke('notifier', { body: { mode: 'message', message_id: r.id } }).then(function (x) {
+        var d = x.data || {};
+        toast('Message envoyé à ' + r.destinataires + ' compte' + (r.destinataires > 1 ? 's' : '') + (d.envoyes ? ' · notification sur ' + d.envoyes + ' appareil' + (d.envoyes > 1 ? 's' : '') : ''));
+        return r;
+      }, function () { toast('Message envoyé à ' + r.destinataires + ' compte' + (r.destinataires > 1 ? 's' : '')); return r; });
+    }).catch(function (e) { toast(e && e.message ? 'Message non envoyé : ' + e.message : 'Message non envoyé'); });
 }
 function notifier(corps) {
   return sb.functions.invoke('notifier', { body: corps }).then(function (r) {
@@ -215,7 +227,7 @@ function vueActus(m, arg) {
       '<label class="l">Retirer automatiquement le (facultatif)<input class="f" type="date" id="p-exp" value="' + (a.expire_le ? isoJour(new Date(a.expire_le)) : '') + '"></label>' +
       '<label class="l">Visible par<select class="f" id="p-v"><option value="public"' + (a.visibilite === 'public' ? ' selected' : '') + '>Tout le monde</option><option value="connectes"' + (a.visibilite === 'connectes' ? ' selected' : '') + '>Adhérents connectés</option><option value="groupes"' + (a.visibilite === 'groupes' ? ' selected' : '') + '>Certains groupes</option></select></label>' +
       '<div id="p-gs"' + (a.visibilite === 'groupes' ? '' : ' hidden') + '>' + choixGroupes(gsel, 'pg') + '</div>' +
-      '<label class="c"><input type="checkbox" id="p-n">Envoyer aussi en notification sur les téléphones</label>' +
+      '<label class="c"><input type="checkbox" id="p-n"' + (a.id ? '' : ' checked') + '>Envoyer aussi dans la messagerie des personnes concernées (avec notification)</label>' +
       '<div class="chips"><button class="btn" id="p-ok">' + (a.id ? 'Enregistrer' : 'Publier') + '</button><button class="btn line" id="p-an">Annuler</button></div></div>', function (r) {
       lierChips(r);
       $('p-v').onchange = function () { $('p-gs').hidden = this.value !== 'groupes'; };
@@ -231,12 +243,14 @@ function vueActus(m, arg) {
         if (!a.id) row.auteur = A.user.id;
         $('p-ok').disabled = true;
         var save = a.id ? q(sb.from('publications').update(row).eq('id', a.id).select('id').single()) : q(sb.from('publications').insert(row).select('id').single());
+        var idPub;
         save.then(function (r2) {
+          idPub = r2.id;
           return q(sb.from('publication_groupes').delete().eq('publication_id', r2.id)).then(function () {
             return vis === 'groupes' ? q(sb.from('publication_groupes').insert(gs.map(function (g) { return { publication_id: r2.id, groupe_id: g }; }))) : null;
           });
         }).then(function () {
-          if ($('p-n').checked) notifier({ titre: (row.urgent ? '⚠️ ' : '') + titre, texte: row.texte || '', groupes: vis === 'groupes' ? gs : null, url: '/app/#/club/actus' });
+          if ($('p-n').checked) diffuser({ titre: (row.urgent ? '⚠️ ' : '') + titre, texte: row.texte || titre, cible: vis === 'groupes' ? 'groupes' : 'tous', groupes: vis === 'groupes' ? gs : null, lien: '#/actu/' + idPub, source: 'actu' });
           toast(a.id ? 'Actu modifiée' : 'Actu publiée'); fermer(); charger();
         }).catch(function () { toast('Enregistrement impossible'); $('p-ok').disabled = false; });
       };
@@ -313,7 +327,7 @@ function vueEvenements(m, arg) {
       '<span class="mut xs">Places limitées : soit un total, soit par niveau (ex. 8 Rouge et 8 Violet), soit les deux.</span>' +
       '<div class="row2"><label class="l">Nombre de places au total (vide = illimité)<input class="f" type="number" min="1" id="v-pl" value="' + esc(e.places_max) + '"></label><label class="l">Prix en € (facultatif)<input class="f" inputmode="decimal" id="v-pr" value="' + esc(e.prix_euros == null ? '' : String(e.prix_euros).replace('.', ',')) + '"></label></div>' +
       '<div id="v-qt"></div>' +
-      '<label class="c"><input type="checkbox" id="v-n">Prévenir les familles concernées par notification</label><input class="f" id="v-nm" placeholder="Message de la notification" hidden>' +
+      '<label class="c"><input type="checkbox" id="v-n">Prévenir les familles concernées (messagerie + notification)</label><textarea class="f" id="v-nm" rows="3" maxlength="4000" placeholder="Message aux familles" hidden></textarea>' +
       '<div class="chips"><button class="btn" id="v-ok">Enregistrer</button><button class="btn line" id="v-an">Annuler</button>' + (nouveau ? '' : '<button class="btn ko" id="v-sup">Supprimer</button>') + '</div></div>', function (r) {
       lierChips(r);
       // Places par niveau : une case par groupe choisi
@@ -364,7 +378,7 @@ function vueEvenements(m, arg) {
         }).then(function () {
           return qts.length ? q(sb.from('evenement_quotas').insert(qts.map(function (x) { return { evenement_id: id, groupe_id: x.groupe_id, places: x.places }; }))) : null;
         }).then(function () {
-          if ($('v-n').checked) notifier({ titre: row.statut === 'annule' ? 'Séance annulée' : row.statut === 'deplace' ? 'Changement de programme' : 'CLOCA Tennis', texte: $('v-nm').value, evenement_id: id, groupes: gs, url: '/app/#/evenement/' + id });
+          if ($('v-n').checked) diffuser({ titre: (row.statut === 'annule' ? 'Annulé · ' : row.statut === 'deplace' ? 'Changement · ' : '') + titre, texte: $('v-nm').value.trim() || titre, cible: 'evenement', evt: id, lien: '#/evenement/' + id, source: 'seance' });
           toast('Événement enregistré'); fermer(); charger();
         }).catch(function () { toast('Enregistrement impossible'); $('v-ok').disabled = false; });
       };
@@ -1341,6 +1355,91 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
+// ---------- Messagerie : messages aux familles, aux groupes, aux inscrits d'une séance, aux coachs
+var MSF = { vue: 'envoyes' };
+var CIBLES_MSG = { tous: 'Tout le club', coachs: 'Les coachs', groupes: 'Des groupes', evenement: 'Une séance ou un événement' };
+var SOURCES_MSG = { direct: 'Message', actu: 'Actu', seance: 'Séance' };
+function vueMessages(m) {
+  m.innerHTML = entete('Messagerie', 'Les messages arrivent dans la boîte « Messages » de l\'appli des personnes concernées, avec une notification. Ils vont sur le compte de la famille : jamais de message privé à un enfant. Les réponses partent par mail à l\'adresse que tu choisis.', '<button class="btn" id="ms-new">Nouveau message</button>') +
+    '<div class="toolbar"><div class="chips">' + [['envoyes', 'Messages envoyés'], ['adresses', 'Adresses de réponse']].map(function (x) { return '<button class="chip' + (MSF.vue === x[0] ? ' on' : '') + '" data-msv="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div><div id="ms-l"><div class="skel"></div></div>';
+  var AD = [], EV = [];
+  var nomCible = function (x) {
+    if (x.cible === 'groupes') return (x.groupes || []).map(nomGroupe).join(', ');
+    if (x.cible === 'evenement') { var e = EV.filter(function (y) { return y.id === x.evenement_id; })[0]; return e ? e.titre + ' (' + fmtJ(new Date(e.debut)) + ')' : 'Séance'; }
+    return CIBLES_MSG[x.cible];
+  };
+  var formMsg = function () {
+    var maint = new Date(); maint.setDate(maint.getDate() - 1);
+    var evts = EV.filter(function (e) { return new Date(e.debut) >= maint; }).slice(0, 80);
+    panneau('Nouveau message', '<div class="stack">' +
+      '<label class="l">De la part de<select class="f" id="mn-de">' + ['Direction sportive', 'CLOCA Tennis', 'L\'accueil du club', 'Le bureau'].map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l">À qui ?<select class="f" id="mn-c">' + Object.keys(CIBLES_MSG).map(function (k) { return '<option value="' + k + '">' + CIBLES_MSG[k] + '</option>'; }).join('') + '</select></label>' +
+      '<div id="mn-gs" hidden>' + choixGroupes([], 'mg') + '</div>' +
+      '<label class="l" id="mn-el" hidden>Séance ou événement<select class="f" id="mn-e"><option value="">Choisir…</option>' + evts.map(function (e) { return '<option value="' + e.id + '">' + esc(fmtJ(new Date(e.debut)) + ' · ' + e.titre) + '</option>'; }).join('') + '</select><span class="mut xs" style="font-weight:400">Les familles des groupes de la séance, ou seulement les inscrits si elle est sur inscription.</span></label>' +
+      '<label class="l">Objet<input class="f" id="mn-t" maxlength="120" placeholder="Ex. Pas de cours samedi 14 novembre"></label>' +
+      '<label class="l">Message<textarea class="f" id="mn-x" rows="6" maxlength="4000"></textarea></label>' +
+      '<label class="l">Les réponses arrivent à<select class="f" id="mn-r">' + AD.filter(function (a) { return a.actif; }).map(function (a) { return '<option value="' + a.id + '">' + esc(a.libelle + ' · ' + a.email) + '</option>'; }).join('') + '</select></label>' +
+      '<span class="mut xs">Chaque famille voit à qui le message s\'adresse (ex. « Pour Enora, Mila ») et reçoit une notification si elle les a activées.</span>' +
+      '<button class="btn" id="mn-ok">Envoyer</button></div>', function (r) {
+      lierChips(r);
+      $('mn-c').onchange = function () { $('mn-gs').hidden = this.value !== 'groupes'; $('mn-el').hidden = this.value !== 'evenement'; };
+      $('mn-ok').onclick = function () {
+        var c = $('mn-c').value, gs = lus(r, 'mg'), t = $('mn-t').value.trim(), x = $('mn-x').value.trim();
+        if (c === 'groupes' && !gs.length) return toast('Choisis au moins un groupe');
+        if (c === 'evenement' && !$('mn-e').value) return toast('Choisis la séance');
+        if (!t || !x) return toast('Écris un objet et un message');
+        if (c === 'tous' && !confirm('Envoyer ce message à tout le club ?')) return;
+        $('mn-ok').disabled = true;
+        diffuser({ titre: t, texte: x, cible: c, groupes: c === 'groupes' ? gs : null, evt: c === 'evenement' ? $('mn-e').value : null, repondre: $('mn-r').value || null, expediteur: $('mn-de').value,
+          lien: c === 'evenement' ? '#/evenement/' + $('mn-e').value : null }).then(function (res) { if (res) { fermer(); charger(); } else $('mn-ok').disabled = false; });
+      };
+    });
+  };
+  var charger = function () {
+    Promise.all([q(sb.from('adresses_reponse').select('*').order('ordre').order('libelle')), q(sb.from('evenements').select('id, titre, debut').order('debut')), chargerGroupes(),
+      MSF.vue === 'envoyes' ? q(sb.from('messages').select('*, message_destinataires(lu_le)').order('created_at', { ascending: false }).limit(150)) : Promise.resolve([])]).then(function (r) {
+      AD = r[0] || []; EV = r[1] || [];
+      var h = '';
+      if (MSF.vue === 'envoyes') {
+        var L = r[3] || [];
+        h = L.length ? '<div class="card stack" style="gap:0;padding:4px 0">' + L.map(function (x, i) {
+          var ds = x.message_destinataires || [], lus2 = ds.filter(function (d) { return d.lu_le; }).length;
+          return '<details style="padding:12px 16px;' + (i ? 'border-top:1px solid var(--bd)' : '') + '"><summary style="cursor:pointer;list-style:none;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline">' +
+            '<span class="mut xs" style="min-width:92px">' + esc(fmtJ(new Date(x.created_at))) + ' ' + esc(fmtH(new Date(x.created_at))) + '</span><span class="badge">' + SOURCES_MSG[x.source] + '</span>' +
+            '<span style="flex:1;min-width:200px"><b class="small">' + esc(x.titre) + '</b><br><span class="xs mut">' + esc(x.expediteur) + ' → ' + esc(nomCible(x)) + '</span></span>' +
+            '<span class="xs"><b>' + lus2 + '</b> / ' + ds.length + ' lu' + (lus2 > 1 ? 's' : '') + '</span></summary>' +
+            '<div class="stack" style="gap:8px;margin-top:10px;padding-left:102px"><div class="small" style="white-space:pre-line">' + esc(x.texte) + '</div>' +
+            (x.repondre_a ? '<span class="xs mut">Réponses à : ' + esc((x.repondre_libelle ? x.repondre_libelle + ' · ' : '') + x.repondre_a) + '</span>' : '') +
+            '<button class="btn sm ko" data-msx="' + x.id + '" style="align-self:flex-start">Retirer de la messagerie</button></div></details>';
+        }).join('') + '</div>' : '<div class="card empty">Aucun message envoyé pour le moment.</div>';
+      } else {
+        h = '<p class="mut small">Ces adresses sont proposées quand on écrit un message. Indique le prénom du coach (comme dans « Accès et rôles ») pour que ses messages répondent à son adresse par défaut.</p>' +
+          '<div class="tw"><table class="t"><thead><tr><th>Nom affiché</th><th>Adresse mail</th><th>Coach (prénom)</th><th>Active</th><th></th></tr></thead><tbody>' + AD.map(function (a) {
+            return '<tr><td><input class="f" data-arl="' + a.id + '" value="' + esc(a.libelle) + '"></td><td><input class="f" type="email" data-are="' + a.id + '" value="' + esc(a.email) + '"></td><td><input class="f" data-arc="' + a.id + '" value="' + esc(a.nom_coach) + '" placeholder="—" style="width:110px"></td>' +
+              '<td><input type="checkbox" data-ara="' + a.id + '"' + (a.actif ? ' checked' : '') + '></td><td class="act"><button class="btn sm" data-ars="' + a.id + '">Enregistrer</button> <button class="btn sm ko" data-arx="' + a.id + '">Supprimer</button></td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          '<div class="card stack" style="margin-top:14px"><b>Ajouter une adresse</b><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f" id="ar-l" placeholder="Ex. Accueil du club" style="flex:1;min-width:160px"><input class="f" type="email" id="ar-e" placeholder="accueil@clocatennis.fr" style="flex:1;min-width:200px"><input class="f" id="ar-c" placeholder="Prénom coach (facultatif)" style="width:180px"><button class="btn" id="ar-ok">Ajouter</button></div></div>';
+      }
+      $('ms-l').innerHTML = h;
+      all('[data-msx]').forEach(function (b) { b.onclick = function () { if (confirm('Retirer ce message de la messagerie des familles ?')) q(sb.from('messages').delete().eq('id', b.dataset.msx)).then(function () { toast('Message retiré'); charger(); }); }; });
+      var mailOk = function (e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e); };
+      all('[data-ars]').forEach(function (b) { b.onclick = function () {
+        var id = b.dataset.ars, v = function (k) { return document.querySelector('[data-' + k + '="' + id + '"]'); };
+        if (!v('arl').value.trim() || !mailOk(v('are').value.trim())) return toast('Nom ou adresse invalide');
+        q(sb.from('adresses_reponse').update({ libelle: v('arl').value.trim(), email: v('are').value.trim().toLowerCase(), nom_coach: v('arc').value.trim() || null, actif: v('ara').checked }).eq('id', id)).then(function () { toast('Adresse enregistrée'); charger(); }).catch(function () { toast('Réservé à la direction'); });
+      }; });
+      all('[data-arx]').forEach(function (b) { b.onclick = function () { if (confirm('Supprimer cette adresse ?')) q(sb.from('adresses_reponse').delete().eq('id', b.dataset.arx)).then(function () { toast('Adresse supprimée'); charger(); }).catch(function () { toast('Réservé à la direction'); }); }; });
+      if ($('ar-ok')) $('ar-ok').onclick = function () {
+        var l = $('ar-l').value.trim(), e = $('ar-e').value.trim().toLowerCase(); if (!l || !mailOk(e)) return toast('Indique un nom et une adresse valide');
+        q(sb.from('adresses_reponse').insert({ libelle: l, email: e, nom_coach: $('ar-c').value.trim() || null, ordre: AD.length + 1 })).then(function () { toast('Adresse ajoutée'); charger(); }).catch(function () { toast('Réservé à la direction'); });
+      };
+    }).catch(function () { $('ms-l').innerHTML = '<div class="card empty">Impossible de charger la messagerie.</div>'; });
+  };
+  all('[data-msv]').forEach(function (b) { b.onclick = function () { MSF.vue = b.dataset.msv; vueMessages(m); }; });
+  $('ms-new').onclick = function () { if (!AD.length) return toast('Patiente une seconde…'); formMsg(); };
+  charger();
+}
+
 // ---------- Historique : tout ce qui change dans l'appli, regroupé par jour, par personne et par type
 var HIF = { periode: 7, cat: '', txt: '' };
 var JCAT = {
@@ -1358,6 +1457,7 @@ var JCAT = {
   coach_missions: ['Coachs', 'mission', 'missions', 1], notes_coach: ['Coachs', 'note de coach', 'notes de coach', 1],
   nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
   club_presence: ['Présence au club', 'changement', 'changements'],
+  messages: ['Messagerie', 'message', 'messages'], adresses_reponse: ['Messagerie', 'adresse de réponse', 'adresses de réponse', 1],
   comptes: ['Comptes et accès', 'compte', 'comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
 };
 var JACT = { ajout: ['ajouté', 'ajoutés', 'b-ok', 'ajoutée', 'ajoutées'], modif: ['modifié', 'modifiés', '', 'modifiée', 'modifiées'], suppr: ['supprimé', 'supprimés', 'b-ko', 'supprimée', 'supprimées'] };
@@ -1413,7 +1513,7 @@ function vueHistorique(m) {
   $('hi-q').oninput = function () { HIF.txt = this.value; afficher(); };
 }
 
-var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces, historique: vueHistorique };
+var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces, historique: vueHistorique };
 function router() {
   if (!A.user) return;
   fermer();

@@ -54,6 +54,8 @@ function go(h) { if (location.hash === h) render(); else location.hash = h; }
 window.CT = { go: go };
 
 var IC = {
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   home: '<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10z"/>',
   cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
@@ -90,7 +92,7 @@ if (sb) (function () {
     if (S.apercu) ['insert', 'update', 'delete', 'upsert'].forEach(function (m) { b[m] = bloque; });
     return b;
   };
-  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|deposer|notifier/.test(n) ? bloque() : rpc(n, a); };
+  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|deposer|notifier|envoyer|messages_lus/.test(n) ? bloque() : rpc(n, a); };
 })();
 
 function chargerPublic() {
@@ -278,7 +280,7 @@ function tabs(actif) {
   t.push(!S.apercu && (S.isStaff || S.gere.length) ? ['gestion', 'tool', 'Gestion'] : ['profil', 'user', 'Profil']);
   $('tabs-in').style.setProperty('--n', t.length);
   $('tabs-in').innerHTML = t.map(function (x) {
-    return '<a href="#/' + x[0] + '" class="' + (actif === x[0] ? 'on' : '') + '"' + (actif === x[0] ? ' aria-current="page"' : '') + '>' + ic(x[1], 24) + x[2] + '</a>';
+    return '<a href="#/' + x[0] + '" class="' + (actif === x[0] ? 'on' : '') + '"' + (actif === x[0] ? ' aria-current="page"' : '') + ' style="position:relative">' + ic(x[1], 24) + x[2] + (x[0] === 'accueil' && nonLus().length ? '<span class="pastille" aria-label="Messages non lus"></span>' : '') + '</a>';
   }).join('');
 }
 function backLink(h, label, light) { return '<a class="back" href="' + h + '" style="color:' + (light ? '#fff' : 'var(--tx)') + '">' + ic('back', 20) + esc(label) + '</a>'; }
@@ -303,9 +305,11 @@ function nomAffiche() {
 function pageAccueil() {
   var urgent = (S.pubs || []).filter(function (p) { return p.urgent; })[0];
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
-    '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div></div>' +
+    '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
   h += '<div id="presence"></div>';
+  var nl = nonLus();
+  if (nl.length) h += '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) h += '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
 
   // Prochain rendez-vous
@@ -1183,7 +1187,7 @@ function remplirGroupe(gid) {
     var notes = r[1] || [], ng = r[2] || [];
     var nomP = function (id) { var m = mb.filter(function (x) { return x.personne_id === id; })[0]; return m ? m.personnes.prenom + ' ' + m.personnes.nom.charAt(0) + '.' : ''; };
     var age = function (d) { if (!d) return ''; var n = new Date(d), t = new Date(); var a = t.getFullYear() - n.getFullYear() - ((t.getMonth() < n.getMonth() || (t.getMonth() === n.getMonth() && t.getDate() < n.getDate())) ? 1 : 0); return a + ' ans'; };
-    var h = '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
+    var h = formEcrireGroupe(gid) + '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
       '<label class="f">Pour<select class="f" id="nt-p"><option value="">Tout le groupe</option>' + mb.map(function (m) { return '<option value="' + m.personne_id + '">' + esc(m.personnes.prenom + ' ' + m.personnes.nom) + '</option>'; }).join('') + '</select></label>' +
       '<label class="f">Séance du (facultatif)<input class="f" type="date" id="nt-j"></label>' +
       '<label class="f">Note<textarea class="f" id="nt-t" rows="3" maxlength="2000" placeholder="Ex. Nicolas : changement de prise en coup droit. Absent les 2 prochaines semaines."></textarea></label>' +
@@ -1198,6 +1202,7 @@ function remplirGroupe(gid) {
       return '<div class="row"><span><b>' + esc(m.personnes.prenom + ' ' + m.personnes.nom) + '</b>' + (nb ? ' <span class="badge" style="background:var(--sun);color:#12304a">' + nb + ' note' + (nb > 1 ? 's' : '') + '</span>' : '') + '</span><span class="mut small">' + [m.personnes.niveau_arena, age(m.personnes.date_naissance)].filter(Boolean).map(esc).join(' · ') + '</span></div>';
     }).join('') + '</section>';
     box.innerHTML = h;
+    lierEcrireGroupe(gid);
     $('nt-ok').onclick = function () {
       var t = $('nt-t').value.trim(); if (!t) return toast('Écris ta note');
       $('nt-ok').disabled = true;
@@ -2005,6 +2010,99 @@ function infosAtelier() {
     '<span class="mut xs">Remplis le formulaire, laisse ta raquette au club house avec une étiquette à ton nom : tu es prévenu dès qu\'elle est cordée.</span></section>';
 }
 
+
+// ---------- Messagerie : messages du club, des coachs, actus et séances ----------
+function chargerMessages() {
+  S.msgs = [];
+  if (!S.user || S.apercu) return Promise.resolve();
+  return q(sb.from('message_destinataires').select('pour, lu_le, messages(id, created_at, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source)').eq('user_id', S.user.id).limit(300))
+    .then(function (l) { S.msgs = (l || []).filter(function (x) { return x.messages; }).sort(function (a, b) { return a.messages.created_at < b.messages.created_at ? 1 : -1; }); })
+    .catch(function () { S.msgs = []; });
+}
+function nonLus() { return (S.msgs || []).filter(function (x) { return !x.lu_le; }); }
+function cloche() {
+  if (!S.user || S.apercu) return '';
+  var n = nonLus().length;
+  return '<a href="#/messages" class="cloche" aria-label="Messages' + (n ? ', ' + n + ' non lu' + (n > 1 ? 's' : '') : '') + '">' + ic('bell', 24, '#fff') + (n ? '<span class="nb">' + (n > 9 ? '9+' : n) + '</span>' : '') + '</a>';
+}
+function quandMsg(d) {
+  var t = new Date(), j = new Date(d);
+  if (j.toDateString() === t.toDateString()) return fmtH(j);
+  var hier = new Date(); hier.setDate(hier.getDate() - 1);
+  if (j.toDateString() === hier.toDateString()) return 'Hier';
+  return fmtCourt(j);
+}
+function pageMessages() {
+  var h = '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1 style="font-size:26px">Messages</h1><p class="mut small" style="margin:4px 0 0">Les messages du club et des coachs qui te concernent.</p></div><main>';
+  if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes messages.</section></main>';
+  var l = S.msgs || [];
+  if (!l.length) return h + '<section class="card empty">Aucun message pour le moment. Les messages du club et des coachs arriveront ici, avec une notification.</section></main>';
+  if (nonLus().length > 1) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
+  h += '<section class="card tight">' + l.map(function (x) {
+    var m = x.messages, nl = !x.lu_le;
+    return '<a class="row" href="#/message/' + m.id + '" style="text-decoration:none;color:inherit;align-items:flex-start;gap:10px">' +
+      '<span style="width:9px;height:9px;border-radius:50%;margin-top:7px;flex:none;background:' + (nl ? 'var(--ac)' : 'transparent') + '"></span>' +
+      '<span class="stack" style="flex:1;gap:2px;min-width:0"><span style="display:flex;justify-content:space-between;gap:8px"><span class="xs mut">' + esc(m.expediteur) + '</span><span class="xs mut" style="flex:none">' + esc(quandMsg(m.created_at)) + '</span></span>' +
+      '<span class="small" style="' + (nl ? 'font-weight:700' : '') + '">' + esc(m.titre) + '</span>' +
+      (x.pour ? '<span class="xs" style="color:var(--ac)">Pour ' + esc(x.pour) + '</span>' : '') +
+      '<span class="xs mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(m.texte) + '</span></span></a>';
+  }).join('') + '</section></main>';
+  setTimeout(function () {
+    if ($('msg-tout')) $('msg-tout').onclick = function () {
+      var ids = nonLus().map(function (x) { return x.messages.id; });
+      q(sb.rpc('messages_lus', { ids: ids })).then(function () { nonLus().forEach(function (x) { x.lu_le = new Date().toISOString(); }); render(); });
+    };
+  });
+  return h;
+}
+function pageMessage(id) {
+  var x = (S.msgs || []).filter(function (y) { return y.messages.id === id; })[0];
+  var h = '<div class="pagehead wrap">' + backLink('#/messages', 'Messages') + '</div><main>';
+  if (!x) return h + '<section class="card empty">Message introuvable. Il a peut-être été retiré par le club.</section></main>';
+  var m = x.messages;
+  if (!x.lu_le && !S.apercu) { x.lu_le = new Date().toISOString(); q(sb.rpc('messages_lus', { ids: [m.id] })).catch(function () { }); }
+  var d = new Date(m.created_at);
+  h += '<section class="card stack" style="gap:12px"><span class="xs mut">' + esc(m.expediteur) + ' · ' + esc(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + ' à ' + fmtH(d) + '</span>' +
+    '<h1 style="font-size:22px;margin:0">' + esc(m.titre) + '</h1>' +
+    (x.pour ? '<span class="badge" style="align-self:flex-start;background:var(--ac);color:#fff">Pour ' + esc(x.pour) + '</span>' : '') +
+    '<div class="small" style="white-space:pre-line;line-height:1.55">' + esc(m.texte) + '</div>' +
+    (m.lien ? '<a class="btn ghost" href="' + esc(m.lien) + '">Voir le détail</a>' : '') + '</section>';
+  if (m.repondre_a) {
+    var sujet = 'Re : ' + m.titre, corps = '\n\n\n— En réponse au message « ' + m.titre + ' » (' + m.expediteur + ', ' + fmtCourt(d) + ')' + (x.pour ? ' · concernant ' + x.pour : '');
+    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre</span><span class="mut small">Ta réponse part par mail à <b>' + esc(m.repondre_libelle || m.repondre_a) + '</b> (' + esc(m.repondre_a) + ').</span>' +
+      '<a class="btn" href="mailto:' + esc(m.repondre_a) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(corps) + '">' + ic('mail', 20, '#fff') + ' Répondre par mail</a></section>';
+  }
+  return h + '</main>';
+}
+// Coach (ou direction) : écrire à tout un groupe, jamais à un enfant seul
+function formEcrireGroupe(gid, nomGroupe) {
+  return '<section class="card stack" style="gap:10px"><span class="eyebrow">Écrire au groupe</span>' +
+    '<span class="mut xs">Le message arrive dans la messagerie des familles du groupe, avec une notification. Il est visible par la direction sportive.</span>' +
+    '<label class="f">Objet<input class="f" id="eg-t" maxlength="120" placeholder="Ex. Séance de samedi en extérieur"></label>' +
+    '<label class="f">Message<textarea class="f" id="eg-x" rows="4" maxlength="4000" placeholder="Ex. Pensez à prendre une gourde et une tenue chaude."></textarea></label>' +
+    '<label class="f">Les réponses arrivent à<select class="f" id="eg-r"><option value="">Chargement…</option></select></label>' +
+    '<button class="btn" id="eg-ok">Envoyer au groupe</button></section>';
+}
+function lierEcrireGroupe(gid) {
+  if (!$('eg-ok')) return;
+  var nc = (nomCoachCompte() || '').toLowerCase();
+  q(sb.from('adresses_reponse').select('id, libelle, email, nom_coach').eq('actif', true).order('ordre').order('libelle')).then(function (l) {
+    l = l || []; var moi = l.filter(function (a) { return a.nom_coach && a.nom_coach.toLowerCase() === nc; })[0];
+    $('eg-r').innerHTML = l.map(function (a) { return '<option value="' + a.id + '"' + (moi && moi.id === a.id ? ' selected' : '') + '>' + esc(a.libelle + ' · ' + a.email) + '</option>'; }).join('') || '<option value="">Adresse du club</option>';
+  }).catch(function () { $('eg-r').innerHTML = '<option value="">Adresse du club</option>'; });
+  $('eg-ok').onclick = function () {
+    var t = $('eg-t').value.trim(), x = $('eg-x').value.trim();
+    if (!t || !x) return toast('Écris un objet et un message');
+    if (S.apercu) return toast('Aperçu : rien n\'est envoyé');
+    $('eg-ok').disabled = true;
+    q(sb.rpc('envoyer_message', { p_titre: t, p_texte: x, p_cible: 'groupes', p_groupes: [gid], p_repondre: $('eg-r').value || null, p_expediteur: S.isStaff ? 'Direction sportive' : null })).then(function (r) {
+      sb.functions.invoke('notifier', { body: { mode: 'message', message_id: r.id } }).catch(function () { });
+      toast('Message envoyé à ' + r.destinataires + ' famille' + (r.destinataires > 1 ? 's' : ''));
+      $('eg-t').value = ''; $('eg-x').value = ''; $('eg-ok').disabled = false;
+    }).catch(function (e) { toast(e && e.message ? e.message : 'Envoi impossible'); $('eg-ok').disabled = false; });
+  };
+}
+
 // ---------- Routeur ----------
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
@@ -2023,6 +2121,8 @@ function render() {
   else if (p === 'double') { html = pageDouble(); actif = 'accueil'; }
   else if (p === 'groupe') { html = pageGroupe(arg); actif = 'agenda'; }
   else if (p === 'coach') { html = pageCoach(); actif = 'accueil'; }
+  else if (p === 'messages') { html = pageMessages(); actif = 'accueil'; }
+  else if (p === 'message') { html = pageMessage(arg); actif = 'accueil'; }
   else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   $('app').innerHTML = html;
@@ -2037,12 +2137,12 @@ function demarrer() {
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { })]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages()]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
       S.user = session.user;
-      chargerUtilisateur().then(chargerAgenda).then(function () { return chargerCordage().catch(function () { }); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
+      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
     }
   });
 }

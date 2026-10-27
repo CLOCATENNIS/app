@@ -24,8 +24,19 @@ Deno.serve(async (req) => {
     let texte = String(b.texte || "").slice(0, 200);
     let url = typeof b.url === "string" && b.url.startsWith("/app/") ? b.url : "/app/";
     let users: string[] = [];
+    let perso: Record<string, string> = {}; // texte personnalisé par destinataire (messagerie)
 
-    if (b.mode === "absence_ng") {
+    if (b.mode === "message") {
+      // Message de la messagerie : seul son auteur peut déclencher les notifications
+      const { data: m } = await admin.from("messages").select("id, auteur, expediteur, titre, texte").eq("id", b.message_id).maybeSingle();
+      if (!m || m.auteur !== u.user.id) return json({ erreur: "message introuvable" }, 404);
+      const { data: ds } = await admin.from("message_destinataires").select("user_id, pour").eq("message_id", m.id);
+      titre = (m.expediteur + " · " + m.titre).slice(0, 80);
+      texte = String(m.texte).replace(/\s+/g, " ").slice(0, 200);
+      url = "/app/#/message/" + m.id;
+      users = (ds || []).map((d) => d.user_id as string);
+      (ds || []).forEach((d) => { if (d.pour) perso[d.user_id as string] = ("Pour " + d.pour + " : " + texte).slice(0, 200); });
+    } else if (b.mode === "absence_ng") {
       // Un jeune Next Gen (ou sa famille) signale une absence : la direction est prévenue tout de suite
       const { data: abs } = await admin.from("nextgen_absences").select("id, jour, motif, cree_par, nextgen(grade, libelle, personne_id, personnes(prenom, nom, foyer_id), groupes(nom))").eq("id", b.absence_id).maybeSingle();
       const ng = abs?.nextgen as unknown as { libelle: string | null; personne_id: string; personnes: { prenom: string; nom: string; foyer_id: string | null }; groupes: { nom: string } | null } | null;
@@ -53,20 +64,20 @@ Deno.serve(async (req) => {
     }
     if (!users.length) return json({ envoyes: 0, appareils: 0 });
 
-    const abos: { id: string; endpoint: string; p256dh: string; auth: string }[] = [];
+    const abos: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string }[] = [];
     for (let i = 0; i < users.length; i += 200) {
-      const { data } = await admin.from("push_abonnements").select("id, endpoint, p256dh, auth").in("user_id", users.slice(i, i + 200));
+      const { data } = await admin.from("push_abonnements").select("id, user_id, endpoint, p256dh, auth").in("user_id", users.slice(i, i + 200));
       abos.push(...(data || []));
     }
     if (!abos.length) return json({ envoyes: 0, appareils: 0 });
 
     const cle = async (c: string) => (await admin.rpc("reglage_prive", { c })).data as string;
     webpush.setVapidDetails(await cle("vapid_sujet"), await cle("vapid_public"), await cle("vapid_prive"));
-    const message = JSON.stringify({ title: titre, body: texte, url, tag: b.tag || undefined });
+    const corps = (uid: string) => JSON.stringify({ title: titre, body: perso[uid] || texte, url, tag: b.tag || undefined });
     let envoyes = 0;
     await Promise.all(abos.map(async (a) => {
       try {
-        await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, message, { TTL: 60 * 60 * 24 });
+        await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, corps(a.user_id), { TTL: 60 * 60 * 24 });
         envoyes++;
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
