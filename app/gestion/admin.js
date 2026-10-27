@@ -30,25 +30,38 @@ var MODULES = [
   ['acces', 'Accès et rôles', ['direction']],
   ['historique', 'Historique', ['direction']]
 ];
-// Rubriques du menu (l'ordre des pages dans chaque rubrique)
+// Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
 var RUBRIQUES = [
   ['', ['accueil']],
-  ['Communication', ['messages', 'actus', 'reseaux', 'annonces']],
-  ['Agenda et activités', ['evenements', 'inscriptions', 'presence']],
-  ['Adhérents', ['adherents', 'groupes', 'adoc']],
-  ['Compétitions', ['arena', 'double']],
-  ['Équipe pédagogique', ['nextgen', 'missions']],
-  ['Services du club', ['cordage', 'boutique']],
-  ['Administration', ['acces', 'historique']]
+  ['Communication', ['messages', 'actus', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, actus, réseaux sociaux et petites annonces.'],
+  ['Agenda et activités', ['evenements', 'inscriptions', 'presence'], 'agenda', 'cal', 'Séances, stages et événements, inscriptions, présence au club.'],
+  ['Adhérents', ['adherents', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, groupes et cours, mise à jour depuis ADOC.'],
+  ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
+  ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
+  ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
+  ['Administration', ['acces', 'historique'], 'admin', 'shield', 'Comptes, rôles et historique de toutes les actions.']
 ];
-function rubFermee(nom, val) {
-  try {
-    var o = JSON.parse(localStorage.getItem('gestion-rubriques') || '{}');
-    if (val === undefined) return !!o[nom];
-    if (val) o[nom] = 1; else delete o[nom];
-    localStorage.setItem('gestion-rubriques', JSON.stringify(o));
-  } catch (e) { return false; }
-}
+var DESC_MOD = {
+  accueil: 'Ce qui demande ton attention aujourd\'hui.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
+  reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider les petites annonces des adhérents.', evenements: 'Créer et modifier séances, stages, tournois et événements.',
+  inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
+  groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Matchs, points et classements CLOC\'ARENA.',
+  double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
+  cordage: 'Raquettes à corder, prêtes et à encaisser.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', acces: 'Qui a accès à quoi : rôles, coachs, adresses autorisées.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
+};
+var ICG = {
+  home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  megaphone: '<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 8a5 5 0 0 1 0 8"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 6h3v2a3 3 0 0 1-3 3M7 6H4v2a3 3 0 0 0 3 3"/>',
+  cap: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
+  bag: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
+};
+function icg(n, t) { return '<svg width="' + (t || 20) + '" height="' + (t || 20) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICG[n] + '</svg>'; }
+function rubDe(v) { return RUBRIQUES.filter(function (r) { return r[0] && r[1].indexOf(v) >= 0; })[0]; }
+function nomMod(id) { var m = MODULES.filter(function (x) { return x[0] === id; })[0]; return m ? m[1] : id; }
 var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable d\'un groupe' };
 var TYPES_EVT = { seance: 'Séance', stage: 'Stage', tournoi: 'Tournoi', animation: 'Animation', reunion: 'Réunion', autre: 'Autre' };
 var TYPES_GRP = { niveau: 'Niveaux CLOC\'ARENA', creneau: 'Créneaux de cours', activite: 'Activités', cours: 'Formules ADOC', profil: 'Profils', evenement: 'Événements', autre: 'Autres' };
@@ -172,21 +185,37 @@ function cadre(contenu) {
   $('root').innerHTML = '<div class="layout"><aside><div class="brand"><img src="../logo.png" alt=""><div><b>CLOCA Tennis</b><br><span>ESPACE GESTION</span></div></div>' +
     '<nav class="nav" aria-label="Gestion">' + RUBRIQUES.map(function (r) {
       var mods = r[1].filter(peut); if (!mods.length) return '';
-      var lien = function (id) { var m = MODULES.filter(function (x) { return x[0] === id; })[0]; return '<a href="#/' + id + '" class="' + (A.view === id ? 'on' : '') + '">' + m[1] + '<span class="n" data-cpt="' + id + '" hidden></span></a>'; };
-      if (!r[0]) return mods.map(lien).join('');
-      var ouvert = mods.indexOf(A.view) >= 0 || !rubFermee(r[0]);
-      return '<div class="rub' + (ouvert ? '' : ' ferme') + '" data-rub="' + esc(r[0]) + '"><button type="button" class="rub-t" aria-expanded="' + ouvert + '">' + esc(r[0]) + '<span class="n" data-rcpt="' + esc(r[0]) + '" hidden></span><span class="chev" aria-hidden="true">▾</span></button><div class="rub-l">' + mods.map(lien).join('') + '</div></div>';
+      if (!r[0]) return '<a href="#/accueil" class="rubl' + (A.view === 'accueil' ? ' on' : '') + '">' + icg('home') + '<span class="lbl">Tableau de bord</span></a>';
+      var act = A.rub === r[2] || mods.indexOf(A.view) >= 0;
+      return '<a href="#/r/' + r[2] + '" class="rubl' + (act ? ' on' : '') + '">' + icg(r[3]) + '<span class="lbl">' + esc(r[0]) + '</span><span class="n" data-rcpt="' + r[2] + '" hidden></span></a>' +
+        (act && mods.length > 1 ? '<div class="subl">' + mods.map(function (id) { return '<a href="#/' + id + '" class="' + (A.view === id ? 'on' : '') + '">' + nomMod(id) + '<span class="n" data-cpt="' + id + '" hidden></span></a>'; }).join('') + '</div>' : '');
     }).join('') + '</nav>' +
     '<div class="side-foot">' + esc(moi) + '<br>' + A.roles.filter(function (r) { return !r.groupe_id; }).map(function (r) { return NOM_ROLE[r.role]; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(', ') +
-    '<br><br><a href="../">Ouvrir l\'appli</a> · <a href="#" id="logout">Se déconnecter</a></div></aside><main id="main">' + contenu + '</main></div>';
+    '<br><br><a href="../">Ouvrir l\'appli</a> · <a href="#" id="logout">Se déconnecter</a></div></aside><div class="col">' + sousNav() + '<main id="main">' + contenu + '</main></div></div>';
   $('logout').onclick = function (e) { e.preventDefault(); sb.auth.signOut().then(function () { location.reload(); }); };
-  all('.rub-t').forEach(function (b) { b.onclick = function () {
-    var r = b.parentNode, f = !r.classList.contains('ferme'); r.classList.toggle('ferme', f); b.setAttribute('aria-expanded', !f); rubFermee(r.dataset.rub, f);
-  }; });
   compteurs().then(function (c) {
-    Object.keys(c).forEach(function (k) { var e = document.querySelector('[data-cpt="' + k + '"]'); if (e && c[k]) { e.textContent = c[k]; e.hidden = false; } });
-    RUBRIQUES.forEach(function (r) { var t = r[1].reduce(function (s2, k) { return s2 + (peut(k) && c[k] ? c[k] : 0); }, 0), e = r[0] && document.querySelector('[data-rcpt="' + r[0] + '"]'); if (e && t) { e.textContent = t; e.hidden = false; } });
+    A.cpt = c;
+    Object.keys(c).forEach(function (k) { all('[data-cpt="' + k + '"]').forEach(function (e) { if (c[k]) { e.textContent = c[k]; e.hidden = false; } }); });
+    RUBRIQUES.forEach(function (r) { var t = r[1].reduce(function (s2, k) { return s2 + (peut(k) && c[k] ? c[k] : 0); }, 0); if (r[0] && t) all('[data-rcpt="' + r[2] + '"]').forEach(function (e) { e.textContent = t; e.hidden = false; }); });
   });
+}
+function sousNav() {
+  var r = A.rub ? RUBRIQUES.filter(function (x) { return x[2] === A.rub; })[0] : rubDe(A.view);
+  if (!r) return '';
+  var mods = r[1].filter(peut);
+  return '<div class="subnav"><a href="#/r/' + r[2] + '" class="fil">' + icg(r[3], 18) + esc(r[0]) + '</a>' + (mods.length > 1 || A.rub ? '<div class="tabs">' + mods.map(function (id) { return '<a href="#/' + id + '" class="' + (A.view === id && !A.rub ? 'on' : '') + '">' + nomMod(id) + '<span class="n" data-cpt="' + id + '" hidden></span></a>'; }).join('') + '</div>' : '') + '</div>';
+}
+function grilleRubriques() {
+  return '<div class="rgrid">' + RUBRIQUES.filter(function (r) { return r[0] && r[1].some(peut); }).map(function (r) {
+    return '<a class="rcard" href="#/r/' + r[2] + '"><span class="ric">' + icg(r[3], 26) + '</span><span class="rtx"><b>' + esc(r[0]) + '<span class="n" data-rcpt="' + r[2] + '" hidden></span></b><span>' + r[1].filter(peut).map(nomMod).join(' · ') + '</span></span></a>';
+  }).join('') + '</div>';
+}
+function vueRubrique(m, slug) {
+  var r = RUBRIQUES.filter(function (x) { return x[2] === slug; })[0];
+  m.innerHTML = '<div class="head"><div><h1>' + esc(r[0]) + '</h1><p>' + esc(r[4]) + '</p></div></div><div class="pgrid">' + r[1].filter(peut).map(function (id) {
+    return '<a class="pcard" href="#/' + id + '"><b>' + nomMod(id) + '<span class="n" data-cpt="' + id + '" hidden></span></b><span>' + esc(DESC_MOD[id] || '') + '</span><span class="go">Ouvrir →</span></a>';
+  }).join('') + '</div>';
+  if (A.cpt) Object.keys(A.cpt).forEach(function (k) { all('[data-cpt="' + k + '"]', m).forEach(function (e) { if (A.cpt[k]) { e.textContent = A.cpt[k]; e.hidden = false; } }); });
 }
 function entete(titre, sous, actions) {
   return '<div class="head"><div><h1>' + esc(titre) + '</h1>' + (sous ? '<p>' + sous + '</p>' : '') + '</div><div class="chips">' + (actions || '') + '</div></div>';
@@ -195,7 +224,7 @@ function entete(titre, sous, actions) {
 // ---------- Tableau de bord ----------
 function vueAccueil(m) {
   var dans14 = new Date(Date.now() + 14 * 864e5);
-  m.innerHTML = entete('Bonjour', 'Ce qui demande ton attention aujourd\'hui.') + '<div class="kpis" id="kpis"><div class="skel"></div></div><div class="two"><div class="card"><div class="sect" style="margin-top:0">Les 14 prochains jours</div><div id="dash-evts" class="list"><div class="skel"></div></div></div><div class="grid"><div id="presence"></div><div class="card" id="dash-liens"></div></div></div>';
+  m.innerHTML = entete('Bonjour', 'Ce qui demande ton attention aujourd\'hui.') + grilleRubriques() + '<div class="kpis" id="kpis"><div class="skel"></div></div><div class="two"><div class="card"><div class="sect" style="margin-top:0">Les 14 prochains jours</div><div id="dash-evts" class="list"><div class="skel"></div></div></div><div class="grid"><div id="presence"></div><div class="card" id="dash-liens"></div></div></div>';
   var k = [];
   var P = [];
   if (peut('annonces')) P.push(nb(sb.from('annonces').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { k.push([n, 'annonce' + (n > 1 ? 's' : '') + ' à valider', '#/annonces', n > 0]); }));
@@ -1547,6 +1576,12 @@ function router() {
   if (!A.user) return;
   fermer();
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/'), v = parts[0] || 'accueil';
+  A.rub = null;
+  if (v === 'r') {
+    var rr = RUBRIQUES.filter(function (x) { return x[2] === parts[1] && x[1].some(peut); })[0];
+    if (rr) { A.rub = rr[2]; A.view = 'r'; cadre('<div class="skel"></div>'); vueRubrique($('main'), rr[2]); window.scrollTo(0, 0); return; }
+    v = 'accueil';
+  }
   if (!peut(v)) v = A.mods[0];
   A.view = v;
   cadre('<div class="skel"></div>');
