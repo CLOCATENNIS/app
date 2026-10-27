@@ -1303,7 +1303,7 @@ function gesSaisir() {
   box.innerHTML = '<section class="card stack" style="gap:10px"><label class="f">Date<input class="f" type="date" id="g-date" value="' + F.date + '"></label>' +
     '<span class="eyebrow">Format</span><div class="chips" style="flex-wrap:wrap">' + S.formats.map(function (x) { return '<button class="chip ' + (x.code === F.format ? 'on' : '') + '" data-fmt="' + esc(x.code) + '">' + esc(x.libelle) + ' · ' + (+x.points_victoire) + '/' + (+x.points_defaite) + '</button>'; }).join('') + '</div></section>' +
     '<section class="card stack" style="gap:10px"><span class="eyebrow">Joueurs</span><div class="chips"><button class="chip ' + (!F.niv.length ? 'on' : '') + '" data-gniv="">Tous niveaux</button>' + NIVEAUX.map(function (n) { return '<button class="chip ' + (F.niv.indexOf(n) >= 0 ? 'on' : '') + '" data-gniv="' + n + '">' + n + '</button>'; }).join('') + '</div>' +
-    '<span class="mut xs">Touche plusieurs niveaux pour un regroupement (ex. Violet + Rouge).</span>' +
+    '<span class="mut xs">Clique sur plusieurs niveaux pour un regroupement (ex. Violet + Rouge).</span>' +
     '<b class="small">' + (dbl ? 'Équipe 1' : 'Joueur 1') + '</b>' + ligne(1, 0) + (dbl ? ligne(1, 1) : '') +
     '<b class="small">' + (dbl ? 'Équipe 2' : 'Joueur 2') + '</b>' + ligne(2, 0) + (dbl ? ligne(2, 1) : '') +
     '<div class="f">Score, côté ' + (dbl ? 'équipe 1' : 'joueur 1') + ' à gauche' + [0, 1, 2].map(function (k) {
