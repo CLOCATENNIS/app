@@ -26,7 +26,8 @@ var MODULES = [
   ['double', 'Double interne', ['direction']],
   ['reseaux', 'Réseaux sociaux', ['direction', 'bureau', 'accueil']],
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
-  ['acces', 'Accès et rôles', ['direction']]
+  ['acces', 'Accès et rôles', ['direction']],
+  ['historique', 'Historique', ['direction']]
 ];
 var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable d\'un groupe' };
 var TYPES_EVT = { seance: 'Séance', stage: 'Stage', tournoi: 'Tournoi', animation: 'Animation', reunion: 'Réunion', autre: 'Autre' };
@@ -1340,7 +1341,79 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
-var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces };
+// ---------- Historique : tout ce qui change dans l'appli, regroupé par jour, par personne et par type
+var HIF = { periode: 7, cat: '', txt: '' };
+var JCAT = {
+  inscriptions: ['Inscriptions', 'inscription', 'inscriptions', 1], participations: ['Inscriptions', 'réponse présent/absent', 'réponses présent/absent', 1],
+  evenements: ['Agenda', 'événement / séance', 'événements / séances'], evenement_groupes: ['Agenda', 'groupe d\'événement', 'groupes d\'événements'], evenement_quotas: ['Agenda', 'quota de places', 'quotas de places'],
+  creneaux: ['Agenda', 'créneau de cours', 'créneaux de cours'], periodes_sans_cours: ['Agenda', 'période sans cours', 'périodes sans cours', 1],
+  personnes: ['Adhérents', 'adhérent', 'adhérents'], foyers: ['Adhérents', 'famille', 'familles', 1], groupe_membres: ['Adhérents', 'joueur dans un groupe', 'joueurs dans des groupes'], creneaux_en_attente: ['Adhérents', 'élève à placer', 'élèves à placer'],
+  groupes: ['Groupes', 'groupe', 'groupes'],
+  arena_matchs: ['Scores CLOC\'ARENA', 'match', 'matchs'], arena_match_joueurs: ['Scores CLOC\'ARENA', 'joueur de match', 'joueurs de matchs'], arena_points: ['Scores CLOC\'ARENA', 'ligne de points', 'lignes de points'], arena_participations: ['Scores CLOC\'ARENA', 'participation', 'participations'], arena_formats: ['Scores CLOC\'ARENA', 'format', 'formats'],
+  double_resultats: ['Double interne', 'score', 'scores'], double_equipes: ['Double interne', 'équipe', 'équipes', 1], double_dispos: ['Double interne', 'disponibilité', 'disponibilités', 1],
+  publications: ['Actus', 'actu', 'actus', 1], publication_groupes: ['Actus', 'destinataire d\'actu', 'destinataires d\'actus'], mises_en_avant: ['Réseaux sociaux', 'publication mise en avant', 'publications mises en avant', 1],
+  annonces: ['Petites annonces', 'annonce', 'annonces', 1],
+  cordage_demandes: ['Cordage', 'demande de cordage', 'demandes de cordage', 1], cordages: ['Cordage', 'cordage', 'cordages'], cordage_tarifs: ['Cordage', 'tarif', 'tarifs'],
+  boutique_ventes: ['Boutique', 'vente', 'ventes', 1], boutique_articles: ['Boutique', 'article', 'articles'], boutique_mouvements: ['Boutique', 'mouvement de stock', 'mouvements de stock'],
+  coach_missions: ['Coachs', 'mission', 'missions', 1], notes_coach: ['Coachs', 'note de coach', 'notes de coach', 1],
+  nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
+  club_presence: ['Présence au club', 'changement', 'changements'],
+  comptes: ['Comptes et accès', 'compte', 'comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
+};
+var JACT = { ajout: ['ajouté', 'ajoutés', 'b-ok', 'ajoutée', 'ajoutées'], modif: ['modifié', 'modifiés', '', 'modifiée', 'modifiées'], suppr: ['supprimé', 'supprimés', 'b-ko', 'supprimée', 'supprimées'] };
+function jValeur(v) {
+  if (v === null || v === undefined || v === '') return '(vide)';
+  if (v === true) return 'oui'; if (v === false) return 'non';
+  if (typeof v === 'object') return JSON.stringify(v).slice(0, 120);
+  var s2 = String(v);
+  if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(s2)) { var d = new Date(s2); return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+  if (/^\d{4}-\d\d-\d\d$/.test(s2)) return new Date(s2 + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/.test(s2)) return '…';
+  return s2.length > 120 ? s2.slice(0, 120) + '…' : s2;
+}
+function jChamp(k) { return k.replace(/_id$/, '').replace(/_/g, ' '); }
+function vueHistorique(m) {
+  m.innerHTML = entete('Historique', 'Tout ce qui est ajouté, modifié ou supprimé dans l\'appli et la gestion : qui, quand, quoi. Clique sur une ligne pour voir le détail.') +
+    '<div class="toolbar"><div class="chips">' + [[1, 'Aujourd\'hui'], [7, '7 jours'], [30, '30 jours'], [400, 'Tout']].map(function (x) { return '<button class="chip' + (HIF.periode === x[0] ? ' on' : '') + '" data-hip="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+    '<select class="f" id="hi-cat" style="max-width:220px"><option value="">Toutes les catégories</option>' + Object.keys(Object.keys(JCAT).reduce(function (o, t) { o[JCAT[t][0]] = 1; return o; }, {})).sort().map(function (c) { return '<option' + (HIF.cat === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select>' +
+    '<input class="f" id="hi-q" placeholder="Chercher une personne, un nom…" value="' + esc(HIF.txt) + '" style="max-width:260px"></div><div id="hi-l"><div class="skel"></div></div>';
+  var depuis = new Date(); depuis.setHours(0, 0, 0, 0); depuis.setDate(depuis.getDate() - (HIF.periode - 1));
+  var L = [];
+  var afficher = function () {
+    var t = norm(HIF.txt).trim();
+    var l = L.filter(function (x) { var c = JCAT[x.table_nom]; return (!HIF.cat || (c ? c[0] : 'Autre') === HIF.cat) && (!t || norm((x.auteur || '') + ' ' + (x.objet || '')).indexOf(t) >= 0); });
+    if (!l.length) { $('hi-l').innerHTML = '<div class="card empty">Rien sur cette période.</div>'; return; }
+    var jours = {}, ordreJ = [];
+    l.forEach(function (x) {
+      if (!jours[x.jour]) { jours[x.jour] = { paq: {}, ordre: [] }; ordreJ.push(x.jour); }
+      var J = jours[x.jour], k = (x.auteur || 'Système') + '|' + x.table_nom + '|' + x.action;
+      if (!J.paq[k]) { J.paq[k] = []; J.ordre.push(k); } J.paq[k].push(x);
+    });
+    $('hi-l').innerHTML = ordreJ.map(function (j) {
+      var J = jours[j];
+      return '<h3 style="margin:22px 0 8px;text-transform:capitalize">' + esc(new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '</h3><div class="card stack" style="gap:0;padding:4px 0">' + J.ordre.map(function (k, i) {
+        var p = J.paq[k], x0 = p[0], c = JCAT[x0.table_nom] || ['Autre', x0.table_nom, x0.table_nom], a = JACT[x0.action];
+        var ts = p.map(function (x) { return new Date(x.created_at).getTime(); }), hm = function (n) { return new Date(n).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
+        var plage = hm(Math.min.apply(null, ts)) === hm(Math.max.apply(null, ts)) ? hm(ts[0]) : hm(Math.min.apply(null, ts)) + ' – ' + hm(Math.max.apply(null, ts));
+        var resume = p.length === 1 ? c[1].charAt(0).toUpperCase() + c[1].slice(1) + ' ' + a[c[3] ? 3 : 0] + (x0.objet ? ' : <b>' + esc(x0.objet) + '</b>' : '') : '<b>' + p.length + ' ' + c[2] + '</b> ' + a[c[3] ? 4 : 1];
+        var detail = p.map(function (x) {
+          var champs = '';
+          if (x.action === 'modif' && x.apres) champs = Object.keys(x.apres).map(function (f) { return '<div class="xs"><span class="mut">' + esc(jChamp(f)) + ' :</span> <s class="mut">' + esc(jValeur(x.avant && x.avant[f])) + '</s> → <b>' + esc(jValeur(x.apres[f])) + '</b></div>'; }).join('');
+          else { var o = x.apres || x.avant || {}; champs = '<div class="xs mut">' + Object.keys(o).filter(function (f) { return o[f] !== null && o[f] !== '' && !/^(id|ordre|cree_par|created_by|maj_par|saisi_par|faite_par|auteur|user_id|legacy_id)$/.test(f) && !/^[0-9a-f]{8}-[0-9a-f]{4}-/.test(String(o[f])); }).map(function (f) { return esc(jChamp(f)) + ' : ' + esc(jValeur(o[f])); }).join(' · ') + '</div>'; }
+          return '<div style="padding:8px 0;border-top:1px solid var(--bd)"><div class="small"><span class="mut">' + esc(new Date(x.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })) + '</span> · ' + esc(x.objet || c[1]) + '</div>' + champs + '</div>';
+        }).join('');
+        return '<details style="padding:10px 16px;' + (i ? 'border-top:1px solid var(--bd)' : '') + '"><summary style="cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;list-style:none"><span class="mut xs" style="min-width:86px">' + plage + '</span><span class="badge ' + a[2] + '">' + esc(c[0]) + '</span><span class="small" style="flex:1;min-width:200px">' + resume + '</span><span class="xs mut">par <b>' + esc(x0.auteur || 'Système') + '</b></span></summary><div style="margin-top:6px;padding-left:96px">' + detail + '</div></details>';
+      }).join('') + '</div>';
+    }).join('') + (L.length >= 3000 ? '<p class="mut xs">Seules les 3 000 dernières actions sont affichées : réduis la période.</p>' : '');
+  };
+  q(sb.from('journal').select('*').gte('created_at', depuis.toISOString()).order('created_at', { ascending: false }).limit(3000)).then(function (r) { L = r || []; afficher(); })
+    .catch(function () { $('hi-l').innerHTML = '<div class="card empty">Historique indisponible pour le moment.</div>'; });
+  all('[data-hip]').forEach(function (b) { b.onclick = function () { HIF.periode = +b.dataset.hip; vueHistorique(m); }; });
+  $('hi-cat').onchange = function () { HIF.cat = this.value; afficher(); };
+  $('hi-q').oninput = function () { HIF.txt = this.value; afficher(); };
+}
+
+var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces, historique: vueHistorique };
 function router() {
   if (!A.user) return;
   fermer();
