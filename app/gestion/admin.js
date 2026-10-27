@@ -1347,7 +1347,17 @@ function vueAcces(m) {
       $('ac-l').innerHTML = ordre.length ? '<div class="stack">' + ordre.map(function (mail) {
         var nc = par[mail][0].nom_coach;
         return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="small" style="word-break:break-all">' + esc(mail) + (nc ? ' <span class="badge b-ok">Coach : ' + esc(nc) + '</span>' : '') + '</b><button class="btn sm line" data-acplus="' + esc(mail) + '">+ rôle</button></div><div class="chips" style="flex-wrap:wrap">' +
-          par[mail].map(function (r) { return '<span class="chip" style="display:inline-flex;gap:6px;align-items:center">' + esc(NOM_ROLE[r.role] || r.role) + (r.groupe ? ' · ' + esc(r.groupe) : '') + '<button title="Retirer" data-acr="' + r.id + '" style="border:0;background:none;cursor:pointer;color:var(--ko);font-weight:700;padding:0 2px">×</button></span>'; }).join('') + '</div></div>';
+          (function () {
+            var puce = function (r, txt) { return '<span class="chip" style="display:inline-flex;gap:6px;align-items:center">' + esc(txt) + '<button title="Retirer" data-acr="' + r.id + '" style="border:0;background:none;cursor:pointer;color:var(--ko);font-weight:700;padding:0 2px">×</button></span>'; };
+            var glob = par[mail].filter(function (r) { return !r.groupe; }), pg = {};
+            par[mail].filter(function (r) { return r.groupe; }).forEach(function (r) { (pg[r.role] = pg[r.role] || []).push(r); });
+            return glob.map(function (r) { return puce(r, NOM_ROLE[r.role] || r.role); }).join('') + '</div>' +
+              Object.keys(pg).map(function (role) {
+                var l = pg[role].sort(function (a, b) { return a.groupe.localeCompare(b.groupe, 'fr'); });
+                return '<details class="acgrp"><summary><span>' + esc(NOM_ROLE[role] || role) + '</span><span class="badge">' + l.length + ' groupe' + (l.length > 1 ? 's' : '') + '</span><span class="mut xs" style="margin-left:auto">voir / retirer ▾</span></summary><div class="chips" style="flex-wrap:wrap;margin-top:8px">' +
+                  l.map(function (r) { return puce(r, r.groupe); }).join('') + '</div></details>';
+              }).join('') + '<div>';
+          })() + '</div></div>';
       }).join('') + '</div>' : '<div class="card empty">Aucun rôle pour le moment.</div>';
       all('[data-acr]').forEach(function (b) { b.onclick = function () { if (confirm('Retirer ce rôle ?')) q(sb.rpc('role_retirer', { r: b.dataset.acr })).then(function () { toast('Rôle retiré'); charger(); }).catch(function (e) { toast(String(e.message || 'Action impossible').indexOf('direction') >= 0 ? 'Il faut garder au moins une personne à la direction' : 'Action impossible'); }); }; });
       all('[data-acplus]').forEach(function (b) { b.onclick = function () { $('ac-m').value = b.dataset.acplus; $('ac-m').focus(); }; });

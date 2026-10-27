@@ -80,6 +80,10 @@ main{padding:24px 28px 60px;max-width:1180px;width:100%}
 input.f,select.f,textarea.f{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
 textarea.f{min-height:90px;resize:vertical}
 [hidden]{display:none!important}
+.acgrp{border:1px solid var(--bd);border-radius:10px;padding:8px 10px}
+.acgrp summary{display:flex;gap:8px;align-items:center;cursor:pointer;list-style:none;font-size:13px;font-weight:600}
+.acgrp summary::-webkit-details-marker{display:none}
+.acgrp[open] summary .mut{visibility:hidden}
 label.l{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--mut)}
 label.c{display:flex;gap:8px;align-items:center;font-size:14px;min-height:32px}
 label.c input{width:18px;height:18px;accent-color:var(--ac)}
@@ -135,6 +139,6 @@ table.t{width:100%;border-collapse:collapse;background:var(--card);border:1px so
 <body>
 <div id="root"><div class="login"><div class="skel"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="admin.js?v=202610272240"></script>
+<script src="admin.js?v=202610272254"></script>
 </body>
 </html>
