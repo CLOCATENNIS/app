@@ -177,7 +177,7 @@ function etatInsc(ev, qui) {
     var i = monInsc(ev, p), nom = qui.length > 1 || S.pers.length > 1 ? '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b> : ' : '';
     if (i && i.statut === 'inscrit') return '<span class="small" style="color:var(--ok);font-weight:600">' + nom + '✓ Inscription confirmée</span>';
     if (i && i.statut === 'attente') return '<span class="small" style="color:var(--ac);font-weight:600">' + nom + '⏳ En liste d\'attente</span>';
-    return '<span class="small mut">' + nom + (passe ? 'Non inscrit' + (p.sexe === 'F' ? 'e' : '') : 'Pas encore inscrit' + (p.sexe === 'F' ? 'e' : '') + ' · touche pour t\'inscrire') + '</span>';
+    return '<span class="small mut">' + nom + (passe ? 'Non inscrit' + (p.sexe === 'F' ? 'e' : '') : 'Pas encore inscrit' + (p.sexe === 'F' ? 'e' : '') + ' · clique pour t\'inscrire') + '</span>';
   }).join('') + '</span>';
 }
 
@@ -189,7 +189,7 @@ function boutonsPart(ev, qui) {
   return '<span class="stack" style="gap:6px;margin-top:4px">' + qui.map(function (p) {
     var r = maReponse(ev, p);
     return '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + (qui.length > 1 || S.pers.length > 1 ? '<b class="small" style="min-width:56px;color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>' : '') +
-      '<button class="chip' + (r === 'oui' ? ' on' : '') + '" data-part="oui|' + ev.id + '|' + p.id + '" style="min-height:36px">' + (r === 'oui' ? '✓ Je participe' : 'Je participe') + '</button>' +
+      '<button class="chip' + (r === 'oui' ? ' on' : '') + '" data-part="oui|' + ev.id + '|' + p.id + '" style="min-height:36px">' + (r === 'oui' ? '✓ Présent' + (p.sexe === 'F' ? 'e' : '') : 'Présent' + (p.sexe === 'F' ? 'e' : '')) + '</button>' +
       '<button class="chip' + (r === 'non' ? ' on' : '') + '" data-part="non|' + ev.id + '|' + p.id + '" style="min-height:36px">' + (r === 'non' ? '✗ Absent' + (p.sexe === 'F' ? 'e' : '') : 'Absent' + (p.sexe === 'F' ? 'e' : '')) + '</button></span>';
   }).join('') + '</span>';
 }
@@ -204,7 +204,7 @@ function lierPart() {
       q(op).then(function () {
         AG.part = (AG.part || []).filter(function (r) { return !(r.evenement_id === x[1] && r.personne_id === x[2]); });
         if (!(deja && deja.reponse === x[0])) AG.part.push({ evenement_id: x[1], personne_id: x[2], reponse: x[0] });
-        toast(deja && deja.reponse === x[0] ? 'Réponse retirée' : x[0] === 'oui' ? 'Présence confirmée' : 'Absence signalée'); render();
+        toast(deja && deja.reponse === x[0] ? 'Réponse retirée' : x[0] === 'oui' ? 'Présence notée' : 'Absence notée'); render();
       }).catch(function () { toast('Réponse impossible pour le moment'); b.disabled = false; });
     };
   });
@@ -217,8 +217,9 @@ function chargerAgenda() {
     q(sb.from('creneaux').select('*, groupes(nom,couleur)')).catch(function () { return []; }),
     q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
     q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; }),
-    q(sb.from('participations').select('evenement_id, personne_id, reponse').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; })
-  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [] }; return AG; });
+    q(sb.from('participations').select('evenement_id, personne_id, reponse').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
+    q(sb.from('nextgen').select('*').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; })
+  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [], ng: r[4] || [] }; return AG; });
 }
 
 function mesItems(du, au) {
@@ -244,13 +245,29 @@ function mesItems(du, au) {
       items.push({ d: d, f: f, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [] });
     }
   });
+  // Encadrement Next Gen : le jeune vient aider sur un cours, avec ses propres horaires
+  ((AG && AG.ng) || []).forEach(function (n) {
+    var p = S.pers.filter(function (x) { return x.id === n.personne_id; })[0];
+    if (!p || (S.sel !== 'all' && S.sel !== p.id)) return;
+    (AG.creneaux || []).filter(function (cr) { return cr.groupe_id === n.groupe_id; }).forEach(function (cr) {
+      for (var j = new Date(du); j < au; j.setDate(j.getDate() + 1)) {
+        var js = j.getDay() === 0 ? 7 : j.getDay(), iso = isoJour(j);
+        if (cr.jour_semaine !== js || (n.du && iso < n.du) || (n.au && iso > n.au) || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
+        if ((AG.pauses || []).some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
+        var a = n.arrivee.split(':'), b = n.depart.split(':');
+        var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var f = new Date(j); f.setHours(+b[0], +b[1], 0, 0);
+        items.push({ d: d, f: f, titre: GRADES_NG[n.grade] + ' · ' + (cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours'), lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: [p], gs: [], ng: true, objectif: n.notes });
+      }
+    });
+  });
   items.sort(function (x, y) { return x.d - y.d; });
   return items;
 }
+var GRADES_NG = { mini_coach: 'Mini coach', coach_junior: 'Coach junior', coach_next_gen: 'Coach Next Gen' };
 
 // ---------- Mise en page commune ----------
 function tabs(actif) {
-  var showArena = !S.user || !S.pers.length || S.pers.some(function (p) { return p.niveau_arena; }) || (S.isStaff && !S.apercu);
+  var showArena = true; // Tweener (jeunes) et Masters (adultes) : utile à tout le monde
   var t = [['accueil', 'home', 'Accueil'], ['agenda', 'cal', 'Agenda']];
   if (showArena) t.push(['arena', 'trophy', 'Arena']);
   t.push(['club', 'club', 'Club']);
@@ -311,7 +328,7 @@ function pageAccueil() {
     if (rangs.length) arenaTxt = rangs.join(' · ');
   }
   h += '<div class="grid2">' +
-    '<a class="tile" href="#/arena">' + ic('trophy', 24) + '<b>CLOC\'ARENA</b><span class="mut small">' + arenaTxt + '</span></a>' +
+    '<a class="tile" href="#/arena/tweener">' + ic('trophy', 24) + '<b>CLOC\'ARENA</b><span class="mut small">' + arenaTxt + '</span></a>' +
     '<a class="tile" href="#/inscriptions">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
     '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
     '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
@@ -406,6 +423,15 @@ function choixCoach(C, nom) {
     '<div class="chips" style="flex-wrap:wrap">' + noms.map(function (n) { return '<button class="chip ' + (n === nom ? 'on' : '') + '" data-coach="' + esc(n) + '">' + esc(n) + '</button>'; }).join('') + '</div></section>';
   Array.prototype.forEach.call(box.querySelectorAll('[data-coach]'), function (b) { b.onclick = function () { try { localStorage.setItem('coachNom', b.dataset.coach); } catch (e) {} S.coachNomMem = b.dataset.coach; render(); }; });
 }
+// Un cours collectif n'apparaît que pour ceux qu'il concerne : la famille (élève ou Next Gen), ou le coach qui l'encadre
+function monCours(cr, coach) {
+  if (!S.user) return false;
+  if (S.groupesDe[cr.groupe_id] && S.groupesDe[cr.groupe_id].length) return true;
+  if (((AG && AG.ng) || []).some(function (n) { return n.groupe_id === cr.groupe_id; })) return true;
+  var nom = coach && coach !== '?' ? coach : (S.coachNomMem || coachNom());
+  if (nom && encadrePar(cr.encadrant, nom)) return true;
+  return S.gere.indexOf(cr.groupe_id) >= 0;
+}
 function agendaClub(l, f, coach) {
   var box = $('club-ag');
   (CLUBAG ? Promise.resolve(CLUBAG) : Promise.all([
@@ -422,7 +448,7 @@ function agendaClub(l, f, coach) {
           var js = j.getDay() === 0 ? 7 : j.getDay(), iso = isoJour(j);
           if (cr.jour_semaine !== js || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
           if (C.pauses.some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
-          if (coach && !encadrePar(cr.encadrant, coach) && S.gere.indexOf(cr.groupe_id) < 0) continue;
+          if (!monCours(cr, coach)) continue;
           var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
           var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var fi = new Date(j); fi.setHours(+b[0], +b[1], 0, 0);
           items.push({ d: d, f: fi, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, c: '#5d6b78', type: 'cours' });
@@ -492,8 +518,25 @@ function telechargerIcs(items, nom) {
 }
 
 // ---------- CLOC'ARENA ----------
+function pageArenaAccueil() {
+  var niv = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<span style="width:18px;height:6px;border-radius:3px;background:' + (NIV[n] ? NIV[n].bg : '#ccc') + '"></span>'; }).join('');
+  return '<div class="darkhead"><div class="wrap"><div class="kicker">LES CIRCUITS DU CLUB · SAISON 2026-2027</div><h1>CLOC\'ARENA</h1><p class="small" style="color:#c9d6e2;margin:6px 0 0">Choisis ton circuit.</p></div></div><main>' +
+    '<a href="#/arena/tweener" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#5b3a86,#c62f2f);border:0;padding:22px">' +
+      '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">JEUNES · JUSQU\'À 17 ANS</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Tweener</span>' +
+      '<span class="small" style="opacity:.9">Le tournoi des jeunes toute la saison : classement, programme et résultats, du Blanc au Jaune.</span>' +
+      '<span style="display:flex;gap:4px;margin-top:2px">' + niv + '</span><span class="small" style="font-weight:700">Entrer →</span></a>' +
+    '<a href="#/arena/masters" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#102f4a,#2f5b7d);border:0;padding:22px">' +
+      '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">ADULTES</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Masters</span>' +
+      '<span class="small" style="opacity:.9">Le circuit des adultes du club : matchs, défis et classement.</span>' +
+      '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span><span class="small" style="font-weight:700">Découvrir →</span></a></main>';
+}
+function pageMasters() {
+  return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
+    '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des adultes arrive bientôt</b>' +
+    '<span class="mut small">Matchs entre adhérents adultes, défis et classement de la saison, sur le même principe que CLOC\'ARENA Tweener pour les jeunes. Les infos seront publiées ici et dans les actus du club.</span></section></main>';
+}
 function pageArena() {
-  var h = '<div class="darkhead"><div class="wrap"><div class="kicker">LE TOURNOI DES JEUNES · SAISON 2026-2027</div><h1>CLOC\'ARENA</h1>' +
+  var h = '<div class="darkhead"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">JEUNES · SAISON 2026-2027</div><h1>CLOC\'ARENA Tweener</h1>' +
     '<div class="seg" style="margin-top:14px">' + [['classement', 'Classement'], ['programme', 'Programme'], ['resultats', 'Résultats']].map(function (t) {
       return '<button data-atab="' + t[0] + '" class="' + (S.arenaTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>';
     }).join('') + '</div></div></div><main id="arena-main"><div class="skel"></div></main>';
@@ -586,7 +629,7 @@ function pageFiche(id) {
     q(sb.rpc('arena_fiche', { p: id })).then(function (f) {
       var c = NIV[f.niveau] || { bg: '#1f5a85', fg: '#fff' };
       var v = f.matchs.filter(function (m) { return m.gagne; }).length;
-      var h = '<div class="darkhead" style="background:' + c.bg + ';color:' + c.fg + '"><div class="wrap">' + backLink('#/arena', 'Classement', c.fg === '#fff') +
+      var h = '<div class="darkhead" style="background:' + c.bg + ';color:' + c.fg + '"><div class="wrap">' + backLink('#/arena/tweener', 'Classement', c.fg === '#fff') +
         '<div class="hero-row" style="margin-top:6px"><div class="datebox" style="background:#fff;color:' + c.bg + ';border-radius:50%"><b style="font-size:24px">' + esc(f.prenom.charAt(0) + f.nom.charAt(0)) + '</b></div>' +
         '<div><h1 style="font-size:26px;line-height:1.1">' + esc(f.prenom + ' ' + f.nom) + '</h1><div class="small" style="opacity:.9">Niveau ' + esc(f.niveau || '—') + (f.rang ? ' · ' + f.rang + (f.rang === 1 ? 'er' : 'e') + ' au général' : '') + (f.rang_niveau ? ' · ' + f.rang_niveau + (f.rang_niveau === 1 ? 'er' : 'e') + ' en ' + esc(f.niveau) : '') + '</div></div></div></div></div><main>' +
         '<div class="grid4"><div class="stat"><b>' + (+f.points) + '</b><span class="mut xs">points</span></div><div class="stat"><b>' + f.matchs.length + '</b><span class="mut xs">matchs</span></div><div class="stat"><b>' + v + '</b><span class="mut xs">victoires</span></div><div class="stat"><b>' + f.participations + '</b><span class="mut xs">présences</span></div></div>';
@@ -604,7 +647,7 @@ function pageFiche(id) {
         '<p class="mut xs" style="display:flex;gap:6px;align-items:center;justify-content:center">' + ic('lock', 14) + 'Fiche visible seulement par la famille, les coachs et la direction sportive.</p></main>';
       $('app').innerHTML = h;
     }).catch(function () {
-      $('app').innerHTML = '<div class="pagehead">' + backLink('#/arena', 'Classement') + '</div><main><section class="card empty">Cette fiche n\'est visible que par la famille du joueur, ses coachs et la direction sportive.</section></main>';
+      $('app').innerHTML = '<div class="pagehead">' + backLink('#/arena/tweener', 'Classement') + '</div><main><section class="card empty">Cette fiche n\'est visible que par la famille du joueur, ses coachs et la direction sportive.</section></main>';
     });
   });
   return '<div style="padding:40px 16px"><div class="skel"></div></div>';
@@ -1620,7 +1663,7 @@ function render() {
   var p = parts[0] || 'accueil', arg = parts[1];
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
-  else if (p === 'arena') html = pageArena();
+  else if (p === 'arena') html = arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : pageArenaAccueil();
   else if (p === 'fiche') { html = pageFiche(arg); actif = 'arena'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }

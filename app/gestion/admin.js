@@ -20,6 +20,7 @@ var MODULES = [
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['arena', 'CLOC\'ARENA', ['direction']],
+  ['nextgen', 'Next Gen', ['direction']],
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['acces', 'Accès et rôles', ['direction']]
 ];
@@ -873,6 +874,60 @@ function vuePresence(m) {
 }
 
 // ---------- Accès et rôles ----------
+// ---------- Next Gen : les jeunes qui encadrent un cours ----------
+var GRADES_NG = [['mini_coach', 'Mini coach'], ['coach_junior', 'Coach junior'], ['coach_next_gen', 'Coach Next Gen']];
+function vueNextGen(m) {
+  m.innerHTML = entete('Next Gen', 'Les jeunes du parcours Next Gen (mini coach, coach junior, coach Next Gen) qui s\'engagent sur un cours. Le cours apparaît dans l\'agenda de leur famille, avec leurs horaires (préparation comprise).', '<button class="btn" id="ng-new">Ajouter un engagement</button>') + '<div id="ng-l"><div class="skel"></div></div>';
+  var CR = [], NG = [];
+  var nomCours = function (gid) { var c = CR.filter(function (x) { return x.groupe_id === gid; })[0]; return c && c.groupes ? c.groupes.nom : nomGroupe(gid); };
+  var hh = function (t) { return t ? t.slice(0, 5).replace(':', 'h') : ''; };
+  var charger = function () {
+    Promise.all([q(sb.from('nextgen').select('*, personnes(prenom, nom)').order('created_at')), q(sb.from('creneaux').select('groupe_id, jour_semaine, heure_debut, heure_fin, lieu, encadrant, groupes(nom, type)').order('jour_semaine').order('heure_debut'))]).then(function (r) {
+      NG = r[0] || []; CR = r[1] || [];
+      $('ng-l').innerHTML = NG.length ? GRADES_NG.map(function (g) {
+        var l = NG.filter(function (n) { return n.grade === g[0]; });
+        return l.length ? '<div class="sect">' + g[1] + ' (' + l.length + ')</div><div class="tw"><table class="t"><thead><tr><th>Jeune</th><th>Cours</th><th>Présence</th><th>Période</th><th></th></tr></thead><tbody>' + l.map(function (n) {
+          return '<tr class="click" data-ng="' + n.id + '"><td><b>' + esc(n.personnes ? n.personnes.prenom + ' ' + n.personnes.nom : '?') + '</b>' + (n.notes ? '<div class="mut xs">' + esc(n.notes) + '</div>' : '') + '</td><td class="small">' + esc(nomCours(n.groupe_id)) + '</td><td class="small">' + hh(n.arrivee) + ' – ' + hh(n.depart) + '</td><td class="small">' + (n.du || n.au ? (n.du ? fmtJ(new Date(n.du + 'T12:00:00')) : '…') + ' → ' + (n.au ? fmtJ(new Date(n.au + 'T12:00:00')) : '…') : 'Toute la saison') + '</td><td class="act"><button class="btn sm ko" data-ngx="' + n.id + '">Retirer</button></td></tr>';
+        }).join('') + '</tbody></table></div>' : '';
+      }).join('') : '<div class="card empty">Aucun engagement Next Gen pour le moment.</div>';
+      all('[data-ng]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('[data-ngx]')) return; form(NG.filter(function (x) { return x.id === tr.dataset.ng; })[0]); }; });
+      all('[data-ngx]').forEach(function (b) { b.onclick = function () { if (confirm('Retirer cet engagement ?')) q(sb.from('nextgen').delete().eq('id', b.dataset.ngx)).then(function () { toast('Engagement retiré'); charger(); }).catch(function () { toast('Action impossible'); }); }; });
+    }).catch(function () { $('ng-l').innerHTML = '<div class="card empty">Impossible de charger les engagements.</div>'; });
+  };
+  var form = function (n) {
+    var nouveau = !n; n = n || { grade: 'coach_next_gen' }; var pers = n.personnes ? { id: n.personne_id, prenom: n.personnes.prenom, nom: n.personnes.nom } : null;
+    var jours = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    var cours = CR.filter(function (c) { return c.groupes && c.groupes.type === 'creneau'; });
+    panneau(nouveau ? 'Nouvel engagement Next Gen' : 'Modifier l\'engagement', '<div class="stack">' +
+      '<div class="l">Jeune<div id="ng-p" class="small" style="margin:6px 0">' + (pers ? '<b>' + esc(pers.prenom + ' ' + pers.nom) + '</b>' : '<span class="mut">Choisis un adhérent ci-dessous</span>') + '</div>' + (nouveau ? CHERCHEUR : '') + '</div>' +
+      '<label class="l">Grade<select class="f" id="ng-g">' + GRADES_NG.map(function (g) { return '<option value="' + g[0] + '"' + (n.grade === g[0] ? ' selected' : '') + '>' + g[1] + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l">Cours encadré<select class="f" id="ng-c"><option value="">Choisir…</option>' + cours.map(function (c) { return '<option value="' + c.groupe_id + '"' + (n.groupe_id === c.groupe_id ? ' selected' : '') + '>' + esc(c.groupes.nom) + '</option>'; }).join('') + '</select></label>' +
+      '<div class="row2"><label class="l">Arrive à<input class="f" type="time" id="ng-a" value="' + (n.arrivee ? n.arrivee.slice(0, 5) : '') + '"></label><label class="l">Repart à<input class="f" type="time" id="ng-d" value="' + (n.depart ? n.depart.slice(0, 5) : '') + '"></label></div>' +
+      '<span class="mut xs">Par défaut : 30 minutes de préparation avant le cours, jusqu\'à la fin du cours.</span>' +
+      '<div class="row2"><label class="l">À partir du (vide = toute la saison)<input class="f" type="date" id="ng-du" value="' + (n.du || '') + '"></label><label class="l">Jusqu\'au<input class="f" type="date" id="ng-au" value="' + (n.au || '') + '"></label></div>' +
+      '<label class="l">Note (rôle, engagement…)<input class="f" id="ng-n" maxlength="200" value="' + esc(n.notes) + '" placeholder="Ex. Engagée sur la saison complète, aide sur les ateliers"></label>' +
+      '<div class="chips"><button class="btn" id="ng-ok">Enregistrer</button><button class="btn line" id="ng-an">Annuler</button></div></div>', function (r) {
+      if (nouveau) chargerPers().then(function () { chercheurPers(r, function (p) { pers = p; $('ng-p').innerHTML = '<b>' + esc(p.prenom + ' ' + p.nom) + '</b>'; }); });
+      $('ng-c').onchange = function () {
+        var c = CR.filter(function (x) { return x.groupe_id === $('ng-c').value; })[0]; if (!c) return;
+        var t = c.heure_debut.split(':'), d = new Date(2000, 0, 1, +t[0], +t[1] - 30);
+        if (!$('ng-a').value) $('ng-a').value = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        if (!$('ng-d').value) $('ng-d').value = c.heure_fin.slice(0, 5);
+      };
+      $('ng-an').onclick = fermer;
+      $('ng-ok').onclick = function () {
+        if (!pers) return toast('Choisis le jeune');
+        if (!$('ng-c').value) return toast('Choisis le cours');
+        if (!$('ng-a').value || !$('ng-d').value || $('ng-d').value <= $('ng-a').value) return toast('Vérifie les horaires');
+        var row = { personne_id: pers.id, grade: $('ng-g').value, groupe_id: $('ng-c').value, arrivee: $('ng-a').value, depart: $('ng-d').value, du: $('ng-du').value || null, au: $('ng-au').value || null, notes: $('ng-n').value.trim() || null };
+        (nouveau ? q(sb.from('nextgen').insert(row).select('id').single()) : q(sb.from('nextgen').update(row).eq('id', n.id).select('id').single())).then(function () { toast('Engagement enregistré'); fermer(); charger(); }).catch(function () { toast('Enregistrement impossible'); });
+      };
+    });
+  };
+  $('ng-new').onclick = function () { form(null); };
+  chargerGroupes().then(charger);
+}
+
 function vueAcces(m) {
   var ROLES_AC = [['direction', 'Direction sportive (tout)'], ['bureau', 'Bureau / président (adhérents, actus, événements, annonces)'], ['accueil', 'Accueil (club house, annonces, cordage, inscriptions, actus)'], ['cordeur', 'Cordeur'], ['coach', 'Coach de groupes (propose les scores, voit ses joueurs)'], ['responsable', 'Responsable de groupes']];
   m.innerHTML = entete('Accès et rôles', 'Qui peut faire quoi. Une même personne peut cumuler plusieurs rôles et plusieurs groupes. Elle doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
@@ -947,7 +1002,7 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
-var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, presence: vuePresence, acces: vueAcces };
+var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, presence: vuePresence, acces: vueAcces };
 function router() {
   if (!A.user) return;
   fermer();
