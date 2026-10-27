@@ -1349,7 +1349,7 @@ var JCAT = {
   creneaux: ['Agenda', 'créneau de cours', 'créneaux de cours'], periodes_sans_cours: ['Agenda', 'période sans cours', 'périodes sans cours', 1],
   personnes: ['Adhérents', 'adhérent', 'adhérents'], foyers: ['Adhérents', 'famille', 'familles', 1], groupe_membres: ['Adhérents', 'joueur dans un groupe', 'joueurs dans des groupes'], creneaux_en_attente: ['Adhérents', 'élève à placer', 'élèves à placer'],
   groupes: ['Groupes', 'groupe', 'groupes'],
-  arena_matchs: ['Scores CLOC\'ARENA', 'match', 'matchs'], arena_match_joueurs: ['Scores CLOC\'ARENA', 'joueur de match', 'joueurs de matchs'], arena_points: ['Scores CLOC\'ARENA', 'ligne de points', 'lignes de points'], arena_participations: ['Scores CLOC\'ARENA', 'participation', 'participations'], arena_formats: ['Scores CLOC\'ARENA', 'format', 'formats'],
+  arena_matchs: ['Scores CLOC\'ARENA', 'match', 'matchs'], arena_match_joueurs: ['Scores CLOC\'ARENA', 'joueur de match', 'joueurs de matchs'], arena_points: ['Scores CLOC\'ARENA', 'ligne de points', 'lignes de points', 1], arena_participations: ['Scores CLOC\'ARENA', 'participation', 'participations', 1], arena_formats: ['Scores CLOC\'ARENA', 'format', 'formats'],
   double_resultats: ['Double interne', 'score', 'scores'], double_equipes: ['Double interne', 'équipe', 'équipes', 1], double_dispos: ['Double interne', 'disponibilité', 'disponibilités', 1],
   publications: ['Actus', 'actu', 'actus', 1], publication_groupes: ['Actus', 'destinataire d\'actu', 'destinataires d\'actus'], mises_en_avant: ['Réseaux sociaux', 'publication mise en avant', 'publications mises en avant', 1],
   annonces: ['Petites annonces', 'annonce', 'annonces', 1],
