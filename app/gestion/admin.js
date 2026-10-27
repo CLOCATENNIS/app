@@ -909,82 +909,139 @@ function envoyerPhoto(fichier, dossier) {
 // ---------- Boutique : ce qu'on vend au club et ce qui reste à payer ----------
 var BTF = { vue: 'ardoise' };
 function vueBoutique(m) {
-  m.innerHTML = entete('Boutique et ardoise', 'Grips, surgrips, balles, poses… Note chaque vente : payée tout de suite ou à payer plus tard. L\'ardoise montre qui doit combien.', '<button class="btn" id="bt-new">Nouvelle vente</button>') +
-    '<div class="toolbar"><div class="chips">' + [['ardoise', 'À payer'], ['historique', 'Historique'], ['articles', 'Articles et prix']].map(function (x) { return '<button class="chip' + (BTF.vue === x[0] ? ' on' : '') + '" data-btv="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div><div id="bt-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Boutique et ardoise', 'Grips, surgrips, balles, poses… Note chaque vente : payée tout de suite ou à payer plus tard. L\'ardoise montre qui doit combien, le stock suit les ventes et les arrivages.', '<button class="btn line" id="bt-ent">Arrivage en stock</button><button class="btn" id="bt-new">Nouvelle vente</button>') +
+    '<div class="toolbar"><div class="chips">' + [['ardoise', 'À payer'], ['historique', 'Ventes'], ['stock', 'Stock et articles']].map(function (x) { return '<button class="chip' + (BTF.vue === x[0] ? ' on' : '') + '" data-btv="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div><div id="bt-l"><div class="skel"></div></div>';
   var ART = [], V = [];
   var nomV = function (v) { if (v.personne_id) { var p = A.pers.filter(function (x) { return x.id === v.personne_id; })[0]; return p ? p.prenom + ' ' + p.nom : 'Adhérent'; } return v.nom_libre; };
   var cleV = function (v) { return v.personne_id || ('libre:' + norm(v.nom_libre).trim()); };
   var MODES = { especes: 'Espèces', cb: 'Carte', cheque: 'Chèque', virement: 'Virement', autre: 'Autre' };
+  var somme = function (l) { return l.reduce(function (s2, v) { return s2 + (+v.total); }, 0); };
+  var num = function (x) { var n = parseFloat(String(x || '').replace(',', '.')); return isNaN(n) ? null : n; };
   var encaisser = function (ids, msg) {
     panneau('Encaisser', '<div class="stack"><span class="small">' + esc(msg) + '</span><label class="l">Payé par<select class="f" id="bt-mode">' + Object.keys(MODES).map(function (k) { return '<option value="' + k + '">' + MODES[k] + '</option>'; }).join('') + '</select></label><button class="btn ok" id="bt-enc">Confirmer le paiement</button></div>', function () {
       $('bt-enc').onclick = function () { q(sb.from('boutique_ventes').update({ paye: true, paye_le: new Date().toISOString(), mode: $('bt-mode').value }).in('id', ids)).then(function () { toast('Paiement enregistré'); fermer(); charger(); }).catch(function () { toast('Action impossible'); }); };
     });
   };
+  // Nouvelle vente ou modification d'une vente
+  var formVente = function (v) {
+    var nouveau = !v; v = v || { quantite: 1, jour: isoJour(new Date()) };
+    var qui = v.personne_id ? A.pers.filter(function (x) { return x.id === v.personne_id; })[0] || { id: v.personne_id, prenom: 'Adhérent', nom: '' } : null;
+    var art = ART.filter(function (a) { return a.id === v.article_id; })[0];
+    panneau(nouveau ? 'Nouvelle vente' : 'Modifier la vente', '<div class="stack"><div class="l">Pour qui ?<div id="bt-qui" class="small" style="margin:6px 0">' + (qui ? '<b>' + esc(qui.prenom + ' ' + qui.nom) + '</b>' : v.nom_libre ? '<b>' + esc(v.nom_libre) + '</b> <span class="badge">non adhérent</span>' : '<span class="mut">Cherche un adhérent, ou écris un nom ci-dessous</span>') + '</div>' + CHERCHEUR + '</div>' +
+      '<label class="l">… ou nom d\'une personne non adhérente<input class="f" id="bt-libre" value="' + esc(v.nom_libre) + '" placeholder="Ex. Kylian Janssen"></label>' +
+      '<label class="l">Article<select class="f" id="bt-a"><option value="">Autre (à écrire)</option>' + ART.filter(function (a) { return a.actif || a.id === v.article_id; }).map(function (a) { return '<option value="' + a.id + '"' + (a.id === v.article_id ? ' selected' : '') + '>' + esc(a.nom) + ' · ' + euros(a.prix) + (a.suivi_stock ? ' · stock ' + a.stock : '') + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l" id="bt-libl"' + (art ? ' style="display:none"' : '') + '>Description<input class="f" id="bt-lib" value="' + esc(art ? '' : v.libelle) + '" placeholder="Ex. 2 tubes de balles recyclées"></label>' +
+      '<div class="row2"><label class="l">Quantité<input class="f" type="number" min="1" id="bt-q" value="' + esc(v.quantite) + '"></label><label class="l">Prix unitaire (€)<input class="f" inputmode="decimal" id="bt-p" value="' + esc(v.prix_unitaire == null ? '' : String(+v.prix_unitaire).replace('.', ',')) + '"></label></div>' +
+      '<b id="bt-tot" class="small"></b>' +
+      '<label class="l">Date<input class="f" type="date" id="bt-j" value="' + esc(v.jour) + '"></label>' +
+      '<label class="l">Note (facultatif)<input class="f" id="bt-no" maxlength="200" value="' + esc(v.note) + '" placeholder="Ex. paiera samedi"></label>' +
+      '<label class="c"><input type="checkbox" id="bt-pp"' + (v.paye ? ' checked' : '') + '>Payé</label><label class="l" id="bt-ml"' + (v.paye ? '' : ' style="display:none"') + '>Payé par<select class="f" id="bt-m">' + Object.keys(MODES).map(function (k) { return '<option value="' + k + '"' + (v.mode === k ? ' selected' : '') + '>' + MODES[k] + '</option>'; }).join('') + '</select></label>' +
+      '<div class="chips"><button class="btn" id="bt-ok">Enregistrer</button>' + (nouveau ? '' : '<button class="btn ko" id="bt-sup">Supprimer la vente</button>') + '</div>' + (nouveau ? '' : '<span class="mut xs">Modifier l\'article ou la quantité corrige le stock automatiquement.</span>') + '</div>', function (r) {
+      chercheurPers(r, function (p) { qui = p; $('bt-libre').value = ''; $('bt-qui').innerHTML = '<b>' + esc(p.prenom + ' ' + p.nom) + '</b>'; });
+      $('bt-libre').oninput = function () { if (this.value.trim()) { qui = null; $('bt-qui').innerHTML = '<b>' + esc(this.value.trim()) + '</b> <span class="badge">non adhérent</span>'; } };
+      var tot = function () { var qn = parseInt($('bt-q').value, 10) || 0, pr = num($('bt-p').value); $('bt-tot').textContent = pr != null && qn ? 'Total : ' + euros(Math.round(qn * pr * 100) / 100) : ''; };
+      $('bt-a').onchange = function () { var a = ART.filter(function (x) { return x.id === $('bt-a').value; })[0]; $('bt-libl').style.display = a ? 'none' : ''; if (a) $('bt-p').value = String(+a.prix).replace('.', ','); tot(); };
+      $('bt-q').oninput = $('bt-p').oninput = tot; tot();
+      $('bt-pp').onchange = function () { $('bt-ml').style.display = this.checked ? '' : 'none'; };
+      if ($('bt-sup')) $('bt-sup').onclick = function () { if (confirm('Supprimer cette vente ? Le stock sera remis.')) q(sb.from('boutique_ventes').delete().eq('id', v.id)).then(function () { toast('Vente supprimée'); fermer(); charger(); }); };
+      $('bt-ok').onclick = function () {
+        var libre = $('bt-libre').value.trim(); if (!qui && !libre) return toast('Indique pour qui');
+        var a = ART.filter(function (x) { return x.id === $('bt-a').value; })[0], lib = a ? a.nom : $('bt-lib').value.trim(); if (!lib) return toast('Décris l\'article');
+        var qn = parseInt($('bt-q').value, 10), pr = num($('bt-p').value);
+        if (!(qn > 0) || pr == null || pr < 0) return toast('Quantité ou prix invalide');
+        var paye = $('bt-pp').checked;
+        var row = { personne_id: qui ? qui.id : null, nom_libre: qui ? null : libre, article_id: a ? a.id : null, libelle: lib, quantite: qn, prix_unitaire: pr, jour: $('bt-j').value || isoJour(new Date()), note: $('bt-no').value.trim() || null, paye: paye, paye_le: paye ? (v.paye_le || new Date().toISOString()) : null, mode: paye ? $('bt-m').value : null };
+        (nouveau ? q(sb.from('boutique_ventes').insert(row)) : q(sb.from('boutique_ventes').update(row).eq('id', v.id)))
+          .then(function () { toast(nouveau ? (paye ? 'Vente enregistrée' : 'Ajouté à l\'ardoise') : 'Vente modifiée'); fermer(); charger(); }).catch(function () { toast('Enregistrement impossible'); });
+      };
+    });
+  };
+  // Arrivage, correction d'inventaire, nouvel article
+  var formStock = function (a, mode) {
+    var titre = mode === 'corriger' ? 'Corriger le stock' : 'Arrivage en stock';
+    panneau(titre, '<div class="stack">' + (mode === 'corriger' ? '<b>' + esc(a.nom) + '</b><span class="mut small">Stock actuel dans l\'appli : ' + a.stock + '. Indique ce que tu as vraiment compté.</span><label class="l">Quantité comptée<input class="f" type="number" min="0" id="bs-q" value="' + a.stock + '"></label>'
+      : '<label class="l">Article<select class="f" id="bs-a"><option value="">+ Nouvel article</option>' + ART.filter(function (x) { return x.suivi_stock; }).map(function (x) { return '<option value="' + x.id + '"' + (a && a.id === x.id ? ' selected' : '') + '>' + esc(x.nom) + ' (stock ' + x.stock + ')</option>'; }).join('') + '</select></label>' +
+        '<div id="bs-new"' + (a ? ' style="display:none"' : '') + ' class="stack"><label class="l">Nom du nouvel article<input class="f" id="bs-n" placeholder="Ex. Surgrip Tecnifibre Pro Contact (à l\'unité)"></label><div class="row2"><label class="l">Prix de vente (€)<input class="f" inputmode="decimal" id="bs-p"></label><label class="l">Rangé où ?<input class="f" id="bs-e" placeholder="Ex. Vitrine"></label></div></div>' +
+        '<label class="l">Quantité ajoutée<input class="f" type="number" min="1" id="bs-q" value="1"></label>') +
+      '<label class="l">Note (facultatif)<input class="f" id="bs-no" maxlength="200" placeholder="' + (mode === 'corriger' ? 'Ex. inventaire de la vitrine' : 'Ex. commande Tecnifibre du 27/10') + '"></label><button class="btn" id="bs-ok">Enregistrer</button></div>', function () {
+      if ($('bs-a')) $('bs-a').onchange = function () { $('bs-new').style.display = this.value ? 'none' : ''; };
+      $('bs-ok').onclick = function () {
+        var qn = parseInt($('bs-q').value, 10), note = $('bs-no').value.trim() || null;
+        if (mode === 'corriger') {
+          if (!(qn >= 0)) return toast('Quantité invalide'); var diff = qn - a.stock; if (!diff) { fermer(); return toast('Stock déjà juste'); }
+          return q(sb.from('boutique_mouvements').insert({ article_id: a.id, quantite: diff, motif: 'correction', note: note })).then(function () { toast('Stock corrigé : ' + qn); fermer(); charger(); }).catch(function () { toast('Action impossible'); });
+        }
+        if (!(qn > 0)) return toast('Quantité invalide');
+        var id = $('bs-a').value;
+        (id ? Promise.resolve(id) : (function () {
+          var nm = $('bs-n').value.trim(), pr = num($('bs-p').value); if (!nm || pr == null || pr < 0) { toast('Nom et prix du nouvel article'); return Promise.reject('saisie'); }
+          return q(sb.from('boutique_articles').insert({ nom: nm, prix: pr, emplacement: $('bs-e').value.trim() || null, ordre: ART.length + 1 }).select('id').single()).then(function (x) { return x.id; });
+        })()).then(function (aid) { return q(sb.from('boutique_mouvements').insert({ article_id: aid, quantite: qn, motif: 'entree', note: note })); })
+          .then(function () { toast('Stock mis à jour'); fermer(); charger(); }).catch(function (e) { if (e !== 'saisie') toast('Action impossible'); });
+      };
+    });
+  };
+  var histoStock = function (a) {
+    q(sb.from('boutique_mouvements').select('*').eq('article_id', a.id).order('created_at', { ascending: false }).limit(100)).then(function (l) {
+      var M = { entree: 'Arrivage', vente: 'Vente', correction: 'Correction' };
+      panneau('Mouvements · ' + a.nom, '<div class="stack">' + (l.length ? l.map(function (x) { return '<div class="it" style="display:flex;justify-content:space-between;gap:8px"><span class="small">' + esc(fmtJ(new Date(x.created_at))) + ' · ' + M[x.motif] + (x.note ? ' <span class="mut xs">(' + esc(x.note) + ')</span>' : '') + '</span><b style="color:' + (x.quantite > 0 ? 'var(--ok)' : 'var(--ko)') + '">' + (x.quantite > 0 ? '+' : '') + x.quantite + '</b></div>'; }).join('') : '<span class="mut small">Aucun mouvement.</span>') + '</div>');
+    });
+  };
   var charger = function () {
     Promise.all([q(sb.from('boutique_articles').select('*').order('ordre').order('nom')), q(sb.from('boutique_ventes').select('*').order('jour', { ascending: false }).order('created_at', { ascending: false }).limit(1000)), chargerPers()]).then(function (r) {
       ART = r[0] || []; V = r[1] || [];
-      var du = V.filter(function (v) { return !v.paye; }), totalDu = du.reduce(function (s2, v) { return s2 + (+v.total); }, 0);
-      var h = '<div class="kpis"><div class="kpi"><b>' + euros(totalDu) + '</b><span>à encaisser</span></div><div class="kpi"><b>' + Object.keys(du.reduce(function (o, v) { o[cleV(v)] = 1; return o; }, {})).length + '</b><span>personnes concernées</span></div><div class="kpi"><b>' + euros(V.filter(function (v) { return v.paye && v.paye_le && new Date(v.paye_le).getMonth() === new Date().getMonth() && new Date(v.paye_le).getFullYear() === new Date().getFullYear(); }).reduce(function (s2, v) { return s2 + (+v.total); }, 0)) + '</b><span>encaissé ce mois-ci</span></div></div>';
+      var du = V.filter(function (v) { return !v.paye; });
+      var bas = ART.filter(function (a) { return a.actif && a.suivi_stock && a.stock <= (a.alerte == null ? 0 : a.alerte); });
+      var h = '<div class="kpis"><div class="kpi"><b>' + euros(somme(du)) + '</b><span>à encaisser</span></div><div class="kpi"><b>' + Object.keys(du.reduce(function (o, v) { o[cleV(v)] = 1; return o; }, {})).length + '</b><span>personnes concernées</span></div><div class="kpi"><b>' + euros(somme(V.filter(function (v) { return v.paye && v.paye_le && new Date(v.paye_le).getMonth() === new Date().getMonth() && new Date(v.paye_le).getFullYear() === new Date().getFullYear(); }))) + '</b><span>encaissé ce mois-ci</span></div>' +
+        '<div class="kpi"><b' + (bas.length ? ' style="color:var(--ko)"' : '') + '>' + bas.length + '</b><span>article' + (bas.length > 1 ? 's' : '') + ' à recommander</span></div></div>';
+      var ligneVente = function (v, avecQui) { return '<div class="it click" data-btv2="' + v.id + '" style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small">' + esc(fmtJ(new Date(v.jour + 'T12:00:00'))) + ' · ' + (avecQui ? '<b>' + esc(nomV(v)) + '</b> · ' : '') + (v.quantite > 1 ? v.quantite + ' × ' : '') + esc(v.libelle) + (v.note ? ' <span class="mut xs">(' + esc(v.note) + ')</span>' : '') + '</span><span style="display:flex;gap:6px;align-items:center"><b class="small">' + euros(v.total) + '</b>' + (v.paye ? '<span class="badge b-ok">' + (v.mode ? MODES[v.mode] : 'Payé') + '</span>' : '<button class="btn sm line" data-btpay="' + v.id + '">Payé</button>') + '</span></div>'; };
       if (BTF.vue === 'ardoise') {
         var par = {}, ordre = [];
         du.forEach(function (v) { var k = cleV(v); if (!par[k]) { par[k] = []; ordre.push(k); } par[k].push(v); });
-        ordre.sort(function (a, b) { return par[b].reduce(function (s2, v) { return s2 + (+v.total); }, 0) - par[a].reduce(function (s2, v) { return s2 + (+v.total); }, 0); });
+        ordre.sort(function (a, b) { return somme(par[b]) - somme(par[a]); });
         h += ordre.length ? '<div class="stack">' + ordre.map(function (k) {
-          var l = par[k], tot = l.reduce(function (s2, v) { return s2 + (+v.total); }, 0);
-          return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>' + esc(nomV(l[0])) + (l[0].personne_id ? '' : ' <span class="badge">non adhérent</span>') + '</b><b style="font-size:20px;color:var(--ko)">' + euros(tot) + '</b></div>' +
-            l.map(function (v) { return '<div class="it" style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small">' + esc(fmtJ(new Date(v.jour + 'T12:00:00'))) + ' · ' + (v.quantite > 1 ? v.quantite + ' × ' : '') + esc(v.libelle) + (v.note ? ' <span class="mut xs">(' + esc(v.note) + ')</span>' : '') + '</span><span style="display:flex;gap:6px;align-items:center"><b class="small">' + euros(v.total) + '</b><button class="btn sm line" data-btpay="' + v.id + '">Payé</button><button class="btn sm ghost" data-btdel="' + v.id + '" title="Supprimer">×</button></span></div>'; }).join('') +
-            (l.length > 1 ? '<button class="btn ok sm" data-btall="' + esc(k) + '">Tout est payé (' + euros(tot) + ')</button>' : '') + '</div>';
-        }).join('') + '</div>' : '<div class="card empty">Personne ne doit rien. 🎾</div>';
+          var l = par[k];
+          return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>' + esc(nomV(l[0])) + (l[0].personne_id ? '' : ' <span class="badge">non adhérent</span>') + '</b><b style="font-size:20px;color:var(--ko)">' + euros(somme(l)) + '</b></div>' +
+            l.map(function (v) { return ligneVente(v, false); }).join('') + (l.length > 1 ? '<button class="btn ok sm" data-btall="' + esc(k) + '">Tout est payé (' + euros(somme(l)) + ')</button>' : '') + '</div>';
+        }).join('') + '</div><p class="mut xs">Clique sur une ligne pour la modifier.</p>' : '<div class="card empty">Personne ne doit rien. 🎾</div>';
       } else if (BTF.vue === 'historique') {
-        h += V.length ? '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Qui</th><th>Article</th><th>Montant</th><th>État</th><th></th></tr></thead><tbody>' + V.map(function (v) {
-          return '<tr><td class="small">' + esc(fmtJ(new Date(v.jour + 'T12:00:00'))) + '</td><td>' + esc(nomV(v)) + '</td><td class="small">' + (v.quantite > 1 ? v.quantite + ' × ' : '') + esc(v.libelle) + (v.note ? '<div class="mut xs">' + esc(v.note) + '</div>' : '') + '</td><td><b>' + euros(v.total) + '</b></td><td>' + (v.paye ? '<span class="badge b-ok">Payé' + (v.mode ? ' · ' + MODES[v.mode] : '') + '</span>' : '<span class="badge b-warn">À payer</span>') + '</td>' +
-            '<td class="act">' + (v.paye ? '<button class="btn sm line" data-btunpay="' + v.id + '">Annuler le paiement</button>' : '<button class="btn sm line" data-btpay="' + v.id + '">Payé</button>') + ' <button class="btn sm ghost" data-btdel="' + v.id + '">×</button></td></tr>';
-        }).join('') + '</tbody></table></div><button class="btn line" id="bt-csv" style="margin-top:12px">Exporter (Excel)</button>' : '<div class="card empty">Aucune vente enregistrée.</div>';
+        h += V.length ? '<div class="card stack" style="gap:2px">' + V.map(function (v) { return ligneVente(v, true); }).join('') + '</div><p class="mut xs">Clique sur une vente pour la modifier ou la supprimer.</p><button class="btn line" id="bt-csv" style="margin-top:12px">Exporter (Excel)</button>' : '<div class="card empty">Aucune vente enregistrée.</div>';
       } else {
-        h += '<div class="card stack"><b>Articles vendus au club</b><span class="mut xs">Le prix se remplit tout seul dans « Nouvelle vente » (modifiable à chaque vente).</span>' + ART.map(function (a) {
-          return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input class="f" data-ban="' + a.id + '" value="' + esc(a.nom) + '" style="flex:1;min-width:180px"><input class="f" data-bap="' + a.id + '" inputmode="decimal" value="' + esc(String(+a.prix).replace('.', ',')) + '" style="width:90px"><span>€</span><label class="c"><input type="checkbox" data-baa="' + a.id + '"' + (a.actif ? ' checked' : '') + '>En vente</label><button class="btn sm" data-bas="' + a.id + '">Enregistrer</button></div>';
-        }).join('') + '<div class="sect">Ajouter un article</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f" id="ba-n" placeholder="Ex. Surgrip Tecnifibre (à l\'unité)" style="flex:1;min-width:180px"><input class="f" id="ba-p" inputmode="decimal" placeholder="Prix €" style="width:90px"><button class="btn" id="ba-ok">Ajouter</button></div></div>';
+        h += '<div class="tw"><table class="t"><thead><tr><th>Article</th><th>Prix</th><th>Rangé</th><th>Stock</th><th>Alerte si ≤</th><th>Suivi</th><th>En vente</th><th></th></tr></thead><tbody>' + ART.map(function (a) {
+          var alerte = a.suivi_stock && a.stock <= (a.alerte == null ? 0 : a.alerte);
+          return '<tr><td><input class="f" data-ban="' + a.id + '" value="' + esc(a.nom) + '" style="min-width:180px"></td><td><input class="f" data-bap="' + a.id + '" inputmode="decimal" value="' + esc(String(+a.prix).replace('.', ',')) + '" style="width:80px"></td><td><input class="f" data-bae="' + a.id + '" value="' + esc(a.emplacement) + '" placeholder="Vitrine" style="width:110px"></td>' +
+            '<td>' + (a.suivi_stock ? '<b style="font-size:18px;color:' + (alerte ? 'var(--ko)' : 'var(--tx)') + '">' + a.stock + '</b>' : '<span class="mut xs">service</span>') + '</td><td><input class="f" type="number" min="0" data-bal="' + a.id + '" value="' + esc(a.alerte) + '" style="width:70px"' + (a.suivi_stock ? '' : ' disabled') + '></td>' +
+            '<td><input type="checkbox" data-bsu="' + a.id + '"' + (a.suivi_stock ? ' checked' : '') + ' title="Suivre le stock"></td><td><input type="checkbox" data-baa="' + a.id + '"' + (a.actif ? ' checked' : '') + '></td>' +
+            '<td class="act"><div style="display:flex;flex-wrap:wrap;gap:4px;min-width:200px"><button class="btn sm" data-bas="' + a.id + '">Enregistrer</button>' + (a.suivi_stock ? ' <button class="btn sm line" data-bplus="' + a.id + '">+ Arrivage</button> <button class="btn sm line" data-bcor="' + a.id + '">Inventaire</button> <button class="btn sm ghost" data-bhis="' + a.id + '">Historique</button>' : '') + '</div></td></tr>';
+        }).join('') + '</tbody></table></div>' +
+          '<div class="card stack" style="margin-top:14px"><b>Ajouter un article</b><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f" id="ba-n" placeholder="Ex. Grip Tecnifibre ATP" style="flex:1;min-width:180px"><input class="f" id="ba-p" inputmode="decimal" placeholder="Prix €" style="width:90px"><input class="f" type="number" min="0" id="ba-s" placeholder="Stock" style="width:90px"><input class="f" id="ba-e" placeholder="Rangé où ?" style="width:120px"><button class="btn" id="ba-ok">Ajouter</button></div><span class="mut xs">Décoche « Suivi » pour un service sans stock (pose de surgrip, pose de grip…).</span></div>';
       }
       $('bt-l').innerHTML = h;
+      all('[data-btv2]').forEach(function (l) { l.onclick = function (e) { if (e.target.closest('[data-btpay]')) return; formVente(V.filter(function (x) { return x.id === l.dataset.btv2; })[0]); }; });
       all('[data-btpay]').forEach(function (b) { b.onclick = function () { var v = V.filter(function (x) { return x.id === b.dataset.btpay; })[0]; encaisser([v.id], nomV(v) + ' · ' + v.libelle + ' · ' + euros(v.total)); }; });
-      all('[data-btall]').forEach(function (b) { b.onclick = function () { var l = du.filter(function (v) { return cleV(v) === b.dataset.btall; }); encaisser(l.map(function (v) { return v.id; }), nomV(l[0]) + ' règle ' + euros(l.reduce(function (s2, v) { return s2 + (+v.total); }, 0)) + ' (' + l.length + ' achats)'); }; });
-      all('[data-btunpay]').forEach(function (b) { b.onclick = function () { q(sb.from('boutique_ventes').update({ paye: false, paye_le: null, mode: null }).eq('id', b.dataset.btunpay)).then(function () { toast('Remis à payer'); charger(); }); }; });
-      all('[data-btdel]').forEach(function (b) { b.onclick = function () { if (confirm('Supprimer cette vente ?')) q(sb.from('boutique_ventes').delete().eq('id', b.dataset.btdel)).then(function () { toast('Vente supprimée'); charger(); }); }; });
-      all('[data-bas]').forEach(function (b) { b.onclick = function () { var id = b.dataset.bas, pr = parseFloat(document.querySelector('[data-bap="' + id + '"]').value.replace(',', '.')), nm = document.querySelector('[data-ban="' + id + '"]').value.trim(); if (!nm || isNaN(pr) || pr < 0) return toast('Nom ou prix invalide'); q(sb.from('boutique_articles').update({ nom: nm, prix: pr, actif: document.querySelector('[data-baa="' + id + '"]').checked }).eq('id', id)).then(function () { toast('Article enregistré'); charger(); }); }; });
-      if ($('ba-ok')) $('ba-ok').onclick = function () { var nm = $('ba-n').value.trim(), pr = parseFloat($('ba-p').value.replace(',', '.')); if (!nm || isNaN(pr) || pr < 0) return toast('Indique un nom et un prix'); q(sb.from('boutique_articles').insert({ nom: nm, prix: pr, ordre: ART.length + 1 })).then(function () { toast('Article ajouté'); charger(); }); };
+      all('[data-btall]').forEach(function (b) { b.onclick = function () { var l = du.filter(function (v) { return cleV(v) === b.dataset.btall; }); encaisser(l.map(function (v) { return v.id; }), nomV(l[0]) + ' règle ' + euros(somme(l)) + ' (' + l.length + ' achats)'); }; });
+      var artDe = function (id) { return ART.filter(function (x) { return x.id === id; })[0]; };
+      var champ = function (k, id) { return document.querySelector('[data-' + k + '="' + id + '"]'); };
+      all('[data-bas]').forEach(function (b) { b.onclick = function () {
+        var id = b.dataset.bas, pr = num(champ('bap', id).value), nm = champ('ban', id).value.trim(), al = champ('bal', id).value;
+        if (!nm || pr == null || pr < 0) return toast('Nom ou prix invalide');
+        q(sb.from('boutique_articles').update({ nom: nm, prix: pr, emplacement: champ('bae', id).value.trim() || null, alerte: al === '' ? null : parseInt(al, 10), suivi_stock: champ('bsu', id).checked, actif: champ('baa', id).checked }).eq('id', id)).then(function () { toast('Article enregistré'); charger(); });
+      }; });
+      all('[data-bplus]').forEach(function (b) { b.onclick = function () { formStock(artDe(b.dataset.bplus), 'entree'); }; });
+      all('[data-bcor]').forEach(function (b) { b.onclick = function () { formStock(artDe(b.dataset.bcor), 'corriger'); }; });
+      all('[data-bhis]').forEach(function (b) { b.onclick = function () { histoStock(artDe(b.dataset.bhis)); }; });
+      if ($('ba-ok')) $('ba-ok').onclick = function () {
+        var nm = $('ba-n').value.trim(), pr = num($('ba-p').value), st = parseInt($('ba-s').value, 10) || 0; if (!nm || pr == null || pr < 0) return toast('Indique un nom et un prix');
+        q(sb.from('boutique_articles').insert({ nom: nm, prix: pr, emplacement: $('ba-e').value.trim() || null, ordre: ART.length + 1 }).select('id').single()).then(function (x) {
+          return st > 0 ? q(sb.from('boutique_mouvements').insert({ article_id: x.id, quantite: st, motif: 'entree', note: 'Stock de départ' })) : null;
+        }).then(function () { toast('Article ajouté'); charger(); });
+      };
       if ($('bt-csv')) $('bt-csv').onclick = function () { csv('boutique-' + isoJour(new Date()) + '.csv', [['Date', 'Qui', 'Article', 'Quantité', 'Prix unitaire', 'Total', 'Payé', 'Mode', 'Note']].concat(V.map(function (v) { return [v.jour, nomV(v), v.libelle, v.quantite, v.prix_unitaire, v.total, v.paye ? 'oui' : 'non', v.mode ? MODES[v.mode] : '', v.note || '']; }))); };
     }).catch(function () { $('bt-l').innerHTML = '<div class="card empty">Impossible de charger la boutique.</div>'; });
   };
   all('[data-btv]').forEach(function (b) { b.onclick = function () { BTF.vue = b.dataset.btv; vueBoutique(m); }; });
-  $('bt-new').onclick = function () {
-    var qui = null;
-    panneau('Nouvelle vente', '<div class="stack"><div class="l">Pour qui ?<div id="bt-qui" class="small" style="margin:6px 0"><span class="mut">Cherche un adhérent, ou écris un nom ci-dessous</span></div>' + CHERCHEUR + '</div>' +
-      '<label class="l">… ou nom d\'une personne non adhérente<input class="f" id="bt-libre" placeholder="Ex. Kylian Janssen"></label>' +
-      '<label class="l">Article<select class="f" id="bt-a"><option value="">Autre (à écrire)</option>' + ART.filter(function (a) { return a.actif; }).map(function (a) { return '<option value="' + a.id + '">' + esc(a.nom) + ' · ' + euros(a.prix) + '</option>'; }).join('') + '</select></label>' +
-      '<label class="l" id="bt-libl">Description<input class="f" id="bt-lib" placeholder="Ex. 2 tubes de balles recyclées"></label>' +
-      '<div class="row2"><label class="l">Quantité<input class="f" type="number" min="1" id="bt-q" value="1"></label><label class="l">Prix unitaire (€)<input class="f" inputmode="decimal" id="bt-p"></label></div>' +
-      '<b id="bt-tot" class="small"></b>' +
-      '<label class="l">Date<input class="f" type="date" id="bt-j" value="' + isoJour(new Date()) + '"></label>' +
-      '<label class="l">Note (facultatif)<input class="f" id="bt-no" maxlength="200" placeholder="Ex. paiera samedi"></label>' +
-      '<label class="c"><input type="checkbox" id="bt-pp">Payé tout de suite</label><label class="l" id="bt-ml" hidden>Payé par<select class="f" id="bt-m"><option value="especes">Espèces</option><option value="cb">Carte</option><option value="cheque">Chèque</option><option value="virement">Virement</option><option value="autre">Autre</option></select></label>' +
-      '<button class="btn" id="bt-ok">Enregistrer la vente</button></div>', function (r) {
-      chercheurPers(r, function (p) { qui = p; $('bt-libre').value = ''; $('bt-qui').innerHTML = '<b>' + esc(p.prenom + ' ' + p.nom) + '</b>'; });
-      $('bt-libre').oninput = function () { if (this.value.trim()) { qui = null; $('bt-qui').innerHTML = '<b>' + esc(this.value.trim()) + '</b> <span class="badge">non adhérent</span>'; } };
-      var tot = function () { var qn = parseInt($('bt-q').value, 10) || 0, pr = parseFloat(($('bt-p').value || '').replace(',', '.')); $('bt-tot').textContent = !isNaN(pr) && qn ? 'Total : ' + euros(qn * pr) : ''; };
-      $('bt-a').onchange = function () { var a = ART.filter(function (x) { return x.id === $('bt-a').value; })[0]; $('bt-libl').hidden = !!a; if (a) $('bt-p').value = String(+a.prix).replace('.', ','); tot(); };
-      $('bt-q').oninput = $('bt-p').oninput = tot;
-      $('bt-pp').onchange = function () { $('bt-ml').hidden = !this.checked; };
-      $('bt-ok').onclick = function () {
-        var libre = $('bt-libre').value.trim(); if (!qui && !libre) return toast('Indique pour qui');
-        var a = ART.filter(function (x) { return x.id === $('bt-a').value; })[0], lib = a ? a.nom : $('bt-lib').value.trim(); if (!lib) return toast('Décris l\'article');
-        var qn = parseInt($('bt-q').value, 10), pr = parseFloat(($('bt-p').value || '').replace(',', '.'));
-        if (!(qn > 0) || isNaN(pr) || pr < 0) return toast('Quantité ou prix invalide');
-        var paye = $('bt-pp').checked;
-        q(sb.from('boutique_ventes').insert({ personne_id: qui ? qui.id : null, nom_libre: qui ? null : libre, article_id: a ? a.id : null, libelle: lib, quantite: qn, prix_unitaire: pr, jour: $('bt-j').value || isoJour(new Date()), note: $('bt-no').value.trim() || null, paye: paye, paye_le: paye ? new Date().toISOString() : null, mode: paye ? $('bt-m').value : null }))
-          .then(function () { toast(paye ? 'Vente enregistrée' : 'Ajouté à l\'ardoise'); fermer(); charger(); }).catch(function () { toast('Enregistrement impossible'); });
-      };
-    });
-  };
+  $('bt-new').onclick = function () { formVente(null); };
+  $('bt-ent').onclick = function () { formStock(null, 'entree'); };
   charger();
 }
 
