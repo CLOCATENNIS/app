@@ -30,6 +30,25 @@ var MODULES = [
   ['acces', 'Accès et rôles', ['direction']],
   ['historique', 'Historique', ['direction']]
 ];
+// Rubriques du menu (l'ordre des pages dans chaque rubrique)
+var RUBRIQUES = [
+  ['', ['accueil']],
+  ['Communication', ['messages', 'actus', 'reseaux', 'annonces']],
+  ['Agenda et activités', ['evenements', 'inscriptions', 'presence']],
+  ['Adhérents', ['adherents', 'groupes', 'adoc']],
+  ['Compétitions', ['arena', 'double']],
+  ['Équipe pédagogique', ['nextgen', 'missions']],
+  ['Services du club', ['cordage', 'boutique']],
+  ['Administration', ['acces', 'historique']]
+];
+function rubFermee(nom, val) {
+  try {
+    var o = JSON.parse(localStorage.getItem('gestion-rubriques') || '{}');
+    if (val === undefined) return !!o[nom];
+    if (val) o[nom] = 1; else delete o[nom];
+    localStorage.setItem('gestion-rubriques', JSON.stringify(o));
+  } catch (e) { return false; }
+}
 var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable d\'un groupe' };
 var TYPES_EVT = { seance: 'Séance', stage: 'Stage', tournoi: 'Tournoi', animation: 'Animation', reunion: 'Réunion', autre: 'Autre' };
 var TYPES_GRP = { niveau: 'Niveaux CLOC\'ARENA', creneau: 'Créneaux de cours', activite: 'Activités', cours: 'Formules ADOC', profil: 'Profils', evenement: 'Événements', autre: 'Autres' };
@@ -151,13 +170,23 @@ function compteurs() {
 function cadre(contenu) {
   var moi = A.user.email;
   $('root').innerHTML = '<div class="layout"><aside><div class="brand"><img src="../logo.png" alt=""><div><b>CLOCA Tennis</b><br><span>ESPACE GESTION</span></div></div>' +
-    '<nav class="nav" aria-label="Gestion">' + MODULES.filter(function (m) { return peut(m[0]); }).map(function (m) {
-      return '<a href="#/' + m[0] + '" class="' + (A.view === m[0] ? 'on' : '') + '">' + m[1] + '<span class="n" data-cpt="' + m[0] + '" hidden></span></a>';
+    '<nav class="nav" aria-label="Gestion">' + RUBRIQUES.map(function (r) {
+      var mods = r[1].filter(peut); if (!mods.length) return '';
+      var lien = function (id) { var m = MODULES.filter(function (x) { return x[0] === id; })[0]; return '<a href="#/' + id + '" class="' + (A.view === id ? 'on' : '') + '">' + m[1] + '<span class="n" data-cpt="' + id + '" hidden></span></a>'; };
+      if (!r[0]) return mods.map(lien).join('');
+      var ouvert = mods.indexOf(A.view) >= 0 || !rubFermee(r[0]);
+      return '<div class="rub' + (ouvert ? '' : ' ferme') + '" data-rub="' + esc(r[0]) + '"><button type="button" class="rub-t" aria-expanded="' + ouvert + '">' + esc(r[0]) + '<span class="n" data-rcpt="' + esc(r[0]) + '" hidden></span><span class="chev" aria-hidden="true">▾</span></button><div class="rub-l">' + mods.map(lien).join('') + '</div></div>';
     }).join('') + '</nav>' +
     '<div class="side-foot">' + esc(moi) + '<br>' + A.roles.filter(function (r) { return !r.groupe_id; }).map(function (r) { return NOM_ROLE[r.role]; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(', ') +
     '<br><br><a href="../">Ouvrir l\'appli</a> · <a href="#" id="logout">Se déconnecter</a></div></aside><main id="main">' + contenu + '</main></div>';
   $('logout').onclick = function (e) { e.preventDefault(); sb.auth.signOut().then(function () { location.reload(); }); };
-  compteurs().then(function (c) { Object.keys(c).forEach(function (k) { var e = document.querySelector('[data-cpt="' + k + '"]'); if (e && c[k]) { e.textContent = c[k]; e.hidden = false; } }); });
+  all('.rub-t').forEach(function (b) { b.onclick = function () {
+    var r = b.parentNode, f = !r.classList.contains('ferme'); r.classList.toggle('ferme', f); b.setAttribute('aria-expanded', !f); rubFermee(r.dataset.rub, f);
+  }; });
+  compteurs().then(function (c) {
+    Object.keys(c).forEach(function (k) { var e = document.querySelector('[data-cpt="' + k + '"]'); if (e && c[k]) { e.textContent = c[k]; e.hidden = false; } });
+    RUBRIQUES.forEach(function (r) { var t = r[1].reduce(function (s2, k) { return s2 + (peut(k) && c[k] ? c[k] : 0); }, 0), e = r[0] && document.querySelector('[data-rcpt="' + r[0] + '"]'); if (e && t) { e.textContent = t; e.hidden = false; } });
+  });
 }
 function entete(titre, sous, actions) {
   return '<div class="head"><div><h1>' + esc(titre) + '</h1>' + (sous ? '<p>' + sous + '</p>' : '') + '</div><div class="chips">' + (actions || '') + '</div></div>';
