@@ -22,6 +22,7 @@ var MODULES = [
   ['arena', 'CLOC\'ARENA', ['direction']],
   ['nextgen', 'Next Gen', ['direction']],
   ['missions', 'Missions coachs', ['direction']],
+  ['double', 'Double interne', ['direction']],
   ['reseaux', 'Réseaux sociaux', ['direction', 'bureau', 'accueil']],
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['acces', 'Accès et rôles', ['direction']]
@@ -904,6 +905,71 @@ function envoyerPhoto(fichier, dossier) {
   });
 }
 
+// ---------- Double interne : équipes, poules et reprise des données de l'appli Google ----------
+function vueDouble(m) {
+  m.innerHTML = entete('Double interne', 'Les équipes et les poules du tournoi interne. Les joueurs suivent le tournoi dans l\'appli (tuile Double interne de l\'accueil) ; tu valides les scores dans l\'onglet Organisateur de l\'appli.', '<button class="btn line" id="dbx-imp">Reprendre les données de l\'appli Google</button><button class="btn" id="dbx-new">Ajouter une équipe</button>') +
+    '<input type="file" id="dbx-f" accept=".xlsx,.xls" hidden><div id="dbx-l"><div class="skel"></div></div>';
+  var EQ = [], RES = [];
+  var charger = function () {
+    Promise.all([q(sb.from('double_equipes').select('*').order('categorie').order('poule').order('numero')), q(sb.from('double_resultats').select('gagnant, perdant, statut'))]).then(function (r) {
+      EQ = r[0] || []; RES = r[1] || [];
+      var groupes = {}; EQ.forEach(function (e) { var k = e.categorie + ' · Poule ' + e.poule; (groupes[k] = groupes[k] || []).push(e); });
+      $('dbx-l').innerHTML = EQ.length ? '<div class="kpis"><div class="kpi"><b>' + EQ.length + '</b><span>équipes</span></div><div class="kpi"><b>' + Object.keys(groupes).length + '</b><span>poules</span></div><div class="kpi"><b>' + RES.filter(function (x) { return x.statut === 'validé'; }).length + '</b><span>scores validés</span></div><div class="kpi"><b>' + RES.filter(function (x) { return x.statut === 'en attente'; }).length + '</b><span>en attente</span></div></div>' +
+        Object.keys(groupes).map(function (k) {
+          return '<div class="sect">' + esc(k) + '</div><div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur 1</th><th>Joueur 2</th><th>Poule</th><th></th></tr></thead><tbody>' + groupes[k].map(function (e) {
+            return '<tr><td class="small">' + e.numero + '</td><td><input class="f" data-dj1="' + esc(e.id) + '" value="' + esc(e.joueur1) + '"></td><td><input class="f" data-dj2="' + esc(e.id) + '" value="' + esc(e.joueur2) + '"></td><td><input class="f" type="number" min="1" max="20" data-dpo="' + esc(e.id) + '" value="' + e.poule + '" style="width:70px"></td>' +
+              '<td class="act"><button class="btn sm" data-dsave="' + esc(e.id) + '">Enregistrer</button> <button class="btn sm ko" data-ddel="' + esc(e.id) + '">Retirer</button></td></tr>';
+          }).join('') + '</tbody></table></div>';
+        }).join('') : '<div class="card stack"><b>Aucune équipe pour le moment</b><span class="small">Pour reprendre le tournoi en cours : ouvre le classeur Google « Double interne CLOCA Tennis 2026-2027 — données », Fichier → Télécharger → Microsoft Excel (.xlsx), puis clique sur « Reprendre les données de l\'appli Google » et choisis ce fichier. Équipes, dispos et scores sont repris tels quels.</span></div>';
+      var val = function (a, id) { return document.querySelector('[data-' + a + '="' + id + '"]').value.trim(); };
+      all('[data-dsave]').forEach(function (b) { b.onclick = function () {
+        var id = b.dataset.dsave, po = parseInt(val('dpo', id), 10); if (!val('dj1', id) || !(po >= 1 && po <= 20)) return toast('Nom ou poule invalide');
+        q(sb.from('double_equipes').update({ joueur1: val('dj1', id), joueur2: val('dj2', id) || null, poule: po }).eq('id', id)).then(function () { toast('Équipe enregistrée'); charger(); }).catch(function () { toast('Action impossible'); });
+      }; });
+      all('[data-ddel]').forEach(function (b) { b.onclick = function () {
+        var id = b.dataset.ddel; if (RES.some(function (x) { return x.statut !== 'refusé' && (x.gagnant === id || x.perdant === id); })) return toast('Cette équipe a déjà un score : impossible de la retirer');
+        if (confirm('Retirer cette équipe ?')) q(sb.from('double_equipes').delete().eq('id', id)).then(function () { toast('Équipe retirée'); charger(); });
+      }; });
+    }).catch(function () { $('dbx-l').innerHTML = '<div class="card empty">Impossible de charger le tournoi.</div>'; });
+  };
+  $('dbx-new').onclick = function () {
+    panneau('Nouvelle équipe', '<div class="stack"><label class="l">Catégorie<select class="f" id="dn-c"><option>Hommes</option><option>Dames</option><option>Mixte</option></select></label><label class="l">Poule<input class="f" type="number" min="1" max="20" id="dn-p" value="1"></label>' +
+      '<label class="l">Joueur 1<input class="f" id="dn-1" placeholder="Ex. G. Lucile"></label><label class="l">Joueur 2<input class="f" id="dn-2" placeholder="Ex. G. Maxence"></label><button class="btn" id="dn-ok">Ajouter</button></div>', function () {
+      $('dn-ok').onclick = function () {
+        var c = $('dn-c').value, po = parseInt($('dn-p').value, 10); if (!$('dn-1').value.trim() || !(po >= 1)) return toast('Indique au moins le joueur 1 et la poule');
+        var n = EQ.filter(function (e) { return e.categorie === c && e.poule === po; }).length + 1;
+        q(sb.from('double_equipes').insert({ id: 'T' + Date.now().toString(36), categorie: c, poule: po, numero: n, joueur1: $('dn-1').value.trim(), joueur2: $('dn-2').value.trim() || null })).then(function () { toast('Équipe ajoutée'); fermer(); charger(); }).catch(function () { toast('Ajout impossible'); });
+      };
+    });
+  };
+  $('dbx-imp').onclick = function () { $('dbx-f').click(); };
+  $('dbx-f').onchange = function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    Promise.all([chargerXlsx(), f.arrayBuffer()]).then(function (r) {
+      var X = r[0], wb = X.read(r[1], { type: 'array', cellDates: true });
+      var feuille = function (nom) { var ws = wb.Sheets[nom] || wb.Sheets[Object.keys(wb.Sheets).filter(function (k) { return norm(k) === norm(nom); })[0]]; return ws ? X.utils.sheet_to_json(ws, { raw: false, defval: '' }) : null; };
+      var eqs = feuille('Equipes'), dis = feuille('Dispos') || [], res = feuille('Resultats') || [];
+      if (!eqs || !eqs.length) throw new Error('Onglet « Equipes » introuvable dans ce fichier');
+      var E = eqs.filter(function (e) { return e.id && e.joueur1; }).map(function (e) { return { id: String(e.id).trim(), categorie: String(e.categorie).trim(), poule: parseInt(e.poule, 10), numero: parseInt(e.numero, 10) || 0, joueur1: String(e.joueur1).trim(), joueur2: String(e.joueur2 || '').trim() || null }; });
+      var ids = E.map(function (e) { return e.id; });
+      var Dd = dis.filter(function (d) { return ids.indexOf(String(d.equipe).trim()) >= 0 && /^[01]{21}$/.test(String(d.creneaux).trim()); }).map(function (d) { return { equipe_id: String(d.equipe).trim(), joueur: parseInt(d.joueur, 10) === 2 ? 2 : 1, creneaux: String(d.creneaux).trim(), maj: d.maj ? new Date(d.maj).toISOString() : new Date().toISOString() }; });
+      var date = function (v) { var t = new Date(v); if (isNaN(t)) { var m = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); t = m ? new Date(+m[3], +m[2] - 1, +m[1], 12) : new Date(); } return t.toISOString(); };
+      var st = function (v) { var n = norm(v); return n.indexOf('valid') === 0 ? 'validé' : n.indexOf('refus') === 0 ? 'refusé' : 'en attente'; };
+      var R = res.filter(function (x) { return ids.indexOf(String(x.gagnant).trim()) >= 0 && ids.indexOf(String(x.perdant).trim()) >= 0 && String(x.gagnant).trim() !== String(x.perdant).trim(); }).map(function (x) {
+        return { date: date(x.date), categorie: String(x.categorie).trim(), poule: parseInt(x.poule, 10), gagnant: String(x.gagnant).trim(), perdant: String(x.perdant).trim(), score: String(x.score || '').trim() || null, forfait: norm(x.forfait) === 'oui', saisi_nom: String(x.saisiPar || '').trim() || null, statut: st(x.statut), traite_le: x.traiteLe ? date(x.traiteLe) : null };
+      });
+      if (!confirm('Reprendre ' + E.length + ' équipes, ' + Dd.length + ' dispos et ' + R.length + ' scores ? Les données du double déjà dans l\'appli du club seront remplacées.')) return;
+      return q(sb.from('double_resultats').delete().not('id', 'is', null)).then(function () { return q(sb.from('double_dispos').delete().not('equipe_id', 'is', null)); })
+        .then(function () { return q(sb.from('double_equipes').delete().not('id', 'is', null)); })
+        .then(function () { return q(sb.from('double_equipes').insert(E)); })
+        .then(function () { return Dd.length ? q(sb.from('double_dispos').insert(Dd)) : null; })
+        .then(function () { return R.length ? q(sb.from('double_resultats').insert(R)) : null; })
+        .then(function () { toast('Tournoi repris : ' + E.length + ' équipes, ' + R.length + ' scores'); charger(); });
+    }).catch(function (e) { toast(e && e.message && e.message.indexOf('Onglet') === 0 ? e.message : 'Reprise impossible : vérifie le fichier'); }).then(function () { $('dbx-f').value = ''; });
+  };
+  charger();
+}
+
 // ---------- Missions des coachs ----------
 function vueMissions(m) {
   m.innerHTML = entete('Missions coachs', 'Ce que les coachs doivent faire passer pendant leurs séances (communication d\'un stage, rappel, consigne…). Ils les voient dans leur espace coach de l\'appli et les cochent une fois faites.', '<button class="btn" id="mi-new">Nouvelle mission</button>') + '<div id="mi-l"><div class="skel"></div></div>';
@@ -1134,7 +1200,7 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
-var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces };
+var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces };
 function router() {
   if (!A.user) return;
   fermer();
