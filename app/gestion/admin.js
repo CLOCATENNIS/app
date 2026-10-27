@@ -847,11 +847,11 @@ function vueGroupes(m) {
 function vueAnnonces(m) {
   m.innerHTML = entete('Petites annonces', 'Rien n\'est publié sans validation. Les numéros ne sont jamais affichés aux adhérents.') + '<div id="an-l"><div class="skel"></div></div>';
   var charger = function () {
-    q(sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })).then(function (l) {
+    q(sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })).then(function (l) {
       var bloc = function (titre, liste, attente) {
         return '<div class="sect">' + titre + ' (' + liste.length + ')</div>' + (liste.length ? '<div class="tw"><table class="t"><tbody>' + liste.map(function (a) {
           return '<tr><td style="width:46%"><b>' + esc(a.type === 'vente' ? a.titre : a.prenom + ' · ' + a.niveau) + '</b> ' + (a.prix ? '<span class="badge b-ac">' + esc(a.prix) + '</span>' : '') + '<div class="mut xs">' + esc(a.type === 'vente' ? 'Vente' : 'Partenaire : ' + a.dispo) + ' · n°' + a.num + ' · ' + esc(fmtJour(new Date(a.created_at))) + '</div>' + (a.description ? '<div class="small">' + esc(a.description) + '</div>' : '') +
-            (a.image_path ? '<a class="xs" target="_blank" rel="noopener" href="' + SUPA_URL + '/storage/v1/object/public/annonces/' + esc(a.image_path) + '">Voir la photo</a>' : '') + '</td>' +
+            ((a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []).map(function (ph, i, l) { return '<a class="xs" target="_blank" rel="noopener" href="' + SUPA_URL + '/storage/v1/object/public/annonces/' + esc(ph) + '" style="margin-right:8px">' + (l.length > 1 ? 'Photo ' + (i + 1) : 'Voir la photo') + '</a>'; }).join('')) + '</td>' +
             '<td class="small" data-anc="' + a.id + '"><button class="btn sm ghost" data-anv="' + a.id + '">Voir le contact</button></td><td class="act">' +
             (attente ? '<button class="btn sm ko" data-ans="' + a.id + '|refusee">Refuser</button> <button class="btn sm ok" data-ans="' + a.id + '|publiee">Publier</button>' : '<span class="mut xs">jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) + '</span> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>') + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="card empty">' + (attente ? 'Rien à valider.' : 'Aucune annonce en ligne.') + '</div>');

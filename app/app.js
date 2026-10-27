@@ -742,14 +742,15 @@ function clubInfos() {
 var AN = { liste: null, type: 'partenaire', form: null, f: {} };
 function photoUrl(p) { return p ? SUPA_URL + '/storage/v1/object/public/annonces/' + p.split('/').map(encodeURIComponent).join('/') : ''; }
 function chargerAnnonces() {
-  return q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false }))
+  return q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false }))
     .then(function (l) { AN.liste = l || []; return AN.liste; });
 }
 function carteAnnonce(a, opts) {
   var wa = function (t) { return 'https://wa.me/' + WA_CLUB + '?text=' + encodeURIComponent(t); };
   var h = '<section class="card stack" style="gap:6px">';
   if (a.type === 'vente') {
-    if (a.image_path) h += '<img src="' + esc(photoUrl(a.image_path)) + '" alt="" loading="lazy" style="width:100%;max-height:260px;object-fit:cover;border-radius:12px" onerror="this.remove()">';
+    var imgs = (a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []);
+    if (imgs.length) h += carrousel(imgs);
     h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b>' + esc(a.titre) + '</b>' + (a.prix ? '<span class="badge" style="background:var(--ac);color:#fff">' + esc(a.prix) + '</span>' : '') + '</div>' +
       (a.description ? '<span class="mut small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
   } else {
@@ -801,6 +802,22 @@ function clubAnnonces(box) {
     });
   }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les annonces pour le moment.</section>'; });
 }
+// Photos d'une annonce : on fait défiler du doigt (ou avec les flèches sur ordinateur)
+function carrousel(imgs) {
+  return '<div class="carou"><div class="car-l">' + imgs.map(function (p, i) { return '<img src="' + esc(photoUrl(p)) + '" alt="Photo ' + (i + 1) + '" loading="lazy">'; }).join('') + '</div>' +
+    (imgs.length > 1 ? '<button class="car-b g" data-car="-1" aria-label="Photo précédente">‹</button><button class="car-b d" data-car="1" aria-label="Photo suivante">›</button>' +
+      '<span class="car-n">1 / ' + imgs.length + '</span><div class="car-dots">' + imgs.map(function (p, i) { return '<span class="' + (i ? '' : 'on') + '"></span>'; }).join('') + '</div>' : '') + '</div>';
+}
+document.addEventListener('scroll', function (e) {
+  var l = e.target; if (!l.classList || !l.classList.contains('car-l')) return;
+  var c = l.parentNode, i = Math.round(l.scrollLeft / l.clientWidth), n = l.children.length;
+  var t = c.querySelector('.car-n'); if (t) t.textContent = (i + 1) + ' / ' + n;
+  Array.prototype.forEach.call(c.querySelectorAll('.car-dots span'), function (d, k) { d.className = k === i ? 'on' : ''; });
+}, true);
+document.addEventListener('click', function (e) {
+  var b = e.target.closest && e.target.closest('[data-car]'); if (!b) return;
+  var l = b.parentNode.querySelector('.car-l'); l.scrollBy({ left: +b.dataset.car * l.clientWidth, behavior: 'smooth' });
+});
 function reduirePhoto(fichier) {
   return new Promise(function (ok, ko) {
     var img = new Image(), url = URL.createObjectURL(fichier);
@@ -820,7 +837,7 @@ function formAnnonce(box) {
   box.innerHTML = '<section class="card stack" style="gap:12px"><b style="font-size:17px">' + (v ? 'Vendre du matériel' : 'Chercher un partenaire') + '</b>' +
     (v ? champ('titre', 'Quoi ?', 'maxlength="80" placeholder="Ex. Raquette Babolat Pure Drive 26"') + champ('prix', 'Prix', 'maxlength="30" placeholder="Ex. 40 €"') +
       champ('description', 'Description (facultatif)', 'maxlength="600" placeholder="État, taille, tension…"', true) +
-      '<label class="f">Photo (facultatif)<input class="f" type="file" accept="image/*" id="an-photo"></label>'
+      '<div class="f">Photos (facultatif, jusqu\'à 6)<div id="an-ph" class="an-ph"></div><label class="btn line" style="margin-top:6px">+ Ajouter des photos<input type="file" accept="image/*" multiple id="an-photo" hidden></label></div>'
       : champ('prenom', 'Prénom', 'maxlength="40" autocomplete="given-name"') +
       '<label class="f">Niveau<select class="f" data-anf="niveau"><option value="">Choisir…</option>' + NIVEAUX.concat(['Adulte / autre']).map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
       champ('dispo', 'Mes disponibilités', 'maxlength="140" placeholder="Ex. mercredi après-midi, samedi matin"') +
@@ -829,7 +846,19 @@ function formAnnonce(box) {
     '<label class="check"><input type="checkbox" id="an-ok"><span>J\'accepte que mon annonce soit publiée dans l\'appli après validation par le club. Mon numéro n\'est jamais publié : le club fait la mise en relation. Pour un mineur, le numéro est celui d\'un parent.</span></label>' +
     '<button class="btn" id="an-go">Envoyer</button><button class="btn line" id="an-back">Annuler</button></section>';
   Array.prototype.forEach.call(box.querySelectorAll('[data-anf]'), function (i) { i.oninput = i.onchange = function () { F[i.dataset.anf] = i.value; }; });
-  $('an-back').onclick = function () { AN.form = null; clubAnnonces(box); };
+  AN.photos = AN.photos || [];
+  var majPhotos = function () {
+    if (!$('an-ph')) return;
+    $('an-ph').innerHTML = AN.photos.map(function (f, i) { return '<span class="th"><img src="' + URL.createObjectURL(f) + '" alt=""><button type="button" data-phx="' + i + '" aria-label="Retirer la photo">×</button></span>'; }).join('');
+    Array.prototype.forEach.call($('an-ph').querySelectorAll('[data-phx]'), function (b) { b.onclick = function () { AN.photos.splice(+b.dataset.phx, 1); majPhotos(); }; });
+  };
+  if ($('an-photo')) $('an-photo').onchange = function () {
+    var l = Array.prototype.slice.call(this.files || []);
+    if (AN.photos.length + l.length > 6) toast('6 photos maximum');
+    AN.photos = AN.photos.concat(l).slice(0, 6); this.value = ''; majPhotos();
+  };
+  majPhotos();
+  $('an-back').onclick = function () { AN.form = null; AN.photos = []; clubAnnonces(box); };
   $('an-go').onclick = function () {
     var t = function (k) { return String(F[k] || '').trim(); };
     if (v && !t('titre')) return toast('Indique ce que tu vends');
@@ -839,13 +868,15 @@ function formAnnonce(box) {
     var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
       : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
     $('an-go').disabled = true;
-    var fichier = v && $('an-photo').files && $('an-photo').files[0];
-    var photo = fichier ? reduirePhoto(fichier).then(function (blob) {
-      var chemin = S.user.id + '/' + Date.now() + '.jpg';
-      return sb.storage.from('annonces').upload(chemin, blob, { contentType: 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; row.image_path = chemin; });
-    }) : Promise.resolve();
+    var chemins = [], base = Date.now();
+    var photo = (v ? AN.photos : []).reduce(function (pr, f, i) {
+      return pr.then(function () { return reduirePhoto(f); }).then(function (blob) {
+        var chemin = S.user.id + '/' + base + '-' + i + '.jpg';
+        return sb.storage.from('annonces').upload(chemin, blob, { contentType: 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; chemins.push(chemin); });
+      });
+    }, Promise.resolve()).then(function () { if (chemins.length) { row.images = chemins; row.image_path = chemins[0]; } });
     photo.then(function () { return q(sb.from('annonces').insert(row)); }).then(function () {
-      AN.form = null; AN.type = row.type;
+      AN.form = null; AN.photos = []; AN.type = row.type;
       toast(S.isStaff ? 'Annonce enregistrée' : 'Merci ! Ton annonce sera visible après validation par le club.');
       clubAnnonces(box);
     }).catch(function () { toast('Envoi impossible, réessaie'); $('an-go').disabled = false; });
