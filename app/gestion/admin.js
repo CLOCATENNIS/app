@@ -19,6 +19,7 @@ var MODULES = [
   ['groupes', 'Groupes', ['direction', 'bureau']],
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
+  ['boutique', 'Boutique et ardoise', ['direction', 'bureau', 'accueil']],
   ['arena', 'CLOC\'ARENA', ['direction']],
   ['nextgen', 'Next Gen', ['direction']],
   ['missions', 'Missions coachs', ['direction']],
@@ -905,6 +906,88 @@ function envoyerPhoto(fichier, dossier) {
   });
 }
 
+// ---------- Boutique : ce qu'on vend au club et ce qui reste à payer ----------
+var BTF = { vue: 'ardoise' };
+function vueBoutique(m) {
+  m.innerHTML = entete('Boutique et ardoise', 'Grips, surgrips, balles, poses… Note chaque vente : payée tout de suite ou à payer plus tard. L\'ardoise montre qui doit combien.', '<button class="btn" id="bt-new">Nouvelle vente</button>') +
+    '<div class="toolbar"><div class="chips">' + [['ardoise', 'À payer'], ['historique', 'Historique'], ['articles', 'Articles et prix']].map(function (x) { return '<button class="chip' + (BTF.vue === x[0] ? ' on' : '') + '" data-btv="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div><div id="bt-l"><div class="skel"></div></div>';
+  var ART = [], V = [];
+  var nomV = function (v) { if (v.personne_id) { var p = A.pers.filter(function (x) { return x.id === v.personne_id; })[0]; return p ? p.prenom + ' ' + p.nom : 'Adhérent'; } return v.nom_libre; };
+  var cleV = function (v) { return v.personne_id || ('libre:' + norm(v.nom_libre).trim()); };
+  var MODES = { especes: 'Espèces', cb: 'Carte', cheque: 'Chèque', virement: 'Virement', autre: 'Autre' };
+  var encaisser = function (ids, msg) {
+    panneau('Encaisser', '<div class="stack"><span class="small">' + esc(msg) + '</span><label class="l">Payé par<select class="f" id="bt-mode">' + Object.keys(MODES).map(function (k) { return '<option value="' + k + '">' + MODES[k] + '</option>'; }).join('') + '</select></label><button class="btn ok" id="bt-enc">Confirmer le paiement</button></div>', function () {
+      $('bt-enc').onclick = function () { q(sb.from('boutique_ventes').update({ paye: true, paye_le: new Date().toISOString(), mode: $('bt-mode').value }).in('id', ids)).then(function () { toast('Paiement enregistré'); fermer(); charger(); }).catch(function () { toast('Action impossible'); }); };
+    });
+  };
+  var charger = function () {
+    Promise.all([q(sb.from('boutique_articles').select('*').order('ordre').order('nom')), q(sb.from('boutique_ventes').select('*').order('jour', { ascending: false }).order('created_at', { ascending: false }).limit(1000)), chargerPers()]).then(function (r) {
+      ART = r[0] || []; V = r[1] || [];
+      var du = V.filter(function (v) { return !v.paye; }), totalDu = du.reduce(function (s2, v) { return s2 + (+v.total); }, 0);
+      var h = '<div class="kpis"><div class="kpi"><b>' + euros(totalDu) + '</b><span>à encaisser</span></div><div class="kpi"><b>' + Object.keys(du.reduce(function (o, v) { o[cleV(v)] = 1; return o; }, {})).length + '</b><span>personnes concernées</span></div><div class="kpi"><b>' + euros(V.filter(function (v) { return v.paye && v.paye_le && new Date(v.paye_le).getMonth() === new Date().getMonth() && new Date(v.paye_le).getFullYear() === new Date().getFullYear(); }).reduce(function (s2, v) { return s2 + (+v.total); }, 0)) + '</b><span>encaissé ce mois-ci</span></div></div>';
+      if (BTF.vue === 'ardoise') {
+        var par = {}, ordre = [];
+        du.forEach(function (v) { var k = cleV(v); if (!par[k]) { par[k] = []; ordre.push(k); } par[k].push(v); });
+        ordre.sort(function (a, b) { return par[b].reduce(function (s2, v) { return s2 + (+v.total); }, 0) - par[a].reduce(function (s2, v) { return s2 + (+v.total); }, 0); });
+        h += ordre.length ? '<div class="stack">' + ordre.map(function (k) {
+          var l = par[k], tot = l.reduce(function (s2, v) { return s2 + (+v.total); }, 0);
+          return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>' + esc(nomV(l[0])) + (l[0].personne_id ? '' : ' <span class="badge">non adhérent</span>') + '</b><b style="font-size:20px;color:var(--ko)">' + euros(tot) + '</b></div>' +
+            l.map(function (v) { return '<div class="it" style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small">' + esc(fmtJ(new Date(v.jour + 'T12:00:00'))) + ' · ' + (v.quantite > 1 ? v.quantite + ' × ' : '') + esc(v.libelle) + (v.note ? ' <span class="mut xs">(' + esc(v.note) + ')</span>' : '') + '</span><span style="display:flex;gap:6px;align-items:center"><b class="small">' + euros(v.total) + '</b><button class="btn sm line" data-btpay="' + v.id + '">Payé</button><button class="btn sm ghost" data-btdel="' + v.id + '" title="Supprimer">×</button></span></div>'; }).join('') +
+            (l.length > 1 ? '<button class="btn ok sm" data-btall="' + esc(k) + '">Tout est payé (' + euros(tot) + ')</button>' : '') + '</div>';
+        }).join('') + '</div>' : '<div class="card empty">Personne ne doit rien. 🎾</div>';
+      } else if (BTF.vue === 'historique') {
+        h += V.length ? '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Qui</th><th>Article</th><th>Montant</th><th>État</th><th></th></tr></thead><tbody>' + V.map(function (v) {
+          return '<tr><td class="small">' + esc(fmtJ(new Date(v.jour + 'T12:00:00'))) + '</td><td>' + esc(nomV(v)) + '</td><td class="small">' + (v.quantite > 1 ? v.quantite + ' × ' : '') + esc(v.libelle) + (v.note ? '<div class="mut xs">' + esc(v.note) + '</div>' : '') + '</td><td><b>' + euros(v.total) + '</b></td><td>' + (v.paye ? '<span class="badge b-ok">Payé' + (v.mode ? ' · ' + MODES[v.mode] : '') + '</span>' : '<span class="badge b-warn">À payer</span>') + '</td>' +
+            '<td class="act">' + (v.paye ? '<button class="btn sm line" data-btunpay="' + v.id + '">Annuler le paiement</button>' : '<button class="btn sm line" data-btpay="' + v.id + '">Payé</button>') + ' <button class="btn sm ghost" data-btdel="' + v.id + '">×</button></td></tr>';
+        }).join('') + '</tbody></table></div><button class="btn line" id="bt-csv" style="margin-top:12px">Exporter (Excel)</button>' : '<div class="card empty">Aucune vente enregistrée.</div>';
+      } else {
+        h += '<div class="card stack"><b>Articles vendus au club</b><span class="mut xs">Le prix se remplit tout seul dans « Nouvelle vente » (modifiable à chaque vente).</span>' + ART.map(function (a) {
+          return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input class="f" data-ban="' + a.id + '" value="' + esc(a.nom) + '" style="flex:1;min-width:180px"><input class="f" data-bap="' + a.id + '" inputmode="decimal" value="' + esc(String(+a.prix).replace('.', ',')) + '" style="width:90px"><span>€</span><label class="c"><input type="checkbox" data-baa="' + a.id + '"' + (a.actif ? ' checked' : '') + '>En vente</label><button class="btn sm" data-bas="' + a.id + '">Enregistrer</button></div>';
+        }).join('') + '<div class="sect">Ajouter un article</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f" id="ba-n" placeholder="Ex. Surgrip Tecnifibre (à l\'unité)" style="flex:1;min-width:180px"><input class="f" id="ba-p" inputmode="decimal" placeholder="Prix €" style="width:90px"><button class="btn" id="ba-ok">Ajouter</button></div></div>';
+      }
+      $('bt-l').innerHTML = h;
+      all('[data-btpay]').forEach(function (b) { b.onclick = function () { var v = V.filter(function (x) { return x.id === b.dataset.btpay; })[0]; encaisser([v.id], nomV(v) + ' · ' + v.libelle + ' · ' + euros(v.total)); }; });
+      all('[data-btall]').forEach(function (b) { b.onclick = function () { var l = du.filter(function (v) { return cleV(v) === b.dataset.btall; }); encaisser(l.map(function (v) { return v.id; }), nomV(l[0]) + ' règle ' + euros(l.reduce(function (s2, v) { return s2 + (+v.total); }, 0)) + ' (' + l.length + ' achats)'); }; });
+      all('[data-btunpay]').forEach(function (b) { b.onclick = function () { q(sb.from('boutique_ventes').update({ paye: false, paye_le: null, mode: null }).eq('id', b.dataset.btunpay)).then(function () { toast('Remis à payer'); charger(); }); }; });
+      all('[data-btdel]').forEach(function (b) { b.onclick = function () { if (confirm('Supprimer cette vente ?')) q(sb.from('boutique_ventes').delete().eq('id', b.dataset.btdel)).then(function () { toast('Vente supprimée'); charger(); }); }; });
+      all('[data-bas]').forEach(function (b) { b.onclick = function () { var id = b.dataset.bas, pr = parseFloat(document.querySelector('[data-bap="' + id + '"]').value.replace(',', '.')), nm = document.querySelector('[data-ban="' + id + '"]').value.trim(); if (!nm || isNaN(pr) || pr < 0) return toast('Nom ou prix invalide'); q(sb.from('boutique_articles').update({ nom: nm, prix: pr, actif: document.querySelector('[data-baa="' + id + '"]').checked }).eq('id', id)).then(function () { toast('Article enregistré'); charger(); }); }; });
+      if ($('ba-ok')) $('ba-ok').onclick = function () { var nm = $('ba-n').value.trim(), pr = parseFloat($('ba-p').value.replace(',', '.')); if (!nm || isNaN(pr) || pr < 0) return toast('Indique un nom et un prix'); q(sb.from('boutique_articles').insert({ nom: nm, prix: pr, ordre: ART.length + 1 })).then(function () { toast('Article ajouté'); charger(); }); };
+      if ($('bt-csv')) $('bt-csv').onclick = function () { csv('boutique-' + isoJour(new Date()) + '.csv', [['Date', 'Qui', 'Article', 'Quantité', 'Prix unitaire', 'Total', 'Payé', 'Mode', 'Note']].concat(V.map(function (v) { return [v.jour, nomV(v), v.libelle, v.quantite, v.prix_unitaire, v.total, v.paye ? 'oui' : 'non', v.mode ? MODES[v.mode] : '', v.note || '']; }))); };
+    }).catch(function () { $('bt-l').innerHTML = '<div class="card empty">Impossible de charger la boutique.</div>'; });
+  };
+  all('[data-btv]').forEach(function (b) { b.onclick = function () { BTF.vue = b.dataset.btv; vueBoutique(m); }; });
+  $('bt-new').onclick = function () {
+    var qui = null;
+    panneau('Nouvelle vente', '<div class="stack"><div class="l">Pour qui ?<div id="bt-qui" class="small" style="margin:6px 0"><span class="mut">Cherche un adhérent, ou écris un nom ci-dessous</span></div>' + CHERCHEUR + '</div>' +
+      '<label class="l">… ou nom d\'une personne non adhérente<input class="f" id="bt-libre" placeholder="Ex. Kylian Janssen"></label>' +
+      '<label class="l">Article<select class="f" id="bt-a"><option value="">Autre (à écrire)</option>' + ART.filter(function (a) { return a.actif; }).map(function (a) { return '<option value="' + a.id + '">' + esc(a.nom) + ' · ' + euros(a.prix) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l" id="bt-libl">Description<input class="f" id="bt-lib" placeholder="Ex. 2 tubes de balles recyclées"></label>' +
+      '<div class="row2"><label class="l">Quantité<input class="f" type="number" min="1" id="bt-q" value="1"></label><label class="l">Prix unitaire (€)<input class="f" inputmode="decimal" id="bt-p"></label></div>' +
+      '<b id="bt-tot" class="small"></b>' +
+      '<label class="l">Date<input class="f" type="date" id="bt-j" value="' + isoJour(new Date()) + '"></label>' +
+      '<label class="l">Note (facultatif)<input class="f" id="bt-no" maxlength="200" placeholder="Ex. paiera samedi"></label>' +
+      '<label class="c"><input type="checkbox" id="bt-pp">Payé tout de suite</label><label class="l" id="bt-ml" hidden>Payé par<select class="f" id="bt-m"><option value="especes">Espèces</option><option value="cb">Carte</option><option value="cheque">Chèque</option><option value="virement">Virement</option><option value="autre">Autre</option></select></label>' +
+      '<button class="btn" id="bt-ok">Enregistrer la vente</button></div>', function (r) {
+      chercheurPers(r, function (p) { qui = p; $('bt-libre').value = ''; $('bt-qui').innerHTML = '<b>' + esc(p.prenom + ' ' + p.nom) + '</b>'; });
+      $('bt-libre').oninput = function () { if (this.value.trim()) { qui = null; $('bt-qui').innerHTML = '<b>' + esc(this.value.trim()) + '</b> <span class="badge">non adhérent</span>'; } };
+      var tot = function () { var qn = parseInt($('bt-q').value, 10) || 0, pr = parseFloat(($('bt-p').value || '').replace(',', '.')); $('bt-tot').textContent = !isNaN(pr) && qn ? 'Total : ' + euros(qn * pr) : ''; };
+      $('bt-a').onchange = function () { var a = ART.filter(function (x) { return x.id === $('bt-a').value; })[0]; $('bt-libl').hidden = !!a; if (a) $('bt-p').value = String(+a.prix).replace('.', ','); tot(); };
+      $('bt-q').oninput = $('bt-p').oninput = tot;
+      $('bt-pp').onchange = function () { $('bt-ml').hidden = !this.checked; };
+      $('bt-ok').onclick = function () {
+        var libre = $('bt-libre').value.trim(); if (!qui && !libre) return toast('Indique pour qui');
+        var a = ART.filter(function (x) { return x.id === $('bt-a').value; })[0], lib = a ? a.nom : $('bt-lib').value.trim(); if (!lib) return toast('Décris l\'article');
+        var qn = parseInt($('bt-q').value, 10), pr = parseFloat(($('bt-p').value || '').replace(',', '.'));
+        if (!(qn > 0) || isNaN(pr) || pr < 0) return toast('Quantité ou prix invalide');
+        var paye = $('bt-pp').checked;
+        q(sb.from('boutique_ventes').insert({ personne_id: qui ? qui.id : null, nom_libre: qui ? null : libre, article_id: a ? a.id : null, libelle: lib, quantite: qn, prix_unitaire: pr, jour: $('bt-j').value || isoJour(new Date()), note: $('bt-no').value.trim() || null, paye: paye, paye_le: paye ? new Date().toISOString() : null, mode: paye ? $('bt-m').value : null }))
+          .then(function () { toast(paye ? 'Vente enregistrée' : 'Ajouté à l\'ardoise'); fermer(); charger(); }).catch(function () { toast('Enregistrement impossible'); });
+      };
+    });
+  };
+  charger();
+}
+
 // ---------- Double interne : équipes, poules et reprise des données de l'appli Google ----------
 function vueDouble(m) {
   m.innerHTML = entete('Double interne', 'Les équipes et les poules du tournoi interne. Les joueurs suivent le tournoi dans l\'appli (tuile Double interne de l\'accueil) ; tu valides les scores dans l\'onglet Organisateur de l\'appli.', '<button class="btn line" id="dbx-imp">Reprendre les données de l\'appli Google</button><button class="btn" id="dbx-new">Ajouter une équipe</button>') +
@@ -1200,7 +1283,7 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
-var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces };
+var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces };
 function router() {
   if (!A.user) return;
   fermer();
