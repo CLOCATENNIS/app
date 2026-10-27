@@ -21,10 +21,12 @@ var MODULES = [
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['arena', 'CLOC\'ARENA', ['direction']],
   ['nextgen', 'Next Gen', ['direction']],
+  ['missions', 'Missions coachs', ['direction']],
+  ['reseaux', 'Réseaux sociaux', ['direction', 'bureau', 'accueil']],
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['acces', 'Accès et rôles', ['direction']]
 ];
-var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', coach: 'Coach', responsable: 'Responsable' };
+var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable d\'un groupe' };
 var TYPES_EVT = { seance: 'Séance', stage: 'Stage', tournoi: 'Tournoi', animation: 'Animation', reunion: 'Réunion', autre: 'Autre' };
 var TYPES_GRP = { niveau: 'Niveaux CLOC\'ARENA', creneau: 'Créneaux de cours', activite: 'Activités', cours: 'Formules ADOC', profil: 'Profils', evenement: 'Événements', autre: 'Autres' };
 var A = { user: null, roles: [], mods: [], groupes: [], pers: null, view: 'accueil' };
@@ -66,7 +68,9 @@ function panneau(titre, html, monter) {
   fermer();
   var ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov';
   ov.innerHTML = '<div class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(titre) + '"><div class="dh"><h2>' + esc(titre) + '</h2><button class="x" id="ov-x" aria-label="Fermer">×</button></div><div id="ov-c">' + html + '</div></div>';
-  ov.onclick = function (e) { if (e.target === ov) fermer(); };
+  var depart = null;
+  ov.onpointerdown = function (e) { depart = e.target; };
+  ov.onclick = function (e) { if (e.target === ov && depart === ov) fermer(); depart = null; };
   document.body.appendChild(ov);
   $('ov-x').onclick = fermer;
   if (monter) monter($('ov-c'));
@@ -369,7 +373,7 @@ function vueEvenements(m, arg) {
 // ---------- Inscriptions ----------
 function vueInscriptions(m, arg) {
   m.innerHTML = entete('Inscriptions', 'Qui est inscrit, qui a payé.') + '<div class="toolbar"><select class="f grow" id="i-ev"><option value="">Chargement…</option></select></div><div id="i-l"></div>';
-  Promise.all([q(sb.from('evenements').select('id, titre, debut, places_max, prix_euros, inscription_ouverte, inscriptions(count)').gte('debut', new Date(Date.now() - 60 * 864e5).toISOString()).order('debut')), chargerPers()]).then(function (r) {
+  Promise.all([q(sb.from('evenements').select('id, titre, debut, places_max, prix_euros, inscription_ouverte, groupe_id, evenement_groupes(groupe_id), evenement_quotas(groupe_id, places), inscriptions(count)').gte('debut', new Date(Date.now() - 60 * 864e5).toISOString()).order('debut')), chargerPers()]).then(function (r) {
     var l = r[0].filter(function (e) { return e.inscription_ouverte || (e.inscriptions[0] && e.inscriptions[0].count); });
     var sel = arg || (l.filter(function (e) { return new Date(e.debut) > new Date(); })[0] || l[l.length - 1] || {}).id;
     $('i-ev').innerHTML = l.length ? l.map(function (e) { var n = e.inscriptions[0] ? e.inscriptions[0].count : 0; return '<option value="' + e.id + '"' + (e.id === sel ? ' selected' : '') + '>' + esc(fmtJ(new Date(e.debut)) + ' · ' + e.titre + ' (' + n + (e.places_max ? '/' + e.places_max : '') + ')') + '</option>'; }).join('') : '<option value="">Aucun événement avec inscriptions</option>';
@@ -378,14 +382,19 @@ function vueInscriptions(m, arg) {
   }).catch(function () { $('i-l').innerHTML = '<div class="card empty">Impossible de charger les inscriptions.</div>'; });
   var liste = function (ev) {
     if (!ev) return;
-    q(sb.from('inscriptions').select('personne_id, statut, paye, created_at').eq('evenement_id', ev.id).order('created_at')).then(function (ins) {
+    Promise.all([q(sb.from('inscriptions').select('personne_id, statut, paye, created_at').eq('evenement_id', ev.id).order('created_at')), chargerGroupes()]).then(function (rr) {
+      var ins = rr[0];
+      var gids = [], qt = {}; if (ev.groupe_id) gids.push(ev.groupe_id); (ev.evenement_groupes || []).forEach(function (g) { if (gids.indexOf(g.groupe_id) < 0) gids.push(g.groupe_id); });
+      (ev.evenement_quotas || []).forEach(function (x) { qt[x.groupe_id] = x.places; });
+      var niveauDe = function (pid) { return gids.filter(function (g) { return A.pers.some(function (p) { return p.id === pid && (p.groupe_membres || []).some(function (m) { return m.groupe_id === g; }); }); })[0]; };
+      var parNiv = gids.map(function (g) { var n = ins.filter(function (i) { return i.statut === 'inscrit' && niveauDe(i.personne_id) === g; }).length; return '<span class="badge" style="margin-right:6px">' + esc(nomGroupe(g).replace("CLOC'ARENA ", '')) + ' : ' + n + (qt[g] ? ' / ' + qt[g] : '') + '</span>'; }).join('');
       var pp = function (id) { return A.pers.filter(function (p) { return p.id === id; })[0] || { prenom: '?', nom: '' }; };
       var actifs = ins.filter(function (i) { return i.statut !== 'annule'; }), payes = actifs.filter(function (i) { return i.paye; }).length;
-      $('i-l').innerHTML = '<div class="kpis"><div class="kpi"><b>' + actifs.length + (ev.places_max ? ' / ' + ev.places_max : '') + '</b><span>inscrits</span></div><div class="kpi"><b>' + payes + '</b><span>ont payé</span></div>' +
+      $('i-l').innerHTML = '<div class="card" style="margin-bottom:12px"><span class="mut xs">Pour : </span>' + (gids.length ? parNiv : '<span class="badge">Tout le monde</span>') + '</div><div class="kpis"><div class="kpi"><b>' + actifs.length + (ev.places_max ? ' / ' + ev.places_max : '') + '</b><span>inscrits</span></div><div class="kpi"><b>' + payes + '</b><span>ont payé</span></div>' +
         (ev.prix_euros ? '<div class="kpi"><b>' + euros(payes * ev.prix_euros) + '</b><span>encaissé sur ' + euros(actifs.length * ev.prix_euros) + '</span></div>' : '') + '</div>' +
         '<div class="two"><div>' + (ins.length ? '<div class="tw"><table class="t"><thead><tr><th>Nom</th><th>Âge</th><th>État</th><th>Paiement</th><th></th></tr></thead><tbody>' + ins.map(function (i) {
           var p = pp(i.personne_id);
-          return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b></td><td class="small">' + age(p.date_naissance) + '</td><td>' + (i.statut === 'attente' ? '<span class="badge b-warn">Liste d\'attente</span>' : i.statut === 'annule' ? '<span class="badge">Annulé</span>' : '<span class="badge b-ok">Inscrit</span>') + '</td>' +
+          return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b>' + (niveauDe(i.personne_id) ? '<div class="mut xs">' + esc(nomGroupe(niveauDe(i.personne_id)).replace("CLOC'ARENA ", '')) + '</div>' : '') + '</td><td class="small">' + age(p.date_naissance) + '</td><td>' + (i.statut === 'attente' ? '<span class="badge b-warn">Liste d\'attente</span>' : i.statut === 'annule' ? '<span class="badge">Annulé</span>' : '<span class="badge b-ok">Inscrit</span>') + '</td>' +
             '<td><label class="c"><input type="checkbox" data-ipaye="' + i.personne_id + '"' + (i.paye ? ' checked' : '') + '>' + (i.paye ? 'Payé' : 'À payer') + '</label></td><td class="act">' + (i.statut === 'attente' ? '<button class="btn sm line" data-ipass="' + i.personne_id + '">Passer inscrit</button> ' : '') + '<button class="btn sm ko" data-isup="' + i.personne_id + '">Retirer</button></td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun inscrit pour le moment.</div>') +
         '</div><div class="card stack"><b>Ajouter une inscription</b><span class="mut xs">Pour une inscription faite au club house ou par téléphone.</span>' + CHERCHEUR + '<button class="btn line" id="i-csv">Exporter la liste (Excel)</button></div></div>';
@@ -874,22 +883,135 @@ function vuePresence(m) {
 }
 
 // ---------- Accès et rôles ----------
+// ---------- Photo réduite et envoyée dans un dossier public ----------
+function envoyerPhoto(fichier, dossier) {
+  return new Promise(function (ok, ko) {
+    var img = new Image(), url = URL.createObjectURL(fichier);
+    img.onload = function () {
+      var r = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(function (b) { b ? ok(b) : ko(new Error('photo')); }, 'image/jpeg', 0.84);
+    };
+    img.onerror = function () { ko(new Error('photo')); };
+    img.src = url;
+  }).then(function (blob) {
+    var chemin = Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.jpg';
+    return sb.storage.from(dossier).upload(chemin, blob, { contentType: 'image/jpeg' }).then(function (r) {
+      if (r.error) throw r.error;
+      return sb.storage.from(dossier).getPublicUrl(chemin).data.publicUrl;
+    });
+  });
+}
+
+// ---------- Missions des coachs ----------
+function vueMissions(m) {
+  m.innerHTML = entete('Missions coachs', 'Ce que les coachs doivent faire passer pendant leurs séances (communication d\'un stage, rappel, consigne…). Ils les voient dans leur espace coach de l\'appli et les cochent une fois faites.', '<button class="btn" id="mi-new">Nouvelle mission</button>') + '<div id="mi-l"><div class="skel"></div></div>';
+  var L = [], COACHS = [];
+  var charger = function () {
+    Promise.all([q(sb.from('coach_missions').select('*').order('created_at', { ascending: false })), q(sb.rpc('roles_liste')).catch(function () { return []; })]).then(function (r) {
+      L = r[0] || []; COACHS = [];
+      (r[1] || []).forEach(function (x) { if (x.nom_coach && COACHS.indexOf(x.nom_coach) < 0) COACHS.push(x.nom_coach); });
+      $('mi-l').innerHTML = (COACHS.length ? '' : '<div class="card small" style="margin-bottom:12px">Aucun coach n\'a encore de prénom de coach : règle-le dans <a href="#/acces">Accès et rôles</a> (rôle « Coach des cours »).</div>') +
+        (L.length ? '<div class="stack">' + L.map(function (x) {
+          return '<div class="card stack click" data-mi="' + x.id + '" style="gap:6px"><div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(x.titre) + '</b>' + (x.faite_le ? '<span class="badge b-ok">Faite' + (x.faite_par ? ' par ' + esc(x.faite_par) : '') + '</span>' : '<span class="badge b-warn">À faire</span>') + '</div>' +
+            '<span class="mut xs">Pour ' + esc(x.pour_nom || 'tous les coachs') + (x.echeance ? ' · avant le ' + esc(fmtJ(new Date(x.echeance + 'T12:00:00'))) : '') + '</span>' + (x.texte ? '<span class="small" style="white-space:pre-line">' + esc(x.texte) + '</span>' : '') +
+            (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" style="max-width:220px;border-radius:10px">' : '') + '</div>';
+        }).join('') + '</div>' : '<div class="card empty">Aucune mission pour le moment.</div>');
+      all('[data-mi]').forEach(function (c) { c.onclick = function () { form(L.filter(function (x) { return x.id === c.dataset.mi; })[0]); }; });
+    }).catch(function () { $('mi-l').innerHTML = '<div class="card empty">Impossible de charger les missions.</div>'; });
+  };
+  var form = function (x) {
+    var nouveau = !x; x = x || {};
+    panneau(nouveau ? 'Nouvelle mission' : 'Modifier la mission', '<div class="stack">' +
+      '<label class="l">Pour<select class="f" id="mi-p"><option value="">Tous les coachs</option>' + COACHS.map(function (c) { return '<option' + (x.pour_nom === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l">Titre<input class="f" id="mi-t" maxlength="120" value="' + esc(x.titre) + '" placeholder="Ex. Présenter le stage de Noël à tes groupes"></label>' +
+      '<label class="l">Consignes<textarea class="f" id="mi-x" rows="5" placeholder="Ce qu\'il faut dire, à qui, avant quand…">' + esc(x.texte) + '</textarea></label>' +
+      '<div class="row2"><label class="l">À faire avant le (facultatif)<input class="f" type="date" id="mi-e" value="' + (x.echeance || '') + '"></label><label class="l">Lien (facultatif)<input class="f" id="mi-li" value="' + esc(x.lien) + '" placeholder="https://…"></label></div>' +
+      '<label class="l">Photo / affiche (facultatif)<input class="f" type="file" id="mi-i" accept="image/*"></label>' + (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" style="max-width:200px;border-radius:10px"><label class="c"><input type="checkbox" id="mi-isup">Retirer la photo</label>' : '') +
+      '<label class="c"><input type="checkbox" id="mi-n"' + (nouveau ? ' checked' : '') + '>Prévenir par notification</label>' +
+      '<div class="chips"><button class="btn" id="mi-ok">Enregistrer</button><button class="btn line" id="mi-an">Annuler</button>' + (nouveau ? '' : '<button class="btn ko" id="mi-sup">Supprimer</button>') + '</div></div>', function () {
+      $('mi-an').onclick = fermer;
+      if ($('mi-sup')) $('mi-sup').onclick = function () { if (confirm('Supprimer cette mission ?')) q(sb.from('coach_missions').delete().eq('id', x.id)).then(function () { toast('Mission supprimée'); fermer(); charger(); }); };
+      $('mi-ok').onclick = function () {
+        var t = $('mi-t').value.trim(); if (!t) return toast('Il faut un titre');
+        var li = $('mi-li').value.trim(); if (li && !/^https?:\/\//.test(li)) return toast('Le lien doit commencer par https://');
+        $('mi-ok').disabled = true;
+        var f = $('mi-i').files && $('mi-i').files[0];
+        (f ? envoyerPhoto(f, 'missions') : Promise.resolve(x.image_url && !($('mi-isup') && $('mi-isup').checked) ? x.image_url : null)).then(function (img) {
+          var row = { pour_nom: $('mi-p').value || null, titre: t, texte: $('mi-x').value.trim() || null, echeance: $('mi-e').value || null, lien: li || null, image_url: img };
+          return nouveau ? q(sb.from('coach_missions').insert(row)) : q(sb.from('coach_missions').update(row).eq('id', x.id));
+        }).then(function () {
+          if ($('mi-n').checked) notifier({ mode: 'mission', pour_nom: $('mi-p').value || null, titre: 'Nouvelle mission coach', texte: t, url: '/app/#/coach' });
+          toast('Mission enregistrée'); fermer(); charger();
+        }).catch(function () { toast('Enregistrement impossible'); $('mi-ok').disabled = false; });
+      };
+    });
+  };
+  $('mi-new').onclick = function () { form(null); };
+  charger();
+}
+
+// ---------- Réseaux sociaux : publications mises en avant ----------
+function vueReseaux(m) {
+  m.innerHTML = entete('Réseaux sociaux', 'Les publications Instagram ou Facebook mises en avant sur le site et sur l\'accueil de l\'appli. Colle le lien de la publication et ajoute sa photo (capture ou photo d\'origine).', '<button class="btn" id="rs-new">Mettre une publication en avant</button>') + '<div id="rs-l"><div class="skel"></div></div>';
+  var L = [];
+  var charger = function () {
+    q(sb.from('mises_en_avant').select('*').order('ordre').order('created_at', { ascending: false })).then(function (l) {
+      L = l || [];
+      $('rs-l').innerHTML = L.length ? '<div class="grid">' + L.map(function (x) {
+        return '<div class="card stack click" data-rs="' + x.id + '" style="gap:6px">' + (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">' : '') +
+          '<b class="small">' + (x.plateforme === 'facebook' ? 'Facebook' : x.plateforme === 'instagram' ? 'Instagram' : 'Lien') + '</b>' + (x.legende ? '<span class="small">' + esc(x.legende) + '</span>' : '') + (x.actif ? '<span class="badge b-ok">Affichée</span>' : '<span class="badge">Masquée</span>') + '</div>';
+      }).join('') + '</div>' : '<div class="card empty">Aucune publication mise en avant. Le site et l\'appli affichent quand même les boutons Instagram et Facebook.</div>';
+      all('[data-rs]').forEach(function (c) { c.onclick = function () { form(L.filter(function (x) { return x.id === c.dataset.rs; })[0]); }; });
+    }).catch(function () { $('rs-l').innerHTML = '<div class="card empty">Impossible de charger.</div>'; });
+  };
+  var form = function (x) {
+    var nouveau = !x; x = x || { plateforme: 'instagram', actif: true };
+    panneau(nouveau ? 'Publication mise en avant' : 'Modifier', '<div class="stack">' +
+      '<label class="l">Réseau<select class="f" id="rs-p"><option value="instagram"' + (x.plateforme === 'instagram' ? ' selected' : '') + '>Instagram</option><option value="facebook"' + (x.plateforme === 'facebook' ? ' selected' : '') + '>Facebook</option><option value="autre"' + (x.plateforme === 'autre' ? ' selected' : '') + '>Autre lien</option></select></label>' +
+      '<label class="l">Lien de la publication<input class="f" id="rs-li" value="' + esc(x.lien) + '" placeholder="https://www.instagram.com/p/…"></label>' +
+      '<label class="l">Légende courte<input class="f" id="rs-le" maxlength="140" value="' + esc(x.legende) + '" placeholder="Ex. Retour en images sur la Miss Cup !"></label>' +
+      '<label class="l">Photo<input class="f" type="file" id="rs-i" accept="image/*"></label>' + (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" style="max-width:200px;border-radius:10px">' : '') +
+      '<div class="row2"><label class="l">Ordre (1 = en premier)<input class="f" type="number" id="rs-o" value="' + esc(x.ordre || 0) + '"></label><label class="c" style="align-self:end"><input type="checkbox" id="rs-a"' + (x.actif ? ' checked' : '') + '>Affichée</label></div>' +
+      '<div class="chips"><button class="btn" id="rs-ok">Enregistrer</button><button class="btn line" id="rs-an">Annuler</button>' + (nouveau ? '' : '<button class="btn ko" id="rs-sup">Supprimer</button>') + '</div></div>', function () {
+      $('rs-an').onclick = fermer;
+      if ($('rs-sup')) $('rs-sup').onclick = function () { if (confirm('Supprimer ?')) q(sb.from('mises_en_avant').delete().eq('id', x.id)).then(function () { toast('Supprimée'); fermer(); charger(); }); };
+      $('rs-ok').onclick = function () {
+        var li = $('rs-li').value.trim(); if (!/^https?:\/\//.test(li)) return toast('Colle le lien complet (https://…)');
+        $('rs-ok').disabled = true;
+        var f = $('rs-i').files && $('rs-i').files[0];
+        (f ? envoyerPhoto(f, 'reseaux') : Promise.resolve(x.image_url || null)).then(function (img) {
+          var row = { plateforme: $('rs-p').value, lien: li, legende: $('rs-le').value.trim() || null, image_url: img, ordre: parseInt($('rs-o').value, 10) || 0, actif: $('rs-a').checked };
+          return nouveau ? q(sb.from('mises_en_avant').insert(row)) : q(sb.from('mises_en_avant').update(row).eq('id', x.id));
+        }).then(function () { toast('Enregistré'); fermer(); charger(); }).catch(function () { toast('Enregistrement impossible'); $('rs-ok').disabled = false; });
+      };
+    });
+  };
+  $('rs-new').onclick = function () { form(null); };
+  charger();
+}
+
 // ---------- Next Gen : les jeunes qui encadrent un cours ----------
 var GRADES_NG = [['mini_coach', 'Mini coach'], ['coach_junior', 'Coach junior'], ['coach_next_gen', 'Coach Next Gen']];
 function vueNextGen(m) {
   m.innerHTML = entete('Next Gen', 'Les jeunes du parcours Next Gen (mini coach, coach junior, coach Next Gen) qui s\'engagent sur un cours. Le cours apparaît dans l\'agenda de leur famille, avec leurs horaires (préparation comprise).', '<button class="btn" id="ng-new">Ajouter un engagement</button>') + '<div id="ng-l"><div class="skel"></div></div>';
   var CR = [], NG = [];
-  var nomCours = function (gid) { var c = CR.filter(function (x) { return x.groupe_id === gid; })[0]; return c && c.groupes ? c.groupes.nom : nomGroupe(gid); };
+  var JRS = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  var nomCours = function (n) { if (!n.groupe_id) return (n.jour_semaine ? JRS[n.jour_semaine] + ' · ' : '') + (n.libelle || 'Encadrement'); var c = CR.filter(function (x) { return x.groupe_id === n.groupe_id; })[0]; return (c && c.groupes ? c.groupes.nom : nomGroupe(n.groupe_id)) + (n.libelle ? ' · ' + n.libelle : ''); };
+  var ABS = [];
   var hh = function (t) { return t ? t.slice(0, 5).replace(':', 'h') : ''; };
   var charger = function () {
-    Promise.all([q(sb.from('nextgen').select('*, personnes(prenom, nom)').order('created_at')), q(sb.from('creneaux').select('groupe_id, jour_semaine, heure_debut, heure_fin, lieu, encadrant, groupes(nom, type)').order('jour_semaine').order('heure_debut'))]).then(function (r) {
-      NG = r[0] || []; CR = r[1] || [];
-      $('ng-l').innerHTML = NG.length ? GRADES_NG.map(function (g) {
+    Promise.all([q(sb.from('nextgen').select('*, personnes(prenom, nom)').order('created_at')), q(sb.from('creneaux').select('groupe_id, jour_semaine, heure_debut, heure_fin, lieu, encadrant, groupes(nom, type)').order('jour_semaine').order('heure_debut')),
+      q(sb.from('nextgen_absences').select('id, jour, motif, created_at, nextgen_id').gte('jour', isoJour(new Date(Date.now() - 14 * 864e5))).order('jour')).catch(function () { return []; })]).then(function (r) {
+      NG = r[0] || []; CR = r[1] || []; ABS = r[2] || [];
+      var nomNg = function (id) { var n = NG.filter(function (x) { return x.id === id; })[0]; return n && n.personnes ? n.personnes.prenom + ' ' + n.personnes.nom : '?'; };
+      $('ng-l').innerHTML = (ABS.length ? '<div class="card stack" style="margin-bottom:14px"><b>Absences signalées</b>' + ABS.map(function (a) { return '<div class="small"><b>' + esc(nomNg(a.nextgen_id)) + '</b> · ' + esc(fmtJ(new Date(a.jour + 'T12:00:00'))) + (a.motif ? ' · ' + esc(a.motif) : '') + ' <span class="mut xs">(signalée le ' + esc(fmtJ(new Date(a.created_at))) + ' à ' + fmtH(new Date(a.created_at)) + ')</span></div>'; }).join('') + '</div>' : '') + (NG.length ? GRADES_NG.map(function (g) {
         var l = NG.filter(function (n) { return n.grade === g[0]; });
         return l.length ? '<div class="sect">' + g[1] + ' (' + l.length + ')</div><div class="tw"><table class="t"><thead><tr><th>Jeune</th><th>Cours</th><th>Présence</th><th>Période</th><th></th></tr></thead><tbody>' + l.map(function (n) {
-          return '<tr class="click" data-ng="' + n.id + '"><td><b>' + esc(n.personnes ? n.personnes.prenom + ' ' + n.personnes.nom : '?') + '</b>' + (n.notes ? '<div class="mut xs">' + esc(n.notes) + '</div>' : '') + '</td><td class="small">' + esc(nomCours(n.groupe_id)) + '</td><td class="small">' + hh(n.arrivee) + ' – ' + hh(n.depart) + '</td><td class="small">' + (n.du || n.au ? (n.du ? fmtJ(new Date(n.du + 'T12:00:00')) : '…') + ' → ' + (n.au ? fmtJ(new Date(n.au + 'T12:00:00')) : '…') : 'Toute la saison') + '</td><td class="act"><button class="btn sm ko" data-ngx="' + n.id + '">Retirer</button></td></tr>';
+          return '<tr class="click" data-ng="' + n.id + '"><td><b>' + esc(n.personnes ? n.personnes.prenom + ' ' + n.personnes.nom : '?') + '</b>' + (n.notes ? '<div class="mut xs">' + esc(n.notes) + '</div>' : '') + '</td><td class="small">' + esc(nomCours(n)) + '</td><td class="small">' + hh(n.arrivee) + ' – ' + hh(n.depart) + '</td><td class="small">' + (n.du || n.au ? (n.du ? fmtJ(new Date(n.du + 'T12:00:00')) : '…') + ' → ' + (n.au ? fmtJ(new Date(n.au + 'T12:00:00')) : '…') : 'Toute la saison') + '</td><td class="act"><button class="btn sm ko" data-ngx="' + n.id + '">Retirer</button></td></tr>';
         }).join('') + '</tbody></table></div>' : '';
-      }).join('') : '<div class="card empty">Aucun engagement Next Gen pour le moment.</div>';
+      }).join('') : '<div class="card empty">Aucun engagement Next Gen pour le moment.</div>');
       all('[data-ng]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('[data-ngx]')) return; form(NG.filter(function (x) { return x.id === tr.dataset.ng; })[0]); }; });
       all('[data-ngx]').forEach(function (b) { b.onclick = function () { if (confirm('Retirer cet engagement ?')) q(sb.from('nextgen').delete().eq('id', b.dataset.ngx)).then(function () { toast('Engagement retiré'); charger(); }).catch(function () { toast('Action impossible'); }); }; });
     }).catch(function () { $('ng-l').innerHTML = '<div class="card empty">Impossible de charger les engagements.</div>'; });
@@ -901,7 +1023,9 @@ function vueNextGen(m) {
     panneau(nouveau ? 'Nouvel engagement Next Gen' : 'Modifier l\'engagement', '<div class="stack">' +
       '<div class="l">Jeune<div id="ng-p" class="small" style="margin:6px 0">' + (pers ? '<b>' + esc(pers.prenom + ' ' + pers.nom) + '</b>' : '<span class="mut">Choisis un adhérent ci-dessous</span>') + '</div>' + (nouveau ? CHERCHEUR : '') + '</div>' +
       '<label class="l">Grade<select class="f" id="ng-g">' + GRADES_NG.map(function (g) { return '<option value="' + g[0] + '"' + (n.grade === g[0] ? ' selected' : '') + '>' + g[1] + '</option>'; }).join('') + '</select></label>' +
-      '<label class="l">Cours encadré<select class="f" id="ng-c"><option value="">Choisir…</option>' + cours.map(function (c) { return '<option value="' + c.groupe_id + '"' + (n.groupe_id === c.groupe_id ? ' selected' : '') + '>' + esc(c.groupes.nom) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l">Cours encadré (facultatif)<select class="f" id="ng-c"><option value="">Aucun cours précis (choisir le jour ci-dessous)</option>' + cours.map(function (c) { return '<option value="' + c.groupe_id + '"' + (n.groupe_id === c.groupe_id ? ' selected' : '') + '>' + esc(c.groupes.nom) + '</option>'; }).join('') + '</select></label>' +
+      '<div class="row2"><label class="l">Jour (si pas de cours précis)<select class="f" id="ng-j"><option value="">—</option>' + [1, 2, 3, 4, 5, 6, 7].map(function (j) { return '<option value="' + j + '"' + (n.jour_semaine === j ? ' selected' : '') + '>' + jours[j] + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l">Intitulé (facultatif)<input class="f" id="ng-li" maxlength="80" value="' + esc(n.libelle) + '" placeholder="Ex. Matinée école de tennis"></label></div>' +
       '<div class="row2"><label class="l">Arrive à<input class="f" type="time" id="ng-a" value="' + (n.arrivee ? n.arrivee.slice(0, 5) : '') + '"></label><label class="l">Repart à<input class="f" type="time" id="ng-d" value="' + (n.depart ? n.depart.slice(0, 5) : '') + '"></label></div>' +
       '<span class="mut xs">Par défaut : 30 minutes de préparation avant le cours, jusqu\'à la fin du cours.</span>' +
       '<div class="row2"><label class="l">À partir du (vide = toute la saison)<input class="f" type="date" id="ng-du" value="' + (n.du || '') + '"></label><label class="l">Jusqu\'au<input class="f" type="date" id="ng-au" value="' + (n.au || '') + '"></label></div>' +
@@ -917,9 +1041,9 @@ function vueNextGen(m) {
       $('ng-an').onclick = fermer;
       $('ng-ok').onclick = function () {
         if (!pers) return toast('Choisis le jeune');
-        if (!$('ng-c').value) return toast('Choisis le cours');
+        if (!$('ng-c').value && !$('ng-j').value) return toast('Choisis un cours, ou au moins le jour');
         if (!$('ng-a').value || !$('ng-d').value || $('ng-d').value <= $('ng-a').value) return toast('Vérifie les horaires');
-        var row = { personne_id: pers.id, grade: $('ng-g').value, groupe_id: $('ng-c').value, arrivee: $('ng-a').value, depart: $('ng-d').value, du: $('ng-du').value || null, au: $('ng-au').value || null, notes: $('ng-n').value.trim() || null };
+        var row = { personne_id: pers.id, grade: $('ng-g').value, groupe_id: $('ng-c').value || null, jour_semaine: $('ng-c').value ? null : +$('ng-j').value, libelle: $('ng-li').value.trim() || null, arrivee: $('ng-a').value, depart: $('ng-d').value, du: $('ng-du').value || null, au: $('ng-au').value || null, notes: $('ng-n').value.trim() || null };
         (nouveau ? q(sb.from('nextgen').insert(row).select('id').single()) : q(sb.from('nextgen').update(row).eq('id', n.id).select('id').single())).then(function () { toast('Engagement enregistré'); fermer(); charger(); }).catch(function () { toast('Enregistrement impossible'); });
       };
     });
@@ -929,11 +1053,12 @@ function vueNextGen(m) {
 }
 
 function vueAcces(m) {
-  var ROLES_AC = [['direction', 'Direction sportive (tout)'], ['bureau', 'Bureau / président (adhérents, actus, événements, annonces)'], ['accueil', 'Accueil (club house, annonces, cordage, inscriptions, actus)'], ['cordeur', 'Cordeur'], ['coach', 'Coach de groupes (propose les scores, voit ses joueurs)'], ['responsable', 'Responsable de groupes']];
+  var ROLES_AC = [['direction', 'Direction sportive (tout)'], ['bureau', 'Bureau / président (adhérents, actus, événements, annonces)'], ['accueil', 'Accueil (club house, annonces, cordage, inscriptions, actus)'], ['cordeur', 'Cordeur'], ['enseignant', 'Coach des cours (ses cours dans son agenda, ses groupes, notes, missions)'], ['coach', 'Coach d\'un groupe CLOC\'ARENA ou d\'une animation (saisit les scores, voit les joueurs du groupe)'], ['responsable', 'Responsable d\'un groupe (même chose, sans être coach)']];
   m.innerHTML = entete('Accès et rôles', 'Qui peut faire quoi. Une même personne peut cumuler plusieurs rôles et plusieurs groupes. Elle doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
     '<div class="two"><div id="ac-l"><div class="skel"></div></div><div class="card stack"><b>Donner des rôles</b><label class="l">Adresse mail<input class="f" id="ac-m" type="email"></label>' +
     '<div class="l">Rôles (plusieurs possibles)<div class="stack" style="gap:6px;margin-top:6px">' + ROLES_AC.map(function (r) { return '<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-acrole="' + r[0] + '"> ' + r[1] + '</label>'; }).join('') + '</div></div>' +
     '<div class="l" id="ac-gl" hidden>Groupes concernés (plusieurs possibles)<input class="f" id="ac-gq" placeholder="Filtrer les groupes…" style="margin-top:6px"><div id="ac-g" class="stack" style="gap:4px;max-height:220px;overflow:auto;margin-top:6px;padding:6px;border:1px solid var(--line);border-radius:10px"></div></div>' +
+    '<label class="l" id="ac-nl" hidden>Prénom de coach, tel qu\'il apparaît dans les créneaux<input class="f" id="ac-n" placeholder="Ex. Florian"></label>' +
     '<button class="btn" id="ac-ok">Ajouter</button>' +
     '<div class="sect">Ce que voit chaque rôle</div><div class="small list">' + ['direction', 'bureau', 'accueil', 'cordeur'].map(function (r) { return '<div class="it"><b>' + NOM_ROLE[r] + '</b><span class="mut xs" style="text-align:right">' + MODULES.filter(function (x) { return x[2].indexOf(r) >= 0; }).map(function (x) { return x[1]; }).join(', ') + '</span></div>'; }).join('') + '</div></div></div>';
   var charger = function () {
@@ -941,18 +1066,23 @@ function vueAcces(m) {
       var par = {}, ordre = [];
       l.forEach(function (r) { if (!par[r.email]) { par[r.email] = []; ordre.push(r.email); } par[r.email].push(r); });
       $('ac-l').innerHTML = ordre.length ? '<div class="stack">' + ordre.map(function (mail) {
-        return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="small" style="word-break:break-all">' + esc(mail) + '</b><button class="btn sm line" data-acplus="' + esc(mail) + '">+ rôle</button></div><div class="chips" style="flex-wrap:wrap">' +
+        var nc = par[mail][0].nom_coach;
+        return '<div class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="small" style="word-break:break-all">' + esc(mail) + (nc ? ' <span class="badge b-ok">Coach : ' + esc(nc) + '</span>' : '') + '</b><button class="btn sm line" data-acplus="' + esc(mail) + '">+ rôle</button></div><div class="chips" style="flex-wrap:wrap">' +
           par[mail].map(function (r) { return '<span class="chip" style="display:inline-flex;gap:6px;align-items:center">' + esc(NOM_ROLE[r.role] || r.role) + (r.groupe ? ' · ' + esc(r.groupe) : '') + '<button title="Retirer" data-acr="' + r.id + '" style="border:0;background:none;cursor:pointer;color:var(--ko);font-weight:700;padding:0 2px">×</button></span>'; }).join('') + '</div></div>';
       }).join('') + '</div>' : '<div class="card empty">Aucun rôle pour le moment.</div>';
       all('[data-acr]').forEach(function (b) { b.onclick = function () { if (confirm('Retirer ce rôle ?')) q(sb.rpc('role_retirer', { r: b.dataset.acr })).then(function () { toast('Rôle retiré'); charger(); }).catch(function (e) { toast(String(e.message || 'Action impossible').indexOf('direction') >= 0 ? 'Il faut garder au moins une personne à la direction' : 'Action impossible'); }); }; });
       all('[data-acplus]').forEach(function (b) { b.onclick = function () { $('ac-m').value = b.dataset.acplus; $('ac-m').focus(); }; });
+      A.coachs = []; l.forEach(function (r) { if (r.nom_coach && A.coachs.indexOf(r.nom_coach) < 0) A.coachs.push(r.nom_coach); });
     }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les rôles.</div>'; });
   };
   chargerGroupes().then(function () {
     $('ac-g').innerHTML = A.groupes.map(function (g) { return '<label class="small" data-gnom="' + esc(String(g.nom).toLowerCase()) + '" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-acg="' + g.id + '"> ' + esc(g.nom) + '</label>'; }).join('');
   });
   $('ac-gq').oninput = function () { var v = this.value.toLowerCase(); all('[data-gnom]').forEach(function (x) { x.hidden = v && x.dataset.gnom.indexOf(v) < 0; }); };
-  all('[data-acrole]').forEach(function (c) { c.onchange = function () { $('ac-gl').hidden = !all('[data-acrole]').some(function (x) { return x.checked && ['coach', 'responsable'].indexOf(x.dataset.acrole) >= 0; }); }; });
+  all('[data-acrole]').forEach(function (c) { c.onchange = function () {
+    $('ac-gl').hidden = !all('[data-acrole]').some(function (x) { return x.checked && ['coach', 'responsable'].indexOf(x.dataset.acrole) >= 0; });
+    $('ac-nl').hidden = !all('[data-acrole]').some(function (x) { return x.checked && x.dataset.acrole === 'enseignant'; });
+  }; });
   $('ac-ok').onclick = function () {
     var mail = $('ac-m').value.trim();
     var roles = all('[data-acrole]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.acrole; });
@@ -967,9 +1097,11 @@ function vueAcces(m) {
       else appels.push({ mail: mail, le_role: r, groupe: null });
     });
     $('ac-ok').disabled = true;
-    Promise.all(appels.map(function (a) { return q(sb.rpc('role_ajouter', a)); })).then(function (rs) {
+    var nomC = $('ac-n').value.trim();
+    if (roles.indexOf('enseignant') >= 0 && !nomC) return toast('Indique le prénom de coach');
+    Promise.all(appels.map(function (a) { return q(sb.rpc('role_ajouter', a)); }).concat(nomC ? [q(sb.rpc('compte_nom_coach_mail', { mail: mail, nom: nomC }))] : [])).then(function (rs) {
       if (rs.indexOf('inconnu') >= 0) toast('Cette personne doit d\'abord se connecter une fois à l\'appli');
-      else { toast(appels.length > 1 ? appels.length + ' rôles ajoutés' : 'Rôle ajouté'); all('[data-acrole],[data-acg]').forEach(function (x) { x.checked = false; }); $('ac-gl').hidden = true; charger(); }
+      else { toast(appels.length > 1 ? appels.length + ' rôles ajoutés' : 'Rôle ajouté'); all('[data-acrole],[data-acg]').forEach(function (x) { x.checked = false; }); $('ac-gl').hidden = true; $('ac-nl').hidden = true; $('ac-n').value = ''; charger(); }
     }).catch(function () { toast('Action impossible'); }).then(function () { $('ac-ok').disabled = false; });
   };
   charger();
@@ -1002,7 +1134,7 @@ function pageConnexion(msg) {
 }
 
 // ---------- Routeur ----------
-var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, presence: vuePresence, acces: vueAcces };
+var VUES = { adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces };
 function router() {
   if (!A.user) return;
   fermer();

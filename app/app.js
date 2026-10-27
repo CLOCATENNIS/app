@@ -212,14 +212,15 @@ function lierPart() {
 
 var AG = null; // cache agenda : {creneaux, insc, part}
 function chargerAgenda() {
-  if (!S.user || !S.pers.length) return Promise.resolve(AG = { creneaux: [], insc: [] });
+  if (!S.user || (!S.pers.length && !nomCoachCompte())) return Promise.resolve(AG = { creneaux: [], insc: [] });
   return Promise.all([
     q(sb.from('creneaux').select('*, groupes(nom,couleur)')).catch(function () { return []; }),
     q(sb.from('inscriptions').select('evenement_id, personne_id, statut, paye').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
     q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; }),
     q(sb.from('participations').select('evenement_id, personne_id, reponse').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
-    q(sb.from('nextgen').select('*').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; })
-  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [], ng: r[4] || [] }; return AG; });
+    q(sb.from('nextgen').select('*').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
+    q(sb.from('nextgen_absences').select('id, nextgen_id, jour, motif')).catch(function () { return []; })
+  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [], ng: r[4] || [], ngabs: r[5] || [] }; return AG; });
 }
 
 function mesItems(du, au) {
@@ -227,6 +228,7 @@ function mesItems(du, au) {
   (S.evts || []).forEach(function (ev) {
     var d = new Date(ev.debut); if (d < du || d >= au) return;
     var qui = concernes(ev, AG && AG.insc);
+    if (!qui.length && nomCoachCompte() && S.sel === 'all' && encadrePar(ev.encadrant, nomCoachCompte())) { items.push({ d: d, f: ev.fin ? new Date(ev.fin) : null, titre: ev.titre, lieu: ev.lieu, enc: ev.encadrant, statut: ev.statut, objectif: ev.objectif, qui: [], gs: evGroupes(ev).gs, id: ev.id, type: ev.type, coach: true }); return; }
     if (qui.length) items.push({ d: d, f: ev.fin ? new Date(ev.fin) : null, titre: ev.titre, lieu: ev.lieu, enc: ev.encadrant, statut: ev.statut, objectif: ev.objectif, qui: qui, gs: evGroupes(ev).gs, id: ev.id, type: ev.type, inscrit: ev.inscription_ouverte });
     else if (inscOuverte(ev) && evGroupes(ev).ids.length) {
       var pos = eligibles(ev).filter(function (p) { return S.sel === 'all' || p.id === S.sel; });
@@ -239,24 +241,26 @@ function mesItems(du, au) {
       if (cr.jour_semaine !== js || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
       if ((AG.pauses || []).some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
       var qui = (S.groupesDe[cr.groupe_id] || []).filter(function (p) { return S.sel === 'all' || p.id === S.sel; });
-      if (!qui.length) continue;
+      var jeCoache = nomCoachCompte() && encadrePar(cr.encadrant, nomCoachCompte()) && S.sel === 'all';
+      if (!qui.length && !jeCoache) continue;
       var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
       var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var f = new Date(j); f.setHours(+b[0], +b[1], 0, 0);
-      items.push({ d: d, f: f, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [] });
+      items.push({ d: d, f: f, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [], gid: cr.groupe_id, coach: !qui.length });
     }
   });
   // Encadrement Next Gen : le jeune vient aider sur un cours, avec ses propres horaires
   ((AG && AG.ng) || []).forEach(function (n) {
     var p = S.pers.filter(function (x) { return x.id === n.personne_id; })[0];
     if (!p || (S.sel !== 'all' && S.sel !== p.id)) return;
-    (AG.creneaux || []).filter(function (cr) { return cr.groupe_id === n.groupe_id; }).forEach(function (cr) {
+    (n.groupe_id ? (AG.creneaux || []).filter(function (cr) { return cr.groupe_id === n.groupe_id; }) : [{ jour_semaine: n.jour_semaine, lieu: null, encadrant: null, groupes: { nom: n.libelle || 'Encadrement' } }]).forEach(function (cr) {
       for (var j = new Date(du); j < au; j.setDate(j.getDate() + 1)) {
         var js = j.getDay() === 0 ? 7 : j.getDay(), iso = isoJour(j);
         if (cr.jour_semaine !== js || (n.du && iso < n.du) || (n.au && iso > n.au) || (cr.du && iso < cr.du) || (cr.au && iso > cr.au)) continue;
         if ((AG.pauses || []).some(function (v) { return iso >= v.debut && iso <= v.fin; })) continue;
         var a = n.arrivee.split(':'), b = n.depart.split(':');
         var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var f = new Date(j); f.setHours(+b[0], +b[1], 0, 0);
-        items.push({ d: d, f: f, titre: GRADES_NG[n.grade] + ' · ' + (cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours'), lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: [p], gs: [], ng: true, objectif: n.notes });
+        var abs = ((AG && AG.ngabs) || []).filter(function (x) { return x.nextgen_id === n.id && x.jour === iso; })[0];
+        items.push({ d: d, f: f, titre: GRADES_NG[n.grade] + ' · ' + (n.libelle && n.groupe_id ? n.libelle : cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours'), lieu: cr.lieu, enc: cr.encadrant, statut: abs ? 'annule' : 'prevu', qui: [p], gs: [], ng: n.id, ngJour: iso, ngAbs: abs, objectif: n.notes });
       }
     });
   });
@@ -328,7 +332,7 @@ function pageAccueil() {
     if (rangs.length) arenaTxt = rangs.join(' · ');
   }
   h += '<div class="grid2">' +
-    '<a class="tile" href="#/arena/tweener">' + ic('trophy', 24) + '<b>CLOC\'ARENA</b><span class="mut small">' + arenaTxt + '</span></a>' +
+    '<a class="tile" href="#/double">' + ic('trophy', 24) + '<b>Double interne</b><span class="mut small">Poules, dispos, scores</span></a>' +
     '<a class="tile" href="#/inscriptions">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
     '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
     '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
@@ -338,6 +342,8 @@ function pageAccueil() {
 
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
   if (actu) h += carteActu(actu, 'Dernière actu');
+  if (nomCoachCompte() || S.isDir) h += '<a class="card stack" href="#/coach" style="gap:4px;text-decoration:none;color:inherit"><span class="eyebrow">Espace coach</span><b>Mes groupes et mes missions</b><span class="mut small" id="coach-resume">Notes de groupe, joueurs, missions de la direction</span></a>';
+  h += '<div id="reseaux"></div>';
   h += '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></main>';
   return h;
 }
@@ -357,10 +363,13 @@ function blocPause(pauses, l, f) {
 function carteAgenda(it, couleur, quiHtml) {
   var etat = it.statut === 'annule' ? '<span class="badge" style="background:var(--ko);color:#fff">Annulé</span>' : it.statut === 'deplace' ? '<span class="badge" style="background:var(--ac);color:#fff">Déplacé</span>' : it.possible || it.surInsc || it.inscrit ? '<span class="badge" style="background:var(--sun);color:#12304a">Sur inscription</span>' : '';
   var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
-  return '<' + (it.id ? 'a href="#/evenement/' + it.id + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + (it.possible ? ' possible' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
+  var href = it.id ? '#/evenement/' + it.id : it.gid && voitGroupe(it.gid) ? '#/groupe/' + it.gid : null;
+  if (it.coach) quiHtml = (quiHtml || '') + '<span class="small" style="color:var(--navy);font-weight:600">Tu encadres' + (href && !it.id ? ' · clique pour voir le groupe' : '') + '</span>';
+  if (it.ng) quiHtml = (quiHtml || '') + (it.ngAbs ? '<span class="small" style="color:var(--ko);font-weight:600">Absence signalée' + (it.ngAbs.motif ? ' · ' + esc(it.ngAbs.motif) : '') + '</span>' : it.d > new Date() && !S.apercu ? '<button class="chip" data-ngabs="' + it.ng + '|' + it.ngJour + '" style="align-self:flex-start;min-height:34px">Je serai absent</button>' : '');
+  return '<' + (href ? 'a href="' + href + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + (it.possible ? ' possible' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
     '<span class="mut small">' + det.join(' · ') + '</span>' + (it.objectif ? '<span class="mut small">' + esc(it.objectif) + '</span>' : '') + (quiHtml || '') +
-    '</div></' + (it.id ? 'a' : 'div') + '>';
+    '</div></' + (href ? 'a' : 'div') + '>';
 }
 function couleurGroupes(gs) { var n = gs[0] && String(gs[0].nom).replace("CLOC'ARENA ", ''); return NIV[n] ? NIV[n].bg : '#1f5a85'; }
 function pageAgenda() {
@@ -379,11 +388,9 @@ function pageAgenda() {
     setTimeout(function () { lierAgenda(); agendaClub(l, f); });
     return h;
   }
-  if (!S.pers.length) {
-    // Compte sans famille (direction, coach, accueil) : ses cours et séances à lui
-    var nom = coachNom();
-    h += '<div id="coach-nom"></div>' + enteteSemaine(l) + '<div id="club-ag" style="display:flex;flex-direction:column;gap:12px"><div class="skel"></div></div></main>';
-    setTimeout(function () { lierAgenda(); agendaClub(l, f, nom || '?'); });
+  if (!S.pers.length && !nomCoachCompte()) {
+    h += enteteSemaine(l) + '<section class="card stack" style="gap:6px"><b>Aucun cours rattaché à ce compte</b><span class="mut small">Pour un coach : la direction indique ton prénom de coach dans « Accès et rôles » (rôle Coach des cours), et tes cours apparaissent ici.</span></section></main>';
+    setTimeout(lierAgenda);
     return h;
   }
   var items = mesItems(l, f);
@@ -393,14 +400,14 @@ function pageAgenda() {
   items.forEach(function (it) {
     var jl = fmtJour(it.d);
     if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
-    var c = it.qui.length === 1 ? S.couleur[it.qui[0].id] : couleurGroupes(it.gs);
+    var c = it.coach ? 'var(--navy)' : it.qui.length === 1 ? S.couleur[it.qui[0].id] : couleurGroupes(it.gs);
     var evo = it.id && !it.possible ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
     var evi = it.id ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
     if (evi && evi.inscription_ouverte) { h += carteAgenda(it, c, etatInsc(evi, it.possible ? it.qui : eligibles(evi).filter(function (p) { return S.sel === 'all' || p.id === S.sel; }))); return; }
     h += carteAgenda(it, c, (S.pers.length > 1 && !(evo && peutRepondre(evo)) ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') + (evo ? boutonsPart(evo, it.qui) : ''));
   });
   h += blocSynchro() + '</main>';
-  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); lierPart(); });
+  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); lierPart(); lierAbsenceNg(); });
   return h;
 }
 function lierAgenda() {
@@ -428,7 +435,7 @@ function monCours(cr, coach) {
   if (!S.user) return false;
   if (S.groupesDe[cr.groupe_id] && S.groupesDe[cr.groupe_id].length) return true;
   if (((AG && AG.ng) || []).some(function (n) { return n.groupe_id === cr.groupe_id; })) return true;
-  var nom = coach && coach !== '?' ? coach : (S.coachNomMem || coachNom());
+  var nom = nomCoachCompte();
   if (nom && encadrePar(cr.encadrant, nom)) return true;
   return S.gere.indexOf(cr.groupe_id) >= 0;
 }
@@ -559,7 +566,7 @@ function arenaClassement() {
     var f = S.arenaFiltre;
     var l = all.filter(function (c) { return f === 'Général' || (f === 'Filles' && c.sexe === 'F') || (f === 'Garçons' && c.sexe === 'M') || c.niveau === f; });
     var mes = S.pers.map(function (p) { return p.id; });
-    var lien = function (c, inner) { return (S.isStaff || mes.indexOf(c.personne_id) >= 0) ? '<a href="#/fiche/' + c.personne_id + '">' + inner + '</a>' : inner; };
+    var lien = function (c, inner) { return '<a href="#/fiche/' + c.personne_id + '">' + inner + '</a>'; };
     var h = '<div class="chips">' + filtres.map(function (x) {
       var st = NIV[x] && f === x ? ' style="background:' + NIV[x].bg + ';border-color:' + NIV[x].bg + ';color:' + NIV[x].fg + '"' : '';
       return '<button class="chip ' + (f === x ? 'on' : '') + '" data-filtre="' + x + '"' + st + '>' + x + '</button>';
@@ -942,6 +949,153 @@ function vueCoach(e) {
   });
 }
 
+// ---------- Coachs : nom de coach du compte, groupes, notes, missions ----------
+function nomCoachCompte() { return (S.compte && S.compte.nom_coach && !S.apercu) ? S.compte.nom_coach : ''; }
+function voitGroupe(gid) {
+  if (S.apercu) return false;
+  if (S.isDir || S.isStaff || S.gere.indexOf(gid) >= 0) return true;
+  var nc = nomCoachCompte();
+  return !!nc && ((AG && AG.creneaux) || []).some(function (cr) { return cr.groupe_id === gid && encadrePar(cr.encadrant, nc); });
+}
+function lierAbsenceNg() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ngabs]'), function (b) {
+    b.onclick = function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var x = b.dataset.ngabs.split('|'), carte = b.parentNode;
+      if (carte.querySelector('.ngabs-f')) return;
+      b.insertAdjacentHTML('afterend', '<span class="ngabs-f stack" style="gap:6px"><input class="f" placeholder="Motif (facultatif) : malade, sortie scolaire…" maxlength="120"><span style="display:flex;gap:6px"><button class="chip on">Prévenir le club</button><button class="chip">Annuler</button></span></span>');
+      var f = carte.querySelector('.ngabs-f'), btns = f.querySelectorAll('button');
+      f.onclick = function (e) { e.preventDefault(); e.stopPropagation(); };
+      btns[1].onclick = function (e) { e.preventDefault(); e.stopPropagation(); f.remove(); };
+      btns[0].onclick = function (e) {
+        e.preventDefault(); e.stopPropagation(); btns[0].disabled = true;
+        q(sb.from('nextgen_absences').insert({ nextgen_id: x[0], jour: x[1], motif: f.querySelector('input').value.trim() || null }).select('id').single()).then(function (r) {
+          sb.functions.invoke('notifier', { body: { mode: 'absence_ng', absence_id: r.id } }).catch(function () { });
+          toast('Absence envoyée à la direction'); return chargerAgenda();
+        }).then(render).catch(function () { toast('Envoi impossible pour le moment'); btns[0].disabled = false; });
+      };
+    };
+  });
+}
+// Le double interne : l'appli du tournoi, affichée dans l'appli du club
+var DOUBLE_URL = 'https://script.google.com/macros/s/AKfycbw7UgI_ieHq-AXgELH6NHJQVoDMVsF9VK_fxK7oEPGuBGvq1Omye5CNNjZJy5m8j40/exec';
+function pageDouble() {
+  return '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1>Double interne</h1><p class="mut small" style="margin:4px 0 0">Poules, disponibilités, matchs et scores du tournoi interne de double.</p></div>' +
+    '<main><a class="btn line" href="' + DOUBLE_URL + '" target="_blank" rel="noopener">Ouvrir en plein écran</a>' +
+    '<iframe src="' + DOUBLE_URL + '" title="Appli du double interne" style="width:100%;height:calc(100vh - 260px);min-height:520px;border:1px solid var(--bd);border-radius:14px;background:#fff" allow="clipboard-write"></iframe>' +
+    '<p class="mut xs" style="text-align:center">La page ne s\'affiche pas ? Utilise « Ouvrir en plein écran », ou ouvre-la en navigation privée si plusieurs comptes Google sont connectés sur ton téléphone.</p></main>';
+}
+// Page d'un groupe (coachs et direction) : joueurs, Next Gen et notes
+function pageGroupe(gid) {
+  var cr = ((AG && AG.creneaux) || []).filter(function (c) { return c.groupe_id === gid; })[0];
+  var nom = cr && cr.groupes ? cr.groupes.nom : 'Groupe';
+  setTimeout(function () { remplirGroupe(gid); });
+  return '<div class="pagehead wrap">' + backLink('#/agenda', 'Agenda') + '<h1 style="font-size:26px">' + esc(String(nom).replace(/^.*?·\s*/, '')) + '</h1>' +
+    (cr ? '<p class="mut small" style="margin:4px 0 0">' + esc(JOURS[cr.jour_semaine].charAt(0).toUpperCase() + JOURS[cr.jour_semaine].slice(1)) + ' ' + cr.heure_debut.slice(0, 5).replace(':', 'h') + ' – ' + cr.heure_fin.slice(0, 5).replace(':', 'h') + (cr.lieu ? ' · ' + esc(cr.lieu) : '') + (cr.encadrant ? ' · ' + esc(cr.encadrant) : '') + '</p>' : '') + '</div>' +
+    '<main id="grp-main"><div class="skel"></div></main>';
+}
+function remplirGroupe(gid) {
+  var box = $('grp-main'); if (!box) return;
+  Promise.all([
+    q(sb.from('groupe_membres').select('personne_id, personnes(prenom, nom, niveau_arena, date_naissance)').eq('groupe_id', gid)),
+    q(sb.from('notes_coach').select('*').eq('groupe_id', gid).order('created_at', { ascending: false })).catch(function () { return []; }),
+    q(sb.from('nextgen').select('grade, arrivee, depart, personnes(prenom, nom)').eq('groupe_id', gid)).catch(function () { return []; })
+  ]).then(function (r) {
+    var mb = (r[0] || []).filter(function (m) { return m.personnes; }).sort(function (a, b) { return a.personnes.prenom.localeCompare(b.personnes.prenom, 'fr'); });
+    var notes = r[1] || [], ng = r[2] || [];
+    var nomP = function (id) { var m = mb.filter(function (x) { return x.personne_id === id; })[0]; return m ? m.personnes.prenom + ' ' + m.personnes.nom.charAt(0) + '.' : ''; };
+    var age = function (d) { if (!d) return ''; var n = new Date(d), t = new Date(); var a = t.getFullYear() - n.getFullYear() - ((t.getMonth() < n.getMonth() || (t.getMonth() === n.getMonth() && t.getDate() < n.getDate())) ? 1 : 0); return a + ' ans'; };
+    var h = '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
+      '<label class="f">Pour<select class="f" id="nt-p"><option value="">Tout le groupe</option>' + mb.map(function (m) { return '<option value="' + m.personne_id + '">' + esc(m.personnes.prenom + ' ' + m.personnes.nom) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="f">Séance du (facultatif)<input class="f" type="date" id="nt-j"></label>' +
+      '<label class="f">Note<textarea class="f" id="nt-t" rows="3" maxlength="2000" placeholder="Ex. Nicolas : changement de prise en coup droit. Absent les 2 prochaines semaines."></textarea></label>' +
+      '<button class="btn" id="nt-ok">Enregistrer la note</button><span class="mut xs">Visible uniquement par les coachs du groupe et la direction sportive.</span></section>';
+    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Notes (' + notes.length + ')</span>' + (notes.length ? notes.map(function (n) {
+      return '<div class="stack" style="gap:2px;padding:8px 0;border-top:1px solid var(--line)"><span class="xs mut">' + esc(n.personne_id ? nomP(n.personne_id) : 'Tout le groupe') + (n.jour ? ' · séance du ' + esc(fmtCourt(new Date(n.jour + 'T12:00:00'))) : '') + ' · ' + esc(n.auteur_nom || '') + ', le ' + esc(fmtCourt(new Date(n.created_at))) + '</span>' +
+        '<span class="small" style="white-space:pre-line">' + esc(n.texte) + '</span>' + (n.auteur === S.user.id || S.isDir ? '<button class="chip" data-ntx="' + n.id + '" style="align-self:flex-start;min-height:30px">Supprimer</button>' : '') + '</div>';
+    }).join('') : '<span class="mut small">Aucune note pour le moment.</span>') + '</section>';
+    if (ng.length) h += '<section class="card stack" style="gap:6px"><span class="eyebrow">Next Gen sur ce cours</span>' + ng.map(function (n) { return '<span class="small"><b>' + esc(n.personnes ? n.personnes.prenom + ' ' + n.personnes.nom : '?') + '</b> · ' + GRADES_NG[n.grade] + ' · ' + n.arrivee.slice(0, 5).replace(':', 'h') + ' – ' + n.depart.slice(0, 5).replace(':', 'h') + '</span>'; }).join('') + '</section>';
+    h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">Joueurs (' + mb.length + ')</div>' + mb.map(function (m) {
+      var nb = notes.filter(function (n) { return n.personne_id === m.personne_id; }).length;
+      return '<div class="row"><span><b>' + esc(m.personnes.prenom + ' ' + m.personnes.nom) + '</b>' + (nb ? ' <span class="badge" style="background:var(--sun);color:#12304a">' + nb + ' note' + (nb > 1 ? 's' : '') + '</span>' : '') + '</span><span class="mut small">' + [m.personnes.niveau_arena, age(m.personnes.date_naissance)].filter(Boolean).map(esc).join(' · ') + '</span></div>';
+    }).join('') + '</section>';
+    box.innerHTML = h;
+    $('nt-ok').onclick = function () {
+      var t = $('nt-t').value.trim(); if (!t) return toast('Écris ta note');
+      $('nt-ok').disabled = true;
+      q(sb.from('notes_coach').insert({ groupe_id: gid, personne_id: $('nt-p').value || null, jour: $('nt-j').value || null, texte: t, auteur_nom: nomCoachCompte() || (S.isDir ? 'Direction' : S.user.email) })).then(function () { toast('Note enregistrée'); remplirGroupe(gid); })
+        .catch(function () { toast('Enregistrement impossible'); $('nt-ok').disabled = false; });
+    };
+    Array.prototype.forEach.call(box.querySelectorAll('[data-ntx]'), function (b) { b.onclick = function () { q(sb.from('notes_coach').delete().eq('id', b.dataset.ntx)).then(function () { toast('Note supprimée'); remplirGroupe(gid); }); }; });
+  }).catch(function () { box.innerHTML = '<section class="card empty">Ce groupe n\'est visible que par ses coachs et la direction.</section>'; });
+}
+// Espace coach : missions de la direction et groupes encadrés
+function pageCoach() {
+  var nc = nomCoachCompte();
+  var mesGroupes = [];
+  ((AG && AG.creneaux) || []).forEach(function (cr) { if ((nc && encadrePar(cr.encadrant, nc)) || S.gere.indexOf(cr.groupe_id) >= 0) mesGroupes.push(cr); });
+  mesGroupes.sort(function (a, b) { return a.jour_semaine - b.jour_semaine || (a.heure_debut < b.heure_debut ? -1 : 1); });
+  setTimeout(remplirMissions);
+  return '<div class="darkhead"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) + '<div class="kicker" style="margin-top:8px">ESPACE COACH' + (nc ? ' · ' + esc(nc.toUpperCase()) : '') + '</div><h1>Mes missions et mes groupes</h1></div></div><main>' +
+    '<div class="dayhead">Missions de la direction</div><div id="missions"><div class="skel"></div></div>' +
+    '<div class="dayhead">Mes groupes</div>' + (mesGroupes.length ? mesGroupes.map(function (cr) {
+      return '<a class="ev" href="#/groupe/' + cr.groupe_id + '"><span class="bar" style="background:var(--navy)"></span><div class="stack" style="flex:1"><b class="t">' + esc(cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '') : 'Groupe') + '</b><span class="mut small">' + esc(JOURS[cr.jour_semaine]) + ' ' + cr.heure_debut.slice(0, 5).replace(':', 'h') + ' – ' + cr.heure_fin.slice(0, 5).replace(':', 'h') + (cr.lieu ? ' · ' + esc(cr.lieu) : '') + '</span></div></a>';
+    }).join('') : '<section class="card empty">' + (nc ? 'Aucun cours avec ton prénom (' + esc(nc) + ') dans les créneaux.' : 'La direction doit indiquer ton prénom de coach dans Accès et rôles.') + '</section>') + '</main>';
+}
+function remplirMissions() {
+  var box = $('missions'); if (!box) return;
+  q(sb.from('coach_missions').select('*').order('faite_le', { nullsFirst: true }).order('echeance', { nullsFirst: false }).order('created_at', { ascending: false })).then(function (l) {
+    l = l || [];
+    box.innerHTML = l.length ? l.map(function (x) {
+      var retard = !x.faite_le && x.echeance && x.echeance < isoJour(new Date());
+      return '<section class="card stack" style="gap:8px;' + (x.faite_le ? 'opacity:.6' : '') + '"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b>' + esc(x.titre) + '</b>' + (x.faite_le ? '<span class="badge" style="background:var(--ok);color:#fff">Faite</span>' : x.echeance ? '<span class="badge" style="background:' + (retard ? 'var(--ko)' : 'var(--sun)') + ';color:' + (retard ? '#fff' : '#12304a') + '">Avant le ' + esc(fmtCourt(new Date(x.echeance + 'T12:00:00'))) + '</span>' : '') + '</div>' +
+        (x.texte ? '<span class="small" style="white-space:pre-line">' + esc(x.texte) + '</span>' : '') + (x.image_url ? '<a href="' + esc(x.image_url) + '" target="_blank" rel="noopener"><img src="' + esc(x.image_url) + '" alt="Pièce jointe de la mission" style="width:100%;border-radius:12px"></a>' : '') +
+        (x.lien ? '<a class="btn line" href="' + esc(x.lien) + '" target="_blank" rel="noopener">Ouvrir le lien</a>' : '') +
+        '<button class="btn ' + (x.faite_le ? 'line' : '') + '" data-mfait="' + x.id + '|' + (x.faite_le ? '0' : '1') + '">' + (x.faite_le ? 'Remettre à faire' : '✓ C\'est fait') + '</button></section>';
+    }).join('') : '<section class="card empty">Aucune mission pour le moment.</section>';
+    Array.prototype.forEach.call(box.querySelectorAll('[data-mfait]'), function (b) {
+      b.onclick = function () { var x = b.dataset.mfait.split('|'); q(sb.rpc('mission_faite', { m: x[0], fait: x[1] === '1' })).then(function () { toast(x[1] === '1' ? 'Mission faite, merci !' : 'Mission remise à faire'); remplirMissions(); }).catch(function () { toast('Action impossible'); }); };
+    });
+  }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les missions.</section>'; });
+}
+function resumeCoach() {
+  var el = $('coach-resume'); if (!el) return;
+  q(sb.from('coach_missions').select('id').is('faite_le', null)).then(function (l) { if (l && l.length && $('coach-resume')) $('coach-resume').innerHTML = '<b style="color:var(--ac)">' + l.length + ' mission' + (l.length > 1 ? 's' : '') + ' à faire</b>'; }).catch(function () { });
+}
+// Réseaux sociaux : publications mises en avant par le club
+var RESEAUX = { instagram: 'https://www.instagram.com/cloc.acheres.tennis', facebook: 'https://www.facebook.com/ClocaTennis/' };
+function remplirReseaux() {
+  var box = $('reseaux'); if (!box) return;
+  var boutons = '<div class="grid2"><a class="btn" href="' + RESEAUX.instagram + '" target="_blank" rel="noopener" style="background:linear-gradient(45deg,#f09433,#dc2743,#bc1888)">Instagram</a><a class="btn" href="' + RESEAUX.facebook + '" target="_blank" rel="noopener" style="background:#1877f2">Facebook</a></div>';
+  var dessiner = function (l) {
+    box.innerHTML = '<section class="card stack" style="gap:10px"><span class="eyebrow">Suivez le club</span>' + (l.length ? '<div style="display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px">' + l.map(function (x) {
+      return '<a href="' + esc(x.lien) + '" target="_blank" rel="noopener" style="flex:0 0 ' + (l.length > 1 ? '78%' : '100%') + ';scroll-snap-align:start;text-decoration:none;color:inherit" class="stack">' + (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="' + esc(x.legende || 'Publication du club') + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px">' : '') + '<span class="small" style="margin-top:6px"><b>' + (x.plateforme === 'facebook' ? 'Facebook' : x.plateforme === 'instagram' ? 'Instagram' : 'À voir') + '</b>' + (x.legende ? ' · ' + esc(x.legende) : '') + '</span></a>';
+    }).join('') + '</div>' : '<span class="mut small">Photos, résultats et coulisses du club.</span>') + boutons + '</section>';
+  };
+  q(sb.from('mises_en_avant').select('*').eq('actif', true).order('ordre').order('created_at', { ascending: false }).limit(6)).then(dessiner).catch(function () { dessiner([]); });
+}
+// Guide des cordages
+function pageGuideCordage() {
+  setTimeout(function () {
+    chargerCordage().then(function () {
+      var box = $('guide-c'); if (!box) return;
+      box.innerHTML = C.cordages.filter(function (c) { return c.actif; }).map(function (c) {
+        return '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(c.nom) + '</b><b>' + euros(c.prix) + '</b></div>' +
+          (c.description ? '<span class="small">' + esc(c.description) + '</span>' : '') +
+          (c.pour_qui ? '<span class="small"><b>Pour qui :</b> ' + esc(c.pour_qui) + '</span>' : '') +
+          (c.sensation ? '<span class="small"><b>Sensations :</b> ' + esc(c.sensation) + '</span>' : '') + '</section>';
+      }).join('') || '<section class="card empty">Aucun cordage proposé pour le moment.</section>';
+    }).catch(function () { });
+  });
+  return '<div class="pagehead wrap">' + backLink('#/cordage/deposer', 'Cordage') + '<h1>Quel cordage choisir ?</h1></div><main>' +
+    '<section class="card stack" style="gap:6px"><b>En bref</b><span class="small">• <b>Tu débutes ou tu joues de temps en temps</b> : un synthétique.<br>• <b>Tu veux du confort, ou tu as mal au coude ou à l\'épaule</b> : un multifilament.<br>• <b>Tu frappes fort, tu mets beaucoup d\'effet ou tu casses souvent</b> : un monofilament (polyester), plutôt pour les joueurs confirmés.</span></section>' +
+    '<div class="dayhead">Les cordages du club</div><div id="guide-c" class="stack" style="gap:12px"><div class="skel"></div></div>' +
+    '<div class="dayhead">Bon à savoir</div><section class="card stack" style="gap:6px"><span class="small"><b>Quand recorder ?</b> Un repère simple : autant de fois par an que tu joues de fois par semaine. Un cordage qui ne casse pas perd quand même sa tension et ses sensations.</span>' +
+    '<span class="small"><b>La tension :</b> plus elle est basse, plus la raquette est puissante et confortable ; plus elle est haute, plus elle contrôle. Pas d\'idée ? Mets « comme d\'habitude » ou demande conseil à Skander ou à ton coach.</span>' +
+    '<span class="small"><b>Jeunes joueurs :</b> un synthétique ou un multifilament, à tension modérée. Le polyester est trop rigide pour un bras qui grandit.</span></section>' +
+    '<a class="btn" href="#/cordage/deposer">Déposer ma raquette</a></main>';
+}
+
 // ---------- Inscriptions : tout ce qui est ouvert, au même endroit ----------
 function pageInscriptions() {
   var l = (S.evts || []).filter(inscOuverte).sort(function (a, b) { return new Date(a.debut) - new Date(b.debut); });
@@ -1025,13 +1179,14 @@ function pageProfil() {
   if (S.pers.length) {
     h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">' + (S.pers.length > 1 ? 'Ma famille' : 'Mon profil') + '</div>' + S.pers.map(function (p) {
       var gs = (p.groupe_membres || []).filter(function (g) { return g.groupes && g.groupes.type !== 'profil'; }).map(function (g) { return groupeBadge(g.groupes); }).join(' ');
-      return '<div class="row"><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b></span><span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' + gs + '</span></div>' +
+      return '<div class="stack" style="gap:8px;padding:12px 0;border-top:1px solid var(--line)"><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b></span>' + (gs ? '<span style="display:flex;gap:6px;flex-wrap:wrap;padding-left:18px">' + gs + '</span>' : '') + '</div>' +
         (p.niveau_arena ? '<a href="#/fiche/' + p.id + '" class="small" style="display:block;padding:0 0 10px 18px;font-weight:600">Voir la fiche CLOC\'ARENA →</a>' : '');
     }).join('') + '</section>';
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
-  if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', coach: 'Coach', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
+  if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
     (S.gere.length || S.isDir ? '<a class="btn ghost" href="#/gestion">Saisie CLOC\'ARENA</a>' : '') +
+    (nomCoachCompte() || S.isDir ? '<a class="btn ghost" href="#/coach">Espace coach (groupes, notes, missions)</a>' : '') +
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
   if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
     '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
@@ -1151,7 +1306,10 @@ function gesSaisir() {
     '<span class="mut xs">Touche plusieurs niveaux pour un regroupement (ex. Violet + Rouge).</span>' +
     '<b class="small">' + (dbl ? 'Équipe 1' : 'Joueur 1') + '</b>' + ligne(1, 0) + (dbl ? ligne(1, 1) : '') +
     '<b class="small">' + (dbl ? 'Équipe 2' : 'Joueur 2') + '</b>' + ligne(2, 0) + (dbl ? ligne(2, 1) : '') +
-    '<label class="f">Score (côté ' + (dbl ? 'équipe 1' : 'joueur 1') + ', sets séparés par un espace)<input class="f" id="g-score" inputmode="numeric" placeholder="7-4  ou  6-3 4-6 10-8" value="' + esc(F.score) + '"></label>' +
+    '<div class="f">Score, côté ' + (dbl ? 'équipe 1' : 'joueur 1') + ' à gauche' + [0, 1, 2].map(function (k) {
+      var v = (F.sets || [])[k] || ['', ''];
+      return '<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="small mut" style="width:96px">' + ['Set 1 / match', 'Set 2', 'Set 3 / super TB'][k] + '</span><input class="f" data-set="' + k + '-0" type="number" inputmode="numeric" min="0" max="20" value="' + esc(v[0]) + '" style="width:70px;text-align:center"><b>–</b><input class="f" data-set="' + k + '-1" type="number" inputmode="numeric" min="0" max="20" value="' + esc(v[1]) + '" style="width:70px;text-align:center"></div>';
+    }).join('') + '</div><input type="hidden" id="g-score" value="' + esc(F.score) + '"></label>' +
     '<p class="small" style="margin:0;color:' + (lu ? 'var(--ok)' : 'var(--mut)') + '" id="g-prev">' + (lu ? '🏆 ' + esc(nomEq(lu.vainqueur)) + ' gagne ' + esc(scorePour(lu.score, lu.vainqueur)) : 'Tape le score pour voir le vainqueur.') + '</p>' +
     '<button class="btn" id="g-save">' + (S.isDir ? 'Enregistrer et valider' : 'Proposer ce score') + '</button>' +
     (S.isDir ? '' : '<p class="mut xs" style="margin:0">Le score sera ajouté au classement après validation par la direction sportive.</p>') + '</section>';
@@ -1160,6 +1318,13 @@ function gesSaisir() {
   Array.prototype.forEach.call(box.querySelectorAll('[data-gniv]'), function (b) { b.onclick = function () { var n = b.dataset.gniv, i = F.niv.indexOf(n); if (!n) F.niv = []; else if (i >= 0) F.niv.splice(i, 1); else F.niv.push(n); gesSaisir(); }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-j]'), function (s) { s.onchange = function () { var x = s.dataset.j.split('-'); F['e' + x[0]][+x[1]] = s.value; gesSaisir(); }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-inv]'), function (c) { c.onchange = function () { F.inv[c.dataset.inv] = c.checked; }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-set]'), function (i) {
+    i.oninput = function () {
+      F.sets = [0, 1, 2].map(function (k) { return [box.querySelector('[data-set="' + k + '-0"]').value, box.querySelector('[data-set="' + k + '-1"]').value]; });
+      F.score = F.sets.filter(function (x) { return x[0] !== '' && x[1] !== ''; }).map(function (x) { return (+x[0]) + '-' + (+x[1]); }).join(' ');
+      $('g-score').oninput.call({ value: F.score });
+    };
+  });
   $('g-score').oninput = function () {
     F.score = this.value; var l2 = lireScore(F.score);
     $('g-prev').style.color = l2 ? 'var(--ok)' : 'var(--mut)';
@@ -1186,7 +1351,7 @@ function enregistrerMatch(dbl) {
     .then(function () { return S.isDir ? q(sb.from('arena_matchs').update({ statut: 'valide', valide_par: S.user.id }).eq('id', match.id)) : null; })
     .then(function () {
       toast(S.isDir ? 'Match enregistré, classement mis à jour' : 'Score proposé à la direction sportive');
-      S.classement = null; G.form.e1 = ['', '']; G.form.e2 = ['', '']; G.form.inv = {}; G.form.score = ''; gesSaisir();
+      S.classement = null; G.form.e1 = ['', '']; G.form.e2 = ['', '']; G.form.inv = {}; G.form.score = ''; G.form.sets = []; gesSaisir();
     })
     .catch(function () {
       if (match) sb.from('arena_matchs').delete().eq('id', match.id);
@@ -1312,10 +1477,10 @@ function cordDeposer(box) {
     S.pers.map(function (p) { return pick('cqui', p.id, F.qui === p.id, '<span class="dot" style="background:' + S.couleur[p.id] + ';margin-right:8px"></span>' + esc(p.prenom + ' ' + p.nom)); }).join('') +
     (cordeur ? pick('cqui', 'ext', F.qui === 'ext', 'Autre joueur (saisi par le cordeur)') + (F.qui === 'ext' ? '<label class="f">Nom du joueur<input class="f" data-cf="nomExt" value="' + esc(F.nomExt) + '" placeholder="Prénom Nom"></label>' : '') : '') +
     '<label class="f">Raquette (facultatif)<input class="f" data-cf="raquette" value="' + esc(F.raquette) + '" placeholder="Ex. Babolat Pure Drive bleue"></label></section>' +
-    '<section class="card stack" style="gap:10px"><span class="eyebrow">Cordage</span><div class="grid2">' +
+    '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Cordage</span><a class="small" href="#/cordage/guide" style="font-weight:600">Quel cordage choisir ? →</a></div><div class="grid2">' +
     pick('cfour', 'club', F.fourni === 'club', 'Fourni par le club') + pick('cfour', 'joueur', F.fourni === 'joueur', 'J\'apporte le mien') + '</div>' +
     (F.fourni === 'club'
-      ? (actifs.length ? actifs.map(function (c) { return pick('ccord', c.id, F.cordage === c.id, esc(c.nom), '<b>' + euros(c.prix) + '</b>'); }).join('') : '<span class="mut small">Aucun cordage du club disponible pour le moment.</span>')
+      ? (actifs.length ? actifs.map(function (c) { return pick('ccord', c.id, F.cordage === c.id, esc(c.nom) + (c.pour_qui ? '<span class="mut xs" style="display:block;font-weight:400">' + esc(c.pour_qui) + '</span>' : ''), '<b>' + euros(c.prix) + '</b>'); }).join('') : '<span class="mut small">Aucun cordage du club disponible pour le moment.</span>')
       : '<label class="f">Quel cordage ?<input class="f" data-cf="perso" value="' + esc(F.perso) + '" placeholder="Ex. Luxilon Alu Power 1.25"></label><span class="mut xs">Pense à le laisser avec la raquette. Pose seule : ' + euros(tarifPose()) + '.</span>') +
     '<label class="f">Tension (facultatif)<input class="f" data-cf="tension" value="' + esc(F.tension) + '" placeholder="Ex. 24 kg / 23 kg, ou « comme d\'habitude »"></label></section>' +
     '<section class="card stack" style="gap:10px"><label class="f">J\'en ai besoin avant le (facultatif)<input class="f" type="date" data-cf="avant" min="' + isoJour(new Date()) + '" value="' + esc(F.avant) + '"></label>' +
@@ -1452,6 +1617,9 @@ function cordReglages(box) {
       return '<div class="stack" style="gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line)"><input class="f" data-cnom="' + c.id + '" value="' + esc(c.nom) + '" aria-label="Nom du cordage">' +
         '<div style="display:flex;gap:8px;align-items:center"><input class="f" data-cprix="' + c.id + '" inputmode="decimal" value="' + esc(String(+c.prix).replace('.', ',')) + '" aria-label="Prix" style="width:110px"><span>€</span>' +
         '<label class="check" style="margin-left:auto"><input type="checkbox" data-cact="' + c.id + '"' + (c.actif ? ' checked' : '') + '>Proposé</label></div>' +
+        '<textarea class="f" data-cdesc="' + c.id + '" rows="2" placeholder="Ce que c\'est (guide des cordages)">' + esc(c.description) + '</textarea>' +
+        '<textarea class="f" data-cpq="' + c.id + '" rows="2" placeholder="Pour qui ?">' + esc(c.pour_qui) + '</textarea>' +
+        '<textarea class="f" data-csen="' + c.id + '" rows="2" placeholder="Sensations, conseils">' + esc(c.sensation) + '</textarea>' +
         '<button class="btn line" data-csave="' + c.id + '">Enregistrer</button></div>';
     }).join('') +
     '<b class="small">Ajouter un cordage</b><input class="f" id="cr-nom" placeholder="Ex. Tecnifibre X-One Biphase 1.30"><div style="display:flex;gap:8px"><input class="f" id="cr-prix" inputmode="decimal" placeholder="Prix en €"><button class="btn" id="cr-add" style="width:auto">Ajouter</button></div></section>';
@@ -1467,7 +1635,8 @@ function cordReglages(box) {
     b.onclick = function () {
       var id = b.dataset.csave, n = num(box.querySelector('[data-cprix="' + id + '"]').value), nom = box.querySelector('[data-cnom="' + id + '"]').value.trim();
       if (n == null || !nom) return toast('Nom ou prix invalide');
-      q(sb.from('cordages').update({ nom: nom, prix: n, actif: box.querySelector('[data-cact="' + id + '"]').checked }).eq('id', id)).then(function () { apres('Cordage enregistré'); }).catch(function () { toast('Action impossible'); });
+      var tx = function (a) { var v = box.querySelector('[data-' + a + '="' + id + '"]').value.trim(); return v || null; };
+      q(sb.from('cordages').update({ nom: nom, prix: n, actif: box.querySelector('[data-cact="' + id + '"]').checked, description: tx('cdesc'), pour_qui: tx('cpq'), sensation: tx('csen') }).eq('id', id)).then(function () { apres('Cordage enregistré'); }).catch(function () { toast('Action impossible'); });
     };
   });
   $('cr-add').onclick = function () {
@@ -1502,7 +1671,8 @@ function estInstallee() { return (window.matchMedia && matchMedia('(display-mode
 var INSTALL = null;
 window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); INSTALL = e; });
 function blocInstaller() {
-  if (estInstallee() || !INSTALL) return '';
+  if (estInstallee()) return '<section class="card"><span class="small" style="color:var(--ok)">✓ L\'appli est installée sur cet appareil.</span></section>';
+  if (!INSTALL) return '<section class="card stack" style="gap:6px"><b>Installer l\'appli sur ce téléphone</b><span class="mut small">' + (estIos() ? 'Dans Safari : bouton Partager, puis « Sur l\'écran d\'accueil ».' : 'Dans le menu ⋮ du navigateur : « Installer l\'application » ou « Ajouter à l\'écran d\'accueil ». Si l\'option n\'apparaît pas, l\'appli est sûrement déjà installée : cherche l\'icône CLOCA Tennis.') + '</span></section>';
   return '<section class="card stack" style="gap:8px"><b>Installer l\'appli sur ce téléphone</b><span class="mut small">Elle s\'ouvre comme une vraie appli, et les notifications s\'affichent au nom de « CLOCA Tennis ».</span><button class="btn navy" id="install-go">Installer CLOCA Tennis</button></section>';
 }
 function lierInstaller() {
@@ -1671,8 +1841,11 @@ function render() {
   else if (p === 'actu') { html = pageActu(arg); actif = 'club'; }
   else if (p === 'profil') html = pageProfil();
   else if (p === 'gestion') html = pageGestion();
-  else if (p === 'cordage') { html = pageCordage(arg); actif = 'accueil'; }
-  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); }); }
+  else if (p === 'cordage') { html = arg === 'guide' ? pageGuideCordage() : pageCordage(arg); actif = 'accueil'; }
+  else if (p === 'double') { html = pageDouble(); actif = 'accueil'; }
+  else if (p === 'groupe') { html = pageGroupe(arg); actif = 'agenda'; }
+  else if (p === 'coach') { html = pageCoach(); actif = 'accueil'; }
+  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   $('app').innerHTML = html;
   if ($('apercu-x')) $('apercu-x').onclick = function () { apercu(null); };

@@ -18,19 +18,39 @@ Deno.serve(async (req) => {
     const jeton = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     const { data: u } = await admin.auth.getUser(jeton);
     if (!u?.user) return json({ erreur: "non connecté" }, 401);
-    const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).in("role", ["direction", "bureau", "accueil"]);
-    if (!roles?.length) return json({ erreur: "réservé à l'équipe du club" }, 403);
-
     const b = await req.json();
-    const titre = String(b.titre || "CLOCA Tennis").slice(0, 80);
-    const texte = String(b.texte || "").slice(0, 200);
-    const url = typeof b.url === "string" && b.url.startsWith("/app/") ? b.url : "/app/";
-    const groupes = Array.isArray(b.groupes) && b.groupes.length ? b.groupes : null;
-    const evt = b.evenement_id || null;
+    const direction = async () => ((await admin.from("responsabilites").select("user_id").eq("role", "direction").is("groupe_id", null)).data || []).map((r) => r.user_id as string);
+    let titre = String(b.titre || "CLOCA Tennis").slice(0, 80);
+    let texte = String(b.texte || "").slice(0, 200);
+    let url = typeof b.url === "string" && b.url.startsWith("/app/") ? b.url : "/app/";
+    let users: string[] = [];
 
-    const { data: ids, error } = await admin.rpc("destinataires_notif", { groupes, evt });
-    if (error) return json({ erreur: error.message }, 500);
-    const users = (ids || []).map((x: unknown) => (typeof x === "string" ? x : (x as Record<string, string>).destinataires_notif));
+    if (b.mode === "absence_ng") {
+      // Un jeune Next Gen (ou sa famille) signale une absence : la direction est prévenue tout de suite
+      const { data: abs } = await admin.from("nextgen_absences").select("id, jour, motif, cree_par, nextgen(grade, libelle, personne_id, personnes(prenom, nom, foyer_id), groupes(nom))").eq("id", b.absence_id).maybeSingle();
+      const ng = abs?.nextgen as unknown as { libelle: string | null; personne_id: string; personnes: { prenom: string; nom: string; foyer_id: string | null }; groupes: { nom: string } | null } | null;
+      if (!abs || !ng || abs.cree_par !== u.user.id) return json({ erreur: "absence introuvable" }, 404);
+      const jour = new Date(abs.jour + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" });
+      titre = "Absence Next Gen : " + ng.personnes.prenom + " " + ng.personnes.nom.charAt(0) + ".";
+      texte = (jour + " · " + (ng.libelle || (ng.groupes ? ng.groupes.nom.replace(/^.*?·\s*/, "") : "")) + (abs.motif ? " · " + abs.motif : "")).slice(0, 200);
+      url = "/app/gestion/#/nextgen";
+      users = await direction();
+    } else {
+      const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).in("role", ["direction", "bureau", "accueil"]);
+      if (!roles?.length) return json({ erreur: "réservé à l'équipe du club" }, 403);
+      if (b.mode === "mission") {
+        // Nouvelle mission : le coach visé, ou tous les comptes coach
+        const q = admin.from("comptes").select("user_id, nom_coach").not("nom_coach", "is", null);
+        const { data: cs } = await q;
+        users = (cs || []).filter((c) => !b.pour_nom || String(c.nom_coach).toLowerCase() === String(b.pour_nom).toLowerCase()).map((c) => c.user_id as string);
+      } else {
+        const groupes = Array.isArray(b.groupes) && b.groupes.length ? b.groupes : null;
+        const evt = b.evenement_id || null;
+        const { data: ids, error } = await admin.rpc("destinataires_notif", { groupes, evt });
+        if (error) return json({ erreur: error.message }, 500);
+        users = (ids || []).map((x: unknown) => (typeof x === "string" ? x : (x as Record<string, string>).destinataires_notif));
+      }
+    }
     if (!users.length) return json({ envoyes: 0, appareils: 0 });
 
     const abos: { id: string; endpoint: string; p256dh: string; auth: string }[] = [];
