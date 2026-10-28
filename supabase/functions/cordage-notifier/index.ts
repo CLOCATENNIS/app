@@ -29,12 +29,11 @@ Deno.serve(async (req) => {
     if (!d) return json({ erreur: "demande introuvable" }, 404);
     if (!d.personne_id) return json({ envoyes: 0, appareils: 0, raison: "joueur sans compte" });
 
-    // 2. Les comptes de la famille du joueur
-    const { data: p } = await admin.from("personnes").select("prenom, foyer_id").eq("id", d.personne_id).single();
-    let cq = admin.from("comptes").select("user_id");
-    cq = p?.foyer_id ? cq.or(`personne_id.eq.${d.personne_id},foyer_id.eq.${p.foyer_id}`) : cq.eq("personne_id", d.personne_id);
-    const { data: comptes } = await cq;
-    const ids = (comptes || []).map((c) => c.user_id);
+    // 2. Les comptes qui suivent ce joueur
+    // (un adulte : son propre compte ; un mineur : les comptes de ses parents)
+    const { data: p } = await admin.from("personnes").select("prenom").eq("id", d.personne_id).single();
+    const { data: comptes } = await admin.rpc("comptes_concernes", { pids: [d.personne_id] });
+    const ids = ((comptes || []) as { user_id: string }[]).map((c) => c.user_id);
     if (!ids.length) return json({ envoyes: 0, appareils: 0, raison: "aucun compte" });
 
     const { data: abos } = await admin.from("push_abonnements").select("id, endpoint, p256dh, auth").in("user_id", ids);

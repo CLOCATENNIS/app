@@ -46,10 +46,10 @@ Deno.serve(async (req) => {
   if (err) return new Response("Agenda indisponible pour le moment (" + err.message + ").", { status: 500 });
   if (!compte) return new Response("Ce lien d'agenda n'est plus valable. Récupère le nouveau dans l'appli.", { status: 404 });
 
-  // La famille
-  let pq = db.from("personnes").select("id, prenom").eq("actif", true);
-  pq = compte.foyer_id ? pq.or(`foyer_id.eq.${compte.foyer_id}${compte.personne_id ? `,id.eq.${compte.personne_id}` : ""}`) : pq.eq("id", compte.personne_id ?? "00000000-0000-0000-0000-000000000000");
-  const { data: pers } = await pq;
+  // Les personnes que suit ce compte : soi-même, et les enfants mineurs pour un parent
+  const { data: vis } = await db.rpc("personnes_visibles", { uid: compte.user_id });
+  const visibles = ((vis || []) as unknown[]).map((x) => (typeof x === "string" ? x : (x as Record<string, string>).personnes_visibles));
+  const { data: pers } = visibles.length ? await db.from("personnes").select("id, prenom").eq("actif", true).in("id", visibles) : { data: [] as { id: string; prenom: string }[] };
   const ids = (pers || []).map((p) => p.id);
   const prenom: Record<string, string> = Object.fromEntries((pers || []).map((p) => [p.id, p.prenom]));
 

@@ -492,6 +492,66 @@ function vueInscriptions(m, arg) {
 
 // ---------- Adhérents ----------
 var ADF = { t: '', profil: '', groupe: '', impayes: false };
+// À qui est ce compte ? Un adulte = son propre compte (il voit sa fiche + les mineurs de la famille). Un parent sans fiche = compte famille.
+function choisirTitulaire(c, foyer, pid, apres) {
+  var membres = foyer ? A.pers.filter(function (p) { return p.foyer_id === foyer; }) : A.pers.filter(function (p) { return p.id === pid; });
+  var majeur = function (p) { return p.date_naissance ? age(p.date_naissance) >= 18 : p.profil !== 'jeune'; };
+  var adultes = membres.filter(majeur);
+  panneau('Relier ' + c.email, '<div class="stack"><span class="mut small">' + (c.prenom ? 'Nom indiqué : <b>' + esc(c.prenom + ' ' + c.nom) + '</b>. ' : '') + 'À qui est ce compte ?</span>' +
+    adultes.map(function (p) { return '<button class="btn line" data-tit="' + p.id + '" style="justify-content:flex-start">C\'est le compte de <b style="margin-left:4px">' + esc(p.prenom + ' ' + p.nom) + '</b></button>'; }).join('') +
+    (foyer ? '<button class="btn line" data-tit="" style="justify-content:flex-start">Un parent qui n\'a pas de fiche adhérent</button>' : '') +
+    '<span class="mut xs">Un adulte voit sa propre fiche et les mineurs de sa famille. Un compte parent voit les mineurs (et les adultes qui n\'ont pas leur propre compte).</span></div>', function (r) {
+    all('[data-tit]', r).forEach(function (b) { b.onclick = function () {
+      q(sb.rpc('compte_definir', { p_user: c.user_id, p_foyer: foyer || null, p_personne: b.dataset.tit || null })).then(function () { toast('Compte relié'); fermer(); if (apres) apres(); }).catch(function () { toast('Action impossible'); });
+    }; });
+  });
+}
+// Tous les comptes de l'appli : qui voit qui, avec les exceptions réglées à la main
+var CAF = { t: '' };
+function comptesAppli(focus) {
+  Promise.all([q(sb.rpc('comptes_liste')), chargerPers()]).then(function (r) {
+    var L = r[0] || [], P = {}; A.pers.forEach(function (p) { P[p.id] = p; });
+    var nomP = function (id) { var p = P[id]; return p ? p.prenom + ' ' + p.nom : '?'; };
+    var mineur = function (p) { return p.date_naissance ? age(p.date_naissance) < 18 : p.profil === 'jeune'; };
+    var rendu = function () {
+      var t = norm(CAF.t).trim();
+      var l = L.filter(function (c) { return !t || norm(c.email + ' ' + (c.prenom || '') + ' ' + (c.nom || '') + ' ' + (c.personne_id ? nomP(c.personne_id) : '') + ' ' + c.voit.map(nomP).join(' ')).indexOf(t) >= 0; });
+      return '<input class="f" id="caf-q" placeholder="Chercher un compte, un nom…" value="' + esc(CAF.t) + '">' + l.map(function (c) {
+        var fam = c.foyer_id ? A.pers.filter(function (p) { return p.foyer_id === c.foyer_id; }) : [];
+        var cand = fam.concat(c.voit.filter(function (id) { return !fam.some(function (p) { return p.id === id; }); }).map(function (id) { return P[id]; }).filter(Boolean));
+        return '<div class="card stack" style="gap:8px" data-caf="' + c.user_id + '"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b class="small" style="word-break:break-all">' + esc(c.email) + '</b>' +
+          '<div class="xs mut">' + (c.personne_id ? 'Compte de <b>' + esc(nomP(c.personne_id)) + '</b>' : c.foyer_id ? 'Compte famille (parent)' : 'Pas encore relié') + (c.prenom ? ' · nom indiqué : ' + esc(c.prenom + ' ' + c.nom) : '') + '</div></div>' +
+          '<button class="btn sm line" data-cft="' + c.user_id + '">' + (c.foyer_id || c.personne_id ? 'Changer' : 'Relier') + '</button></div>' +
+          (cand.length ? '<div class="xs mut">Ce compte voit :</div><div class="chips" style="flex-wrap:wrap">' + cand.map(function (p) {
+            var on = c.voit.indexOf(p.id) >= 0;
+            return '<label class="chip' + (on ? ' on' : '') + '" style="cursor:pointer"><input type="checkbox" data-cfv="' + c.user_id + '|' + p.id + '"' + (on ? ' checked' : '') + ' hidden>' + esc(p.prenom + ' ' + p.nom) + (mineur(p) ? ' <span class="xs">(mineur)</span>' : '') + '</label>';
+          }).join('') + '</div>' : '') +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><div data-cfa="' + c.user_id + '" style="flex:1;min-width:220px">' + CHERCHEUR.replace('Rechercher un adhérent (2 lettres minimum)', 'Lui faire voir quelqu\'un d\'autre…') + '</div>' +
+          (c.exceptions ? '<button class="btn sm ghost" data-cfr="' + c.user_id + '">Revenir au réglage normal (' + c.exceptions + ' exception' + (c.exceptions > 1 ? 's' : '') + ')</button>' : '') + '</div></div>';
+      }).join('') + (l.length ? '' : '<div class="card empty">Aucun compte.</div>');
+    };
+    panneau('Comptes de l\'appli (' + L.length + ')', '<div class="stack"><span class="mut small">Règle : un adulte a son propre compte et voit sa fiche + les mineurs de sa famille. Les messages, notifications et l\'agenda suivent la même règle. Coche ou décoche pour faire une exception.</span><div id="caf-l" class="stack">' + rendu() + '</div></div>', function (root) {
+      var lier = function () {
+        $('caf-q').oninput = function () { CAF.t = this.value; var pos = this.selectionStart; $('caf-l').innerHTML = rendu(); lier(); $('caf-q').focus(); $('caf-q').setSelectionRange(pos, pos); };
+        all('[data-cft]', root).forEach(function (b) { b.onclick = function () {
+          var c = L.filter(function (x) { return x.user_id === b.dataset.cft; })[0];
+          if (c.foyer_id || c.personne_id) choisirTitulaire(c, c.foyer_id, c.personne_id, function () { comptesAppli(); });
+          else { fermer(); comptesARattacher(); }
+        }; });
+        all('[data-cfv]', root).forEach(function (i) { i.onchange = function () {
+          var x = i.dataset.cfv.split('|');
+          q(sb.from('compte_visibilite').upsert({ user_id: x[0], personne_id: x[1], voit: i.checked })).then(function () { toast(i.checked ? 'Ajouté à ce compte' : 'Retiré de ce compte'); comptesAppli(); }).catch(function () { toast('Action impossible'); });
+        }; });
+        all('[data-cfr]', root).forEach(function (b) { b.onclick = function () { q(sb.from('compte_visibilite').delete().eq('user_id', b.dataset.cfr)).then(function () { toast('Réglage normal rétabli'); comptesAppli(); }); }; });
+        all('[data-cfa]', root).forEach(function (box) { chercheurPers(box, function (p) {
+          q(sb.from('compte_visibilite').upsert({ user_id: box.dataset.cfa, personne_id: p.id, voit: true })).then(function () { toast(p.prenom + ' ajouté à ce compte'); comptesAppli(); });
+        }); });
+      };
+      lier();
+    });
+  }).catch(function () { toast('Liste indisponible'); });
+}
+
 // Comptes créés dans l'appli mais pas encore reliés à une famille : nom déclaré + suggestions
 function comptesARattacher() {
   Promise.all([q(sb.rpc('comptes_a_rattacher')), chargerPers()]).then(function (r) {
@@ -511,10 +571,7 @@ function comptesARattacher() {
       });
       return Object.keys(sc).map(function (k) { return sc[k]; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 3);
     };
-    var lier = function (c, x) {
-      var row = x.foyer ? { email: c.email.toLowerCase(), foyer_id: x.foyer } : { email: c.email.toLowerCase(), personne_id: x.pid };
-      return q(sb.from('acces_emails').upsert(row)).then(function () { toast(c.email + ' rattaché'); comptesARattacher(); }).catch(function () { toast('Rattachement impossible'); });
-    };
+    var lier = function (c, x) { choisirTitulaire(c, x.foyer, x.pid, comptesARattacher); };
     panneau('Comptes à rattacher (' + L.length + ')', '<div class="stack"><span class="mut small">Ces personnes se sont connectées à l\'appli, mais leur adresse n\'est reliée à aucun adhérent. Elles indiquent leur nom à la première connexion : choisis la bonne famille, et leur agenda s\'affiche aussitôt.</span>' +
       (L.length ? L.map(function (c, i) {
         var sg = sugg(c);
@@ -536,7 +593,7 @@ function comptesARattacher() {
 function vueAdherents(m, arg) {
   if (arg === 'impayes') ADF.impayes = true;
   setTimeout(function () { q(sb.rpc('comptes_a_rattacher')).then(function (l) { if ($('ad-ratn') && l && l.length) { $('ad-ratn').textContent = l.length; $('ad-ratn').hidden = false; } if (arg === 'rattacher') comptesARattacher(); }).catch(function () { }); });
-  m.innerHTML = entete('Adhérents', 'Fiches, familles, groupes et cotisations.', '<button class="btn line" id="ad-rat">Comptes à rattacher<span class="n" id="ad-ratn" hidden style="margin-left:6px"></span></button><button class="btn line" id="ad-csv">Exporter</button>' + (aRole(['direction', 'bureau', 'accueil']) ? '<button class="btn" id="ad-new">Nouvel adhérent</button>' : '')) +
+  m.innerHTML = entete('Adhérents', 'Fiches, familles, groupes et cotisations.', '<button class="btn line" id="ad-cpt">Comptes de l\'appli</button><button class="btn line" id="ad-rat">Comptes à rattacher<span class="n" id="ad-ratn" hidden style="margin-left:6px"></span></button><button class="btn line" id="ad-csv">Exporter</button>' + (aRole(['direction', 'bureau', 'accueil']) ? '<button class="btn" id="ad-new">Nouvel adhérent</button>' : '')) +
     '<div class="toolbar"><input class="f grow" id="ad-q" placeholder="Rechercher un nom, un prénom…" value="' + esc(ADF.t) + '">' +
     '<select class="f" id="ad-p" style="width:auto"><option value="">Jeunes et adultes</option><option value="jeune"' + (ADF.profil === 'jeune' ? ' selected' : '') + '>Jeunes</option><option value="adulte"' + (ADF.profil === 'adulte' ? ' selected' : '') + '>Adultes</option></select>' +
     '<select class="f" id="ad-g" style="width:auto"><option value="">Tous les groupes</option></select>' +
@@ -641,6 +698,7 @@ function vueAdherents(m, arg) {
     $('ad-i').onchange = function () { ADF.impayes = this.checked; dessiner(); };
     if ($('ad-new')) $('ad-new').onclick = nouveau;
     $('ad-rat').onclick = comptesARattacher;
+    $('ad-cpt').onclick = function () { comptesAppli(); };
     $('ad-csv').onclick = function () {
       csv('adherents.csv', [['Nom', 'Prénom', 'Date de naissance', 'Âge', 'Profil', 'Licence', 'Cours', 'Groupes', 'Cotisation à jour']].concat(filtrer().map(function (p) {
         return [p.nom, p.prenom, p.date_naissance, age(p.date_naissance), p.profil, p.adoc_id, p.cours, (p.groupe_membres || []).map(function (g) { return nomGroupe(g.groupe_id); }).join(', '), p.cotisation_a_jour ? 'oui' : 'non'];

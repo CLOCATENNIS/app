@@ -92,7 +92,7 @@ if (sb) (function () {
     if (S.apercu) ['insert', 'update', 'delete', 'upsert'].forEach(function (m) { b[m] = bloque; });
     return b;
   };
-  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|deposer|notifier|envoyer|messages_lus/.test(n) ? bloque() : rpc(n, a); };
+  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|deposer|notifier|envoyer|messages_lus|declarer/.test(n) ? bloque() : rpc(n, a); };
 })();
 
 function chargerPublic() {
@@ -118,10 +118,15 @@ function chargerUtilisateur() {
     var cible = S.apercu && S.isDir ? { foyer_id: S.apercu.foyer, personne_id: null } : S.compte;
     if (!S.isDir) S.apercu = null;
     if (S.apercu) { S.roles = []; S.isStaff = false; S.isDir = false; S.gere = []; } // l'appli exactement comme un parent
-    if (!cible || (!cible.foyer_id && !cible.personne_id)) return;
-    var f = sb.from('personnes').select('id, prenom, nom, sexe, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))').order('prenom');
-    f = cible.foyer_id ? f.or('foyer_id.eq.' + cible.foyer_id + (cible.personne_id ? ',id.eq.' + cible.personne_id : '')) : f.eq('id', cible.personne_id);
-    return q(f).then(function (pers) {
+    var champs = 'id, prenom, nom, sexe, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))';
+    // Qui suit qui : un adulte voit sa fiche et les mineurs de sa famille (la règle est appliquée par la base)
+    var liste = S.apercu ? q(sb.from('personnes').select(champs).eq('foyer_id', cible.foyer_id).order('prenom'))
+      : q(sb.rpc('mes_personnes_ids')).then(function (ids) {
+        ids = (ids || []).map(function (x) { return typeof x === 'string' ? x : x.mes_personnes_ids; });
+        return ids.length ? q(sb.from('personnes').select(champs).in('id', ids).order('prenom')) : [];
+      });
+    if (!S.apercu && (!cible || (!cible.foyer_id && !cible.personne_id))) return;
+    return liste.then(function (pers) {
       S.pers = pers || [];
       S.pers.forEach(function (p, i) {
         S.couleur[p.id] = FAMILLE[i % FAMILLE.length];
