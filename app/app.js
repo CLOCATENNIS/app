@@ -341,15 +341,24 @@ function pageAccueil() {
     '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
     '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
 
-  if (!S.user) h += '<section class="card stack" style="gap:10px"><b>Ton espace personnel</b><span class="mut small">Connecte-toi avec l\'adresse mail donnée au club pour voir ton agenda, tes inscriptions et la fiche de tes enfants.</span><a class="btn" href="#/profil">Me connecter</a></section>';
-  else if (!S.pers.length && !S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
+  if (!S.user) h += '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
+    '<ol class="small" style="margin:0;padding-left:20px;line-height:1.7"><li>Tape l\'adresse mail donnée au club</li><li>Ouvre le mail : tu reçois un code</li><li>Tape le code : c\'est fait !</li></ol>' +
+    '<a class="btn" href="#/profil">Me connecter</a><button class="btn line" data-guide="1">Besoin d\'aide ? Le guide pas à pas</button></section>';
+  else if (!S.pers.length && !S.isStaff) h += '<section class="card stack" style="gap:8px"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. ' + (S.compte && S.compte.identite_le ? 'Le club a reçu ton nom (' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + ') et va relier ton compte à ta famille.' : 'Indique ton nom pour que le club relie ton compte à ta famille.') + '</span>' + (S.compte && S.compte.identite_le ? '' : '<button class="btn" data-identite="1">Indiquer mon nom</button>') + '</section>';
 
+  if (S.user && estMobile() && !estInstallee() && !localStorageGet('cloca-install-masque')) h += '<section class="card stack" style="gap:8px"><b>📲 Installe l\'appli sur ton téléphone</b><span class="mut small">Une icône sur l\'écran d\'accueil, et les notifications du club.</span><div style="display:flex;gap:8px"><button class="btn" data-guide="1" style="flex:2">Me montrer comment</button><button class="btn line" id="inst-masq" style="flex:1">Plus tard</button></div></section>';
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
   if (actu) h += carteActu(actu, 'Dernière actu');
   if (nomCoachCompte() || S.isDir) h += '<a class="card stack" href="#/coach" style="gap:4px;text-decoration:none;color:inherit"><span class="eyebrow">Espace coach</span><b>Mes groupes et mes missions</b><span class="mut small" id="coach-resume">Notes de groupe, joueurs, missions de la direction</span></a>';
   h += '<div id="reseaux"></div>';
   h += '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></main>';
   return h;
+}
+
+function lierAccueilAide() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-guide]'), function (b) { b.onclick = function () { ouvrirGuide(0); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-identite]'), function (b) { b.onclick = function () { modale(formIdentite(false), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; });
+  if ($('inst-masq')) $('inst-masq').onclick = function () { localStorageSet('cloca-install-masque', '1'); render(); };
 }
 
 // ---------- Agenda ----------
@@ -1386,7 +1395,8 @@ function pageProfil() {
     h += '<section class="card stack" style="gap:12px"><span class="mut small">Entre l\'adresse mail que tu as donnée au club. Tu recevras un code, sans mot de passe à retenir.</span>';
     if (S.loginStep === 1) h += '<label class="f">Adresse mail<input class="f" id="lg-mail" type="email" autocomplete="email" inputmode="email" placeholder="prenom.nom@exemple.fr" value="' + esc(S.loginEmail) + '"></label><button class="btn" id="lg-send">Recevoir mon code</button>';
     else h += '<label class="f">Code reçu par mail<input class="f" id="lg-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></label><button class="btn" id="lg-ok">Me connecter</button><button class="btn line" id="lg-back">Changer d\'adresse</button>';
-    h += '<p class="mut small" id="lg-msg" style="margin:0">' + (S.loginStep === 2 ? 'Un mail vient de partir vers ' + esc(S.loginEmail) + '. Tape le code, ou clique sur le lien du mail.' : '') + '</p></section></main>';
+    h += '<p class="mut small" id="lg-msg" style="margin:0">' + (S.loginStep === 2 ? 'Un mail vient de partir vers ' + esc(S.loginEmail) + '. Il arrive en moins d\'une minute : regarde aussi dans les spams ou l\'onglet Promotions. Tape le code à 6 chiffres ci-dessus.' : '') + '</p></section>' +
+      '<section class="card stack" style="gap:8px"><b>Besoin d\'aide ?</b><span class="mut small">Installer l\'appli, se connecter, activer les notifications : on te montre où appuyer.</span><a class="btn line" href="#/aide">Voir le guide pas à pas</a></section></main>';
     setTimeout(lierLogin);
     return h;
   }
@@ -1404,10 +1414,12 @@ function pageProfil() {
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
   if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
     '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
+  h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
   h += blocInstaller() + blocPush();
+  h += '<a class="btn ghost" href="#/aide">' + ic('alert', 18) + ' Aide et guide pas à pas</a>';
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
     '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
-  setTimeout(function () { lierPush(); lierInstaller(); lierApercu(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
+  setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
 function apercu(foyer, nom) {
@@ -2134,6 +2146,142 @@ function lierEcrireGroupe(gid) {
   };
 }
 
+// ---------- Guide pas à pas : installer l'appli, se connecter, s'y retrouver ----------
+function estAndroid() { return /android/i.test(navigator.userAgent); }
+function estMobile() { return estIos() || estAndroid(); }
+function navInterne() { return /FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|musical_ly|TikTok/i.test(navigator.userAgent) || (estAndroid() && /; wv\)/.test(navigator.userAgent)); }
+function iosHorsSafari() { return estIos() && /CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent); }
+var URL_APPLI = 'https://clocatennis.fr/app/';
+// Petites maquettes dessinées pour montrer où appuyer
+function maquette(t) {
+  var o = '#b4532a', cadre = function (h, c) { return '<svg viewBox="0 0 260 ' + h + '" width="100%" style="max-width:300px;display:block;margin:0 auto" role="img" aria-hidden="true"><rect x="1" y="1" width="258" height="' + (h - 2) + '" rx="16" fill="#f4f6f8" stroke="#c9d3dc" stroke-width="2"/>' + c + '</svg>'; };
+  var halo = function (x, y, r) { return '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="none" stroke="' + o + '" stroke-width="3.5"/><circle cx="' + x + '" cy="' + y + '" r="' + (r + 7) + '" fill="none" stroke="' + o + '" stroke-opacity=".35" stroke-width="3"/>'; };
+  var txt = function (x, y, s, w, c, a) { return '<text x="' + x + '" y="' + y + '" font-family="system-ui,sans-serif" font-size="' + (w || 13) + '" fill="' + (c || '#12304a') + '"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + s + '</text>'; };
+  if (t === 'ios-partager') return cadre(170, '<rect x="14" y="16" width="232" height="70" rx="10" fill="#fff"/>' + txt(130, 56, 'clocatennis.fr/app', 14, '#5d6b78', 'middle') +
+    '<rect x="1" y="104" width="258" height="64" fill="#fff"/><rect x="18" y="114" width="224" height="30" rx="9" fill="#e9edf1"/>' + txt(130, 134, 'clocatennis.fr', 12, '#5d6b78', 'middle') +
+    '<g stroke="#2f6fd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M40 156l-6 0"/><path d="M80 150h0"/>' +
+    '<path d="M124 154v-14M118 146l6-6 6 6"/><path d="M117 150v8h14v-8"/></g>' + halo(124, 151, 15) +
+    txt(130, 98, '1. Touche ce bouton, en bas de Safari', 12.5, o, 'middle'));
+  if (t === 'ios-ecran') return cadre(190, '<rect x="14" y="14" width="232" height="162" rx="12" fill="#fff"/>' +
+    ['Copier', 'Ajouter à la liste de lecture', 'Ajouter un signet', 'Sur l\'écran d\'accueil', 'Imprimer'].map(function (l, i) {
+      var y = 44 + i * 30, on = i === 3;
+      return (on ? '<rect x="20" y="' + (y - 20) + '" width="220" height="28" rx="7" fill="#fbe3d8" stroke="' + o + '" stroke-width="2.5"/>' : '<line x1="24" y1="' + (y + 9) + '" x2="236" y2="' + (y + 9) + '" stroke="#eef1f4"/>') +
+        txt(30, y, l, 13, on ? o : '#12304a') + (on ? '<rect x="212" y="' + (y - 14) + '" width="16" height="16" rx="4" fill="none" stroke="' + o + '" stroke-width="2"/><path d="M220 ' + (y - 10) + 'v8M216 ' + (y - 6) + 'h8" stroke="' + o + '" stroke-width="2"/>' : '');
+    }).join(''));
+  if (t === 'ios-ajouter') return cadre(150, '<rect x="14" y="14" width="232" height="122" rx="12" fill="#fff"/>' + txt(30, 40, 'Annuler', 13, '#2f6fd6') + txt(130, 40, 'Écran d\'accueil', 13, '#12304a', 'middle') +
+    '<rect x="196" y="24" width="44" height="24" rx="7" fill="#fbe3d8" stroke="' + o + '" stroke-width="2.5"/>' + txt(218, 41, 'Ajouter', 12, o, 'middle') +
+    '<image href="' + LOGO + '" x="30" y="64" width="52" height="52"/>' + txt(96, 86, 'CLOCA Tennis', 15) + txt(96, 106, 'clocatennis.fr', 12, '#5d6b78'));
+  if (t === 'icone') return cadre(150, [0, 1, 2, 3].map(function (i) { return '<rect x="' + (28 + i * 56) + '" y="22" width="40" height="40" rx="10" fill="#d6dee6"/>'; }).join('') +
+    '<rect x="28" y="80" width="40" height="40" rx="10" fill="#d6dee6"/><rect x="84" y="80" width="40" height="40" rx="10" fill="#fff"/><image href="' + LOGO + '" x="86" y="82" width="36" height="36"/>' + halo(104, 100, 26) + txt(104, 140, 'CLOCA Tennis', 11, o, 'middle'));
+  if (t === 'android-menu') return cadre(190, '<rect x="14" y="14" width="232" height="30" rx="9" fill="#fff"/>' + txt(26, 34, 'clocatennis.fr/app', 12, '#5d6b78') +
+    '<g fill="#12304a"><circle cx="234" cy="22" r="2.3"/><circle cx="234" cy="29" r="2.3"/><circle cx="234" cy="36" r="2.3"/></g>' + halo(234, 29, 11) +
+    '<rect x="96" y="54" width="150" height="124" rx="10" fill="#fff" stroke="#d6dee6"/>' + ['Nouvel onglet', 'Favoris', 'Historique', 'Installer l\'application'].map(function (l, i) {
+      var y = 78 + i * 28, on = i === 3; return (on ? '<rect x="100" y="' + (y - 18) + '" width="142" height="26" rx="6" fill="#fbe3d8" stroke="' + o + '" stroke-width="2.5"/>' : '') + txt(110, y, l, 12, on ? o : '#12304a');
+    }).join('') + txt(20, 176, 'ou « Ajouter à l\'écran d\'accueil »', 11, '#5d6b78'));
+  if (t === 'connexion') return cadre(170, '<rect x="14" y="14" width="232" height="142" rx="12" fill="#fff"/>' + txt(28, 38, 'Adresse mail', 12, '#5d6b78') +
+    '<rect x="28" y="46" width="204" height="30" rx="8" fill="#f4f6f8" stroke="#c9d3dc"/>' + txt(38, 66, 'prenom.nom@gmail.com', 12) + '<rect x="28" y="86" width="204" height="32" rx="9" fill="' + o + '"/>' + txt(130, 107, 'Recevoir mon code', 13, '#fff', 'middle') +
+    txt(28, 140, 'Code reçu par mail :', 12, '#5d6b78') + '<g font-family="system-ui" font-size="16" font-weight="700" fill="#12304a">' + '482915'.split('').map(function (c, i) { return '<rect x="' + (150 + i * 14) + '" y="126" width="12" height="20" rx="3" fill="#fbe3d8"/><text x="' + (156 + i * 14) + '" y="141" text-anchor="middle" font-size="12">' + c + '</text>'; }).join('') + '</g>');
+  if (t === 'notifs') return cadre(130, '<rect x="14" y="20" width="232" height="56" rx="12" fill="#fff" stroke="#d6dee6"/><image href="' + LOGO + '" x="24" y="30" width="36" height="36"/>' + txt(70, 44, 'CLOCA Tennis · Coach Florian', 12, '#12304a') + txt(70, 62, 'Pour Enora : séance en extérieur…', 11.5, '#5d6b78') +
+    '<rect x="70" y="90" width="120" height="30" rx="9" fill="' + o + '"/>' + txt(130, 110, 'Autoriser', 13, '#fff', 'middle'));
+  return '';
+}
+function etapesGuide() {
+  var E = [], ios = estIos(), andr = estAndroid(), inst = estInstallee();
+  E.push({ t: 'Bienvenue dans l\'appli du club 🎾', x: 'En 2 minutes, on t\'explique comment l\'installer sur ton téléphone, te connecter et t\'y retrouver. Tu pourras revoir ce guide à tout moment dans <b>Profil → Aide</b>.', img: '<img src="' + LOGO + '" alt="" style="width:96px;height:96px;border-radius:50%;background:#fff;display:block;margin:6px auto">' });
+  if (navInterne() || iosHorsSafari()) E.push({ t: 'Ouvre la page dans ' + (ios ? 'Safari' : 'Chrome'), x: (ios ? 'Sur iPhone, l\'installation ne marche que depuis <b>Safari</b>.' : 'Tu es dans le navigateur d\'une autre appli (Instagram, Facebook…).') + ' Copie le lien ci-dessous, ouvre <b>' + (ios ? 'Safari' : 'Chrome') + '</b> et colle-le dans la barre d\'adresse.' + (navInterne() ? ' Ou touche <b>⋯</b> en haut, puis « Ouvrir dans le navigateur ».' : ''), btn: ['copier', 'Copier le lien de l\'appli'] });
+  if (estMobile() && !inst) {
+    if (ios) {
+      E.push({ t: 'Installer · étape 1 sur 3', x: 'Dans <b>Safari</b>, touche le bouton <b>Partager</b> : le carré avec une flèche vers le haut, en bas de l\'écran (ou en haut à droite sur iPad).', img: maquette('ios-partager') });
+      E.push({ t: 'Installer · étape 2 sur 3', x: 'Fais défiler la liste vers le bas et touche <b>« Sur l\'écran d\'accueil »</b>. Si tu ne la vois pas, touche « Modifier les actions » tout en bas pour l\'ajouter.', img: maquette('ios-ecran') });
+      E.push({ t: 'Installer · étape 3 sur 3', x: 'Touche <b>« Ajouter »</b> en haut à droite. L\'icône CLOCA Tennis apparaît sur ton écran d\'accueil, comme une vraie appli.', img: maquette('ios-ajouter') });
+    } else {
+      E.push({ t: 'Installer l\'appli', x: INSTALL ? 'Touche le bouton ci-dessous, puis <b>« Installer »</b>. L\'icône CLOCA Tennis apparaît sur ton écran d\'accueil.' : 'Dans <b>Chrome</b>, touche les <b>3 petits points ⋮</b> en haut à droite, puis <b>« Installer l\'application »</b> (ou « Ajouter à l\'écran d\'accueil »), et confirme.', img: INSTALL ? '' : maquette('android-menu'), btn: INSTALL ? ['installer', 'Installer CLOCA Tennis'] : null });
+    }
+    E.push({ t: 'Ouvre l\'appli depuis son icône', x: 'Ferme ' + (ios ? 'Safari' : 'le navigateur') + ' et ouvre <b>CLOCA Tennis</b> depuis ton écran d\'accueil. ' + (ios ? 'C\'est indispensable sur iPhone pour recevoir les notifications.' : 'Elle s\'ouvre en plein écran, comme une vraie appli.'), img: maquette('icone') });
+  } else if (!estMobile()) E.push({ t: 'Sur ordinateur', x: 'Tu peux utiliser l\'appli directement ici, rien à installer. Pour l\'avoir sur ton téléphone, ouvre <b>clocatennis.fr/app</b> dessus et relance ce guide.' });
+  E.push({ t: 'Se connecter', x: 'Va dans <b>Profil</b> et tape <b>l\'adresse mail que tu as donnée au club</b> à l\'inscription. Tu reçois un <b>code à 6 chiffres</b> par mail (pas de mot de passe). Il arrive en moins d\'une minute : regarde aussi dans les <b>spams</b> ou l\'onglet <b>Promotions</b>.', img: maquette('connexion'), btn: S.user ? null : ['connexion', 'Me connecter maintenant'] });
+  E.push({ t: 'Activer les notifications', x: 'Cours annulé, message du coach, inscriptions ouvertes : tu es prévenu tout de suite. Une fois connecté, va dans <b>Profil</b> et touche <b>« Activer les notifications »</b>, puis <b>« Autoriser »</b>.' + (ios && !inst ? ' Sur iPhone, ça marche seulement depuis l\'icône installée.' : ''), img: maquette('notifs') });
+  E.push({ t: 'Ce que tu trouves dans l\'appli', x: '<div class="stack" style="gap:8px;text-align:left">' + [['home', 'Accueil', 'le prochain rendez-vous, les actus, qui est au club'], ['cal', 'Agenda', 'les cours et séances de toute la famille'], ['bell', 'Messages', 'la cloche 🔔 en haut : les messages du club et des coachs'], ['check', 'Inscriptions', 'stages, CLOC\'ARENA et événements'], ['user', 'Profil', 'ta famille, les notifications et ce guide']].map(function (x) { return '<div style="display:flex;gap:10px;align-items:center">' + ic(x[0], 22, '#b4532a') + '<span class="small"><b>' + x[1] + '</b> : ' + x[2] + '</span></div>'; }).join('') + '</div>' });
+  E.push({ t: 'C\'est tout ! 👏', x: 'Une question ? Écris au club depuis <b>Profil</b> ou demande à l\'accueil du club house. Tu retrouves ce guide dans <b>Profil → Aide</b>.' });
+  return E;
+}
+function modale(html, lier, fermable) {
+  fermerModale();
+  var d = document.createElement('div'); d.className = 'modal-f'; d.id = 'modale';
+  d.innerHTML = '<div class="modal" role="dialog" aria-modal="true">' + (fermable === false ? '' : '<button class="modal-x" id="modal-x" aria-label="Fermer">×</button>') + html + '</div>';
+  document.body.appendChild(d); document.body.style.overflow = 'hidden';
+  if ($('modal-x')) $('modal-x').onclick = fermerModale;
+  if (lier) lier(d);
+}
+function fermerModale() { var d = $('modale'); if (d) d.remove(); document.body.style.overflow = ''; }
+function ouvrirGuide(i) {
+  var E = etapesGuide(); i = Math.max(0, Math.min(i || 0, E.length - 1)); var e = E[i];
+  localStorageSet('cloca-guide-vu', '1');
+  modale('<div class="stack" style="gap:14px;text-align:center"><div class="guide-pts">' + E.map(function (x, k) { return '<span class="' + (k === i ? 'on' : k < i ? 'fait' : '') + '"></span>'; }).join('') + '</div>' +
+    '<h2 style="margin:0;font-size:21px">' + e.t + '</h2>' + (e.img || '') + '<div class="small" style="line-height:1.55">' + e.x + '</div>' +
+    (e.btn ? '<button class="btn navy" id="g-act">' + e.btn[1] + '</button>' : '') +
+    '<div style="display:flex;gap:8px">' + (i ? '<button class="btn line" id="g-prec" style="flex:1">Précédent</button>' : '') + '<button class="btn" id="g-suiv" style="flex:2">' + (i === E.length - 1 ? 'Terminer' : 'Suivant') + '</button></div>' +
+    '<span class="mut xs">' + (i + 1) + ' / ' + E.length + '</span></div>', function () {
+    if ($('g-prec')) $('g-prec').onclick = function () { ouvrirGuide(i - 1); };
+    $('g-suiv').onclick = function () { if (i === E.length - 1) fermerModale(); else ouvrirGuide(i + 1); };
+    if ($('g-act')) $('g-act').onclick = function () {
+      if (e.btn[0] === 'copier') { var ok = function () { toast('Lien copié : colle-le dans ' + (estIos() ? 'Safari' : 'Chrome')); }; if (navigator.clipboard) navigator.clipboard.writeText(URL_APPLI).then(ok, function () { prompt('Copie ce lien :', URL_APPLI); }); else prompt('Copie ce lien :', URL_APPLI); }
+      else if (e.btn[0] === 'installer' && INSTALL) { INSTALL.prompt(); INSTALL.userChoice.then(function (r) { INSTALL = null; if (r.outcome === 'accepted') toast('Appli installée'); ouvrirGuide(i + 1); }); }
+      else if (e.btn[0] === 'connexion') { fermerModale(); go('#/profil'); }
+    };
+  });
+}
+// Après la connexion : qui es-tu ? Le club peut ainsi rattacher le compte à la bonne famille.
+function formIdentite(depuisProfil) {
+  var c = S.compte || {};
+  return '<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">' + (depuisProfil ? 'Mes informations' : 'Faisons connaissance 👋') + '</h2>' +
+    '<span class="mut small">Ton adresse mail ne dit pas toujours qui tu es. Indique ton nom : le club pourra relier ton compte à ta famille et à tes enfants.</span>' +
+    '<div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Prénom<input class="f" id="id-p" autocomplete="given-name" maxlength="60" value="' + esc(c.prenom_declare) + '"></label><label class="f">Nom<input class="f" id="id-n" autocomplete="family-name" maxlength="60" value="' + esc(c.nom_declare) + '"></label></div>' +
+    '<label class="f">Tu es…<select class="f" id="id-q">' + [['', 'Choisir…'], ['parent', 'Parent d\'un ou plusieurs adhérents'], ['adherent', 'Adhérent (je joue au club)'], ['les_deux', 'Les deux'], ['coach', 'Coach du club'], ['autre', 'Autre (bureau, bénévole…)']].map(function (x) { return '<option value="' + x[0] + '"' + (c.qualite_declaree === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
+    '<label class="f" id="id-el">Prénom et nom de tes enfants inscrits au club<input class="f" id="id-e" maxlength="200" placeholder="Ex. Enora et Mila Martin" value="' + esc(c.enfants_declares) + '"></label>' +
+    '<button class="btn" id="id-ok">Enregistrer</button>' + (depuisProfil ? '' : '<button class="btn line" id="id-later">Plus tard</button>') + '</div>';
+}
+function lierIdentite(apres) {
+  var maj = function () { var v = $('id-q').value; $('id-el').style.display = v === 'parent' || v === 'les_deux' || v === '' ? '' : 'none'; };
+  $('id-q').onchange = maj; maj();
+  if ($('id-later')) $('id-later').onclick = function () { try { sessionStorage.setItem('cloca-identite-plus-tard', '1'); } catch (e) { } fermerModale(); };
+  $('id-ok').onclick = function () {
+    var p = $('id-p').value.trim(), n = $('id-n').value.trim(); if (!p || !n) return toast('Indique ton prénom et ton nom');
+    if (S.apercu) return toast('Aperçu : rien n\'est enregistré');
+    $('id-ok').disabled = true;
+    q(sb.rpc('declarer_identite', { p_prenom: p, p_nom: n, p_enfants: $('id-e').value.trim() || null, p_qualite: $('id-q').value || null })).then(function () {
+      S.compte = Object.assign(S.compte || {}, { prenom_declare: p, nom_declare: n.toUpperCase(), enfants_declares: $('id-e').value.trim() || null, qualite_declaree: $('id-q').value || null, identite_le: new Date().toISOString() });
+      toast('Merci ' + p + ' !'); if (apres) apres();
+    }).catch(function () { toast('Enregistrement impossible'); $('id-ok').disabled = false; });
+  };
+}
+// Ce qui s'ouvre tout seul, une fois, au bon moment
+function guidesAuto() {
+  if (S.apercu || $('modale')) return;
+  var ss = function (k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, ssSet = function (k) { try { sessionStorage.setItem(k, '1'); } catch (e) { } };
+  if (S.user && S.compte && !S.compte.identite_le && !ss('cloca-identite-plus-tard')) return modale(formIdentite(false), function () { lierIdentite(fermerModale); }, false);
+  if (!S.user && !localStorageGet('cloca-guide-vu')) return modale('<div class="stack" style="gap:14px;text-align:center"><img src="' + LOGO + '" alt="" style="width:84px;height:84px;border-radius:50%;background:#fff;margin:0 auto"><h2 style="margin:0;font-size:22px">Bienvenue dans l\'appli du club !</h2>' +
+    '<span class="small">Laisse-toi guider : en 2 minutes, l\'appli est sur ton téléphone et tu es connecté.</span><button class="btn" id="w-go">C\'est parti, guide-moi</button><button class="btn line" id="w-non">Je sais déjà faire</button></div>', function () {
+    $('w-go').onclick = function () { ouvrirGuide(0); };
+    $('w-non').onclick = function () { localStorageSet('cloca-guide-vu', '1'); fermerModale(); };
+  });
+  if (!S.user && estInstallee() && !ss('cloca-rappel-cnx')) { ssSet('cloca-rappel-cnx'); return modale('<div class="stack" style="gap:14px;text-align:center"><h2 style="margin:0;font-size:21px">Tu n\'es pas encore connecté</h2><span class="small">Connecte-toi avec l\'adresse mail donnée au club pour voir ton agenda, tes messages et tes inscriptions. Un code arrive par mail, sans mot de passe.</span>' + maquette('connexion') +
+    '<button class="btn" id="r-go">Me connecter</button><button class="btn line" id="r-aide">Voir le guide</button></div>', function () { $('r-go').onclick = function () { fermerModale(); go('#/profil'); }; $('r-aide').onclick = function () { ouvrirGuide(0); }; }); }
+}
+function pageAide() {
+  var h = '<div class="pagehead wrap">' + backLink('#/profil', 'Profil') + '<h1 style="font-size:26px">Aide</h1></div><main>' +
+    '<section class="card stack" style="gap:10px"><b>Le guide pas à pas</b><span class="mut small">Installer l\'appli, se connecter, activer les notifications : on te montre où appuyer, écran par écran.</span><button class="btn" id="aide-go">Lancer le guide</button></section>';
+  var bloc = function (titre, etapes, img) { return '<details class="card"><summary style="cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:8px">' + titre + '<span class="mut">▾</span></summary><div class="stack" style="gap:10px;margin-top:12px">' + (img || '') + '<ol class="small" style="margin:0;padding-left:20px;line-height:1.6">' + etapes.map(function (e) { return '<li>' + e + '</li>'; }).join('') + '</ol></div></details>'; };
+  h += bloc('Installer sur iPhone', ['Ouvre <b>clocatennis.fr/app</b> dans <b>Safari</b> (pas depuis WhatsApp ou Instagram : copie le lien dans Safari).', 'Touche le bouton <b>Partager</b> (carré avec une flèche), en bas.', 'Choisis <b>« Sur l\'écran d\'accueil »</b>, puis <b>« Ajouter »</b>.', 'Ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>.'], maquette('ios-partager'));
+  h += bloc('Installer sur Android', ['Ouvre <b>clocatennis.fr/app</b> dans <b>Chrome</b>.', 'Touche les <b>3 points ⋮</b> en haut à droite.', 'Choisis <b>« Installer l\'application »</b> ou <b>« Ajouter à l\'écran d\'accueil »</b>.', 'Ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>.'], maquette('android-menu'));
+  h += bloc('Se connecter', ['Va dans <b>Profil</b>.', 'Tape l\'adresse mail donnée au club à l\'inscription.', 'Ouvre le mail reçu et tape le <b>code à 6 chiffres</b> dans l\'appli.', 'Pas de mail ? Regarde dans les <b>spams</b> ou <b>Promotions</b>, attends une minute, puis redemande un code.'], maquette('connexion'));
+  h += bloc('Activer les notifications', ['Ouvre l\'appli <b>depuis son icône</b> (obligatoire sur iPhone).', 'Va dans <b>Profil</b> → <b>Activer les notifications</b>.', 'Touche <b>« Autoriser »</b>.'], maquette('notifs'));
+  h += bloc('Mon adresse n\'est pas reconnue', ['Vérifie que c\'est bien l\'adresse donnée au club à l\'inscription.', 'Remplis <b>Profil → Mes informations</b> (prénom, nom, enfants) : le club reliera ton compte à ta famille.', 'Sinon, demande à l\'accueil du club house.']);
+  h += '</main>';
+  setTimeout(function () { if ($('aide-go')) $('aide-go').onclick = function () { ouvrirGuide(0); }; });
+  return h;
+}
+
 // ---------- Routeur ----------
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
@@ -2153,8 +2301,9 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = 'agenda'; }
   else if (p === 'coach') { html = pageCoach(); actif = 'accueil'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'accueil'; }
+  else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'accueil'; }
-  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); }); }
+  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   $('app').innerHTML = html;
   if ($('apercu-x')) $('apercu-x').onclick = function () { apercu(null); };

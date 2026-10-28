@@ -127,6 +127,14 @@ button.pick{width:100%;background:var(--card);color:var(--tx);font:inherit;font-
 .empty{text-align:center;padding:22px 10px;color:var(--mut)}
 .skel{height:64px;border-radius:14px;background:linear-gradient(90deg,var(--soft),var(--card),var(--soft));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
+.modal-f{position:fixed;inset:0;z-index:60;background:rgba(10,25,40,.55);display:flex;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+@media (min-width:600px){.modal-f{align-items:center}}
+.modal{position:relative;background:var(--card);color:var(--tx);border-radius:22px;padding:22px 18px 16px;width:100%;max-width:440px;max-height:calc(100vh - 40px);overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.modal-x{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;border:0;background:var(--soft);color:var(--tx);font-size:22px;line-height:1;cursor:pointer}
+.guide-pts{display:flex;gap:5px;justify-content:center}
+.guide-pts span{width:8px;height:8px;border-radius:4px;background:var(--bd)}
+.guide-pts span.fait{background:var(--peach)}
+.guide-pts span.on{width:22px;background:var(--ac)}
 .carou{position:relative;border-radius:12px;overflow:hidden;background:var(--soft)}
 .car-l{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .car-l::-webkit-scrollbar{display:none}
@@ -162,6 +170,6 @@ nav.tabs a.on{color:var(--ac);font-weight:600}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="in" id="tabs-in"></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202610272240"></script>
+<script src="app.js?v=202610282300"></script>
 </body>
 </html>

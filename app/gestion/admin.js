@@ -177,6 +177,7 @@ function compteurs() {
   var p = [];
   if (peut('annonces')) p.push(nb(sb.from('annonces').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.annonces = n; }).catch(function () { }));
   if (peut('cordage')) p.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.cordage = n; }).catch(function () { }));
+  if (peut('adherents')) p.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { c.adherents = (l || []).length; }).catch(function () { }));
   if (peut('arena')) p.push(nb(sb.from('arena_matchs').select('id', { count: 'exact', head: true }).eq('statut', 'propose')).then(function (n) { c.arena = n; }).catch(function () { }));
   return Promise.all(p).then(function () { return c; });
 }
@@ -227,6 +228,7 @@ function vueAccueil(m) {
   m.innerHTML = entete('Bonjour', 'Ce qui demande ton attention aujourd\'hui.') + grilleRubriques() + '<div class="kpis" id="kpis"><div class="skel"></div></div><div class="two"><div class="card"><div class="sect" style="margin-top:0">Les 14 prochains jours</div><div id="dash-evts" class="list"><div class="skel"></div></div></div><div class="grid"><div id="presence"></div><div class="card" id="dash-liens"></div></div></div>';
   var k = [];
   var P = [];
+  if (peut('adherents')) P.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { var n = (l || []).length; k.push([n, 'compte' + (n > 1 ? 's' : '') + ' à rattacher', '#/adherents/rattacher', n > 0]); }));
   if (peut('annonces')) P.push(nb(sb.from('annonces').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { k.push([n, 'annonce' + (n > 1 ? 's' : '') + ' à valider', '#/annonces', n > 0]); }));
   if (peut('cordage')) {
     P.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { k.push([n, 'raquette' + (n > 1 ? 's' : '') + ' à corder', '#/cordage', false]); }));
@@ -490,9 +492,51 @@ function vueInscriptions(m, arg) {
 
 // ---------- Adhérents ----------
 var ADF = { t: '', profil: '', groupe: '', impayes: false };
+// Comptes créés dans l'appli mais pas encore reliés à une famille : nom déclaré + suggestions
+function comptesARattacher() {
+  Promise.all([q(sb.rpc('comptes_a_rattacher')), chargerPers()]).then(function (r) {
+    var L = r[0] || [];
+    var QUAL = { parent: 'Parent', adherent: 'Adhérent', les_deux: 'Parent et adhérent', coach: 'Coach', autre: 'Autre' };
+    var mots = function (x) { return norm(x || '').split(/[^a-z]+/).filter(function (m) { return m.length > 1 && ['et', 'de', 'du', 'la', 'le', 'les'].indexOf(m) < 0; }); };
+    var sugg = function (c) {
+      var noms = mots(c.nom).concat(mots(c.enfants)), pre = mots(c.enfants).concat(mots(c.prenom)), mail = mots(String(c.email).split('@')[0]);
+      var sc = {};
+      A.pers.forEach(function (p) {
+        var n = mots(p.nom), pr = mots(p.prenom), s2 = 0;
+        if (n.some(function (m) { return noms.indexOf(m) >= 0; })) s2 += 3;
+        if (n.some(function (m) { return mail.indexOf(m) >= 0 || String(c.email).toLowerCase().indexOf(m) >= 0 && m.length > 3; })) s2 += 2;
+        if (pr.some(function (m) { return pre.indexOf(m) >= 0; })) s2 += 2;
+        if (p.email && String(p.email).toLowerCase() === String(c.email).toLowerCase()) s2 += 10;
+        if (s2 >= 3) { var k = p.foyer_id || p.id; sc[k] = sc[k] || { k: k, foyer: p.foyer_id, pid: p.id, s: 0, l: [] }; sc[k].s = Math.max(sc[k].s, s2); sc[k].l.push(p); }
+      });
+      return Object.keys(sc).map(function (k) { return sc[k]; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 3);
+    };
+    var lier = function (c, x) {
+      var row = x.foyer ? { email: c.email.toLowerCase(), foyer_id: x.foyer } : { email: c.email.toLowerCase(), personne_id: x.pid };
+      return q(sb.from('acces_emails').upsert(row)).then(function () { toast(c.email + ' rattaché'); comptesARattacher(); }).catch(function () { toast('Rattachement impossible'); });
+    };
+    panneau('Comptes à rattacher (' + L.length + ')', '<div class="stack"><span class="mut small">Ces personnes se sont connectées à l\'appli, mais leur adresse n\'est reliée à aucun adhérent. Elles indiquent leur nom à la première connexion : choisis la bonne famille, et leur agenda s\'affiche aussitôt.</span>' +
+      (L.length ? L.map(function (c, i) {
+        var sg = sugg(c);
+        return '<div class="card stack" style="gap:8px"><div><b>' + (c.prenom ? esc(c.prenom + ' ' + c.nom) : '<span class="mut">Nom pas encore indiqué</span>') + '</b>' + (c.qualite ? ' <span class="badge">' + QUAL[c.qualite] + '</span>' : '') +
+          '<div class="xs mut">' + esc(c.email) + ' · inscrit le ' + esc(fmtJour(new Date(c.created_at))) + '</div>' + (c.enfants ? '<div class="small">Enfants : <b>' + esc(c.enfants) + '</b></div>' : '') + '</div>' +
+          (sg.length ? '<div class="stack" style="gap:6px"><span class="xs mut">Suggestions :</span>' + sg.map(function (x, j) { return '<button class="btn sm line" data-rsug="' + i + '|' + j + '" style="justify-content:flex-start;text-align:left">Relier à ' + (x.foyer ? 'la famille ' : '') + esc(x.l.map(function (p) { return p.prenom + ' ' + p.nom; }).join(', ')) + '</button>'; }).join('') + '</div>' : '') +
+          '<div data-rch="' + i + '">' + CHERCHEUR + '</div></div>';
+      }).join('') : '<div class="card empty">Tous les comptes sont rattachés. 👍</div>') + '</div>', function (root) {
+      L.forEach(function (c, i) {
+        var sg = sugg(c);
+        all('[data-rsug^="' + i + '|"]', root).forEach(function (b) { b.onclick = function () { lier(c, sg[+b.dataset.rsug.split('|')[1]]); }; });
+        var box = root.querySelector('[data-rch="' + i + '"]');
+        if (box) chercheurPers(box, function (p) { if (confirm('Relier ' + c.email + ' à ' + (p.foyer_id ? 'la famille de ' : '') + p.prenom + ' ' + p.nom + ' ?')) lier(c, { foyer: p.foyer_id, pid: p.id }); });
+      });
+    });
+  }).catch(function () { toast('Liste indisponible'); });
+}
+
 function vueAdherents(m, arg) {
   if (arg === 'impayes') ADF.impayes = true;
-  m.innerHTML = entete('Adhérents', 'Fiches, familles, groupes et cotisations.', '<button class="btn line" id="ad-csv">Exporter</button>' + (aRole(['direction', 'bureau', 'accueil']) ? '<button class="btn" id="ad-new">Nouvel adhérent</button>' : '')) +
+  setTimeout(function () { q(sb.rpc('comptes_a_rattacher')).then(function (l) { if ($('ad-ratn') && l && l.length) { $('ad-ratn').textContent = l.length; $('ad-ratn').hidden = false; } if (arg === 'rattacher') comptesARattacher(); }).catch(function () { }); });
+  m.innerHTML = entete('Adhérents', 'Fiches, familles, groupes et cotisations.', '<button class="btn line" id="ad-rat">Comptes à rattacher<span class="n" id="ad-ratn" hidden style="margin-left:6px"></span></button><button class="btn line" id="ad-csv">Exporter</button>' + (aRole(['direction', 'bureau', 'accueil']) ? '<button class="btn" id="ad-new">Nouvel adhérent</button>' : '')) +
     '<div class="toolbar"><input class="f grow" id="ad-q" placeholder="Rechercher un nom, un prénom…" value="' + esc(ADF.t) + '">' +
     '<select class="f" id="ad-p" style="width:auto"><option value="">Jeunes et adultes</option><option value="jeune"' + (ADF.profil === 'jeune' ? ' selected' : '') + '>Jeunes</option><option value="adulte"' + (ADF.profil === 'adulte' ? ' selected' : '') + '>Adultes</option></select>' +
     '<select class="f" id="ad-g" style="width:auto"><option value="">Tous les groupes</option></select>' +
@@ -596,6 +640,7 @@ function vueAdherents(m, arg) {
     $('ad-g').onchange = function () { ADF.groupe = this.value; dessiner(); };
     $('ad-i').onchange = function () { ADF.impayes = this.checked; dessiner(); };
     if ($('ad-new')) $('ad-new').onclick = nouveau;
+    $('ad-rat').onclick = comptesARattacher;
     $('ad-csv').onclick = function () {
       csv('adherents.csv', [['Nom', 'Prénom', 'Date de naissance', 'Âge', 'Profil', 'Licence', 'Cours', 'Groupes', 'Cotisation à jour']].concat(filtrer().map(function (p) {
         return [p.nom, p.prenom, p.date_naissance, age(p.date_naissance), p.profil, p.adoc_id, p.cours, (p.groupe_membres || []).map(function (g) { return nomGroupe(g.groupe_id); }).join(', '), p.cotisation_a_jour ? 'oui' : 'non'];
