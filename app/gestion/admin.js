@@ -27,7 +27,8 @@ var MODULES = [
   ['double', 'Double interne', ['direction']],
   ['reseaux', 'Réseaux sociaux', ['direction', 'bureau', 'accueil']],
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
-  ['acces', 'Accès et rôles', ['direction']],
+  ['equipe', 'Équipe du club', ['direction']],
+  ['acces', 'Accès particuliers', ['direction']],
   ['historique', 'Historique', ['direction']]
 ];
 // Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
@@ -39,7 +40,7 @@ var RUBRIQUES = [
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
   ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
-  ['Administration', ['acces', 'historique'], 'admin', 'shield', 'Comptes, rôles et historique de toutes les actions.']
+  ['Administration', ['equipe', 'acces', 'historique'], 'admin', 'shield', 'Équipe du club (organigramme), accès particuliers et historique de toutes les actions.']
 ];
 var DESC_MOD = {
   accueil: 'Ce qui demande ton attention aujourd\'hui.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
@@ -47,7 +48,7 @@ var DESC_MOD = {
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Matchs, points et classements CLOC\'ARENA.',
   double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
-  cordage: 'Raquettes à corder, prêtes et à encaisser.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', acces: 'Qui a accès à quoi : rôles, coachs, adresses autorisées.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
+  cordage: 'Raquettes à corder, prêtes et à encaisser.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
 };
 var ICG = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -1434,9 +1435,98 @@ function vueNextGen(m) {
   chargerGroupes().then(charger);
 }
 
+// ---------- Équipe du club : l'organigramme. Les fonctions donnent les accès, rattachés à la personne (pas à une adresse)
+var FONCTIONS = [
+  ['direction', 'Direction sportive', 'Tout l\'espace gestion.'],
+  ['coach', 'Coach', 'Ses cours dans son agenda, ses groupes, les notes, les missions, écrire à ses groupes.'],
+  ['cordeur', 'Cordeur', 'L\'atelier cordage.'],
+  ['accueil', 'Accueil', 'Club house, inscriptions, cordage, boutique, messages, annonces.'],
+  ['president', 'Président·e', 'Accès bureau : adhérents, actus, événements, boutique…'],
+  ['vice_president', 'Vice-président·e', 'Accès bureau.'],
+  ['tresorier', 'Trésorier·e', 'Accès bureau.'],
+  ['secretaire', 'Secrétaire', 'Accès bureau.'],
+  ['bureau', 'Membre du bureau', 'Accès bureau.']
+];
+var NOM_FCT = {}; FONCTIONS.forEach(function (f) { NOM_FCT[f[0]] = f[1]; });
+function vueEquipe(m) {
+  m.innerHTML = entete('Équipe du club', 'L\'organigramme du club. Chaque fonction donne automatiquement les bons accès dans l\'appli, à la personne et non à une adresse mail : dès que son compte est relié à sa fiche (même avec une adresse perso), elle retrouve ses accès et ses cours.', '<button class="btn" id="eq-new">Ajouter un membre</button>') + '<div id="eq-l"><div class="skel"></div></div>';
+  var EQ = [], CPT = [], CR = [];
+  var JRS = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  var coursDe = function (nc) {
+    if (!nc) return [];
+    var n = norm(nc).trim();
+    return CR.filter(function (c) { return String(c.encadrant || '').split(/\s*(?:,|\bet\b|&|\+|\/)\s*/i).some(function (x) { return norm(x).trim() === n; }); });
+  };
+  var comptesDe = function (e) { return CPT.filter(function (c) { return (e.personne_id && c.personne_id === e.personne_id) || c.user_id === e.user_id; }); };
+  var form = function (e) {
+    var nouveau = !e; e = e || { fonctions: [], actif: true };
+    var fiche = e.personne_id ? A.pers.filter(function (p) { return p.id === e.personne_id; })[0] : null;
+    panneau(nouveau ? 'Ajouter un membre' : e.prenom + ' ' + (e.nom || ''), '<div class="stack">' +
+      '<div class="l">Fiche ADOC<div id="eq-fiche" class="small" style="margin:6px 0">' + (fiche ? '<b>' + esc(fiche.prenom + ' ' + fiche.nom) + '</b>' : '<span class="mut">Aucune fiche : cherche la personne, ou écris son nom ci-dessous</span>') + '</div>' + CHERCHEUR + '</div>' +
+      '<div class="row2"><label class="l">Prénom<input class="f" id="eq-p" value="' + esc(e.prenom) + '"></label><label class="l">Nom<input class="f" id="eq-n" value="' + esc(e.nom) + '"></label></div>' +
+      '<div class="sect">Fonctions</div>' + FONCTIONS.map(function (f) { return '<label class="c" style="align-items:flex-start"><input type="checkbox" name="eqf" value="' + f[0] + '"' + (e.fonctions.indexOf(f[0]) >= 0 ? ' checked' : '') + '><span><b>' + f[1] + '</b><br><span class="mut xs">' + f[2] + '</span></span></label>'; }).join('') +
+      '<label class="l" id="eq-ncl">Prénom écrit dans les horaires des cours<input class="f" id="eq-nc" value="' + esc(e.nom_coach || e.prenom) + '" placeholder="Ex. David"><span class="mut xs" style="font-weight:400">Ses cours sont retrouvés grâce à ce prénom (colonne « encadrant » des créneaux).</span></label>' +
+      '<label class="c"><input type="checkbox" id="eq-a"' + (e.actif ? ' checked' : '') + '>Actif (décoche pour retirer les accès sans effacer la fiche)</label>' +
+      '<div class="chips"><button class="btn" id="eq-ok">Enregistrer</button>' + (nouveau ? '' : '<button class="btn ko" id="eq-x">Retirer de l\'équipe</button>') + '</div></div>', function (r) {
+      chercheurPers(r, function (p) { fiche = p; $('eq-fiche').innerHTML = '<b>' + esc(p.prenom + ' ' + p.nom) + '</b>'; $('eq-p').value = p.prenom; $('eq-n').value = p.nom; if (!$('eq-nc').value) $('eq-nc').value = p.prenom; });
+      var maj = function () { $('eq-ncl').style.display = lus(r, 'eqf').indexOf('coach') >= 0 ? '' : 'none'; };
+      all('input[name="eqf"]', r).forEach(function (i) { i.onchange = maj; }); maj();
+      if ($('eq-x')) $('eq-x').onclick = function () { if (confirm('Retirer ' + e.prenom + ' de l\'équipe ? Ses accès liés à ses fonctions seront retirés.')) q(sb.from('equipe').delete().eq('id', e.id)).then(function () { toast('Retiré de l\'équipe'); fermer(); charger(); }); };
+      $('eq-ok').onclick = function () {
+        var pr = $('eq-p').value.trim(); if (!pr) return toast('Indique au moins le prénom');
+        var fs = lus(r, 'eqf'); if (!fs.length) return toast('Coche au moins une fonction');
+        var row = { personne_id: fiche ? fiche.id : null, prenom: pr, nom: $('eq-n').value.trim().toUpperCase() || null, fonctions: fs, nom_coach: fs.indexOf('coach') >= 0 ? ($('eq-nc').value.trim() || pr) : null, actif: $('eq-a').checked };
+        (nouveau ? q(sb.from('equipe').insert(row)) : q(sb.from('equipe').update(row).eq('id', e.id))).then(function () { toast('Enregistré'); fermer(); charger(); })
+          .catch(function (err) { toast(String(err && err.message || '').indexOf('duplicate') >= 0 ? 'Cette personne est déjà dans l\'équipe' : 'Enregistrement impossible'); });
+      };
+    });
+  };
+  var relierCompte = function (e) {
+    var libres = CPT.filter(function (c) { return !c.personne_id || c.personne_id !== e.personne_id; });
+    panneau('Relier un compte à ' + e.prenom, '<div class="stack"><span class="mut small">Choisis le compte avec lequel ' + esc(e.prenom) + ' s\'est connecté. ' + (e.personne_id ? 'Le compte sera relié à sa fiche ADOC : il verra sa fiche, ses cours et ses accès.' : 'Il récupérera ses accès.') + '</span>' +
+      '<input class="f" id="rc-q" placeholder="Chercher une adresse ou un nom…"><div id="rc-l" class="stack" style="gap:6px"></div></div>', function () {
+      var aff = function () {
+        var t = norm($('rc-q').value).trim();
+        $('rc-l').innerHTML = libres.filter(function (c) { return !t || norm(c.email + ' ' + (c.prenom || '') + ' ' + (c.nom || '')).indexOf(t) >= 0; }).slice(0, 30).map(function (c) {
+          return '<button class="btn line" data-rcu="' + c.user_id + '" style="justify-content:flex-start;text-align:left"><span><b>' + esc(c.email) + '</b>' + (c.prenom ? '<br><span class="xs mut">nom indiqué : ' + esc(c.prenom + ' ' + c.nom) + '</span>' : '') + '</span></button>';
+        }).join('') || '<span class="mut small">Aucun compte trouvé. La personne doit d\'abord se connecter une fois à l\'appli.</span>';
+        all('[data-rcu]').forEach(function (b) { b.onclick = function () {
+          var act = e.personne_id ? q(sb.rpc('compte_definir', { p_user: b.dataset.rcu, p_foyer: null, p_personne: e.personne_id })) : q(sb.from('equipe').update({ user_id: b.dataset.rcu }).eq('id', e.id));
+          act.then(function () { toast('Compte relié'); fermer(); charger(); }).catch(function () { toast('Action impossible'); });
+        }; });
+      };
+      $('rc-q').oninput = aff; aff();
+    });
+  };
+  var charger = function () {
+    Promise.all([q(sb.from('equipe').select('*').order('ordre').order('prenom')), q(sb.rpc('comptes_liste')), q(sb.from('creneaux').select('jour_semaine, heure_debut, heure_fin, encadrant, groupes(nom)').order('jour_semaine').order('heure_debut')), chargerPers()]).then(function (r) {
+      EQ = r[0] || []; CPT = r[1] || []; CR = r[2] || [];
+      var cat = function (e) { var f = e.fonctions; return f.indexOf('direction') >= 0 ? 0 : f.some(function (x) { return ['president', 'vice_president', 'tresorier', 'secretaire', 'bureau'].indexOf(x) >= 0; }) ? 1 : f.indexOf('coach') >= 0 ? 2 : 3; };
+      var titres = ['Direction', 'Bureau', 'Coachs', 'Accueil et atelier'];
+      var h = [0, 1, 2, 3].map(function (k) {
+        var l = EQ.filter(function (e) { return cat(e) === k; }); if (!l.length) return '';
+        return '<div class="sect">' + titres[k] + '</div><div class="pgrid">' + l.map(function (e) {
+          var cs = comptesDe(e), cours = e.fonctions.indexOf('coach') >= 0 ? coursDe(e.nom_coach || e.prenom) : [];
+          return '<div class="pcard" style="min-height:0;gap:8px' + (e.actif ? '' : ';opacity:.55') + '"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:17px">' + esc(e.prenom + ' ' + (e.nom || '')) + '</b><button class="btn sm line" data-eqe="' + e.id + '">Modifier</button></div>' +
+            '<div class="chips" style="gap:4px">' + e.fonctions.map(function (f) { return '<span class="badge">' + NOM_FCT[f] + '</span>'; }).join('') + (e.actif ? '' : '<span class="badge b-ko">Inactif</span>') + '</div>' +
+            (e.personne_id ? '' : '<span class="xs" style="color:var(--warn)">Pas de fiche ADOC reliée</span>') +
+            (cours.length ? '<details><summary class="xs" style="cursor:pointer">' + cours.length + ' cours (« ' + esc(e.nom_coach) + ' » dans les horaires) ▾</summary><div class="xs mut" style="margin-top:4px;line-height:1.6">' + cours.map(function (c) { return JRS[c.jour_semaine] + ' ' + c.heure_debut.slice(0, 5).replace(':', 'h') + ' · ' + esc(String(c.groupes ? c.groupes.nom : '').replace(/^.*?·\s*/, '')); }).join('<br>') + '</div></details>' : e.fonctions.indexOf('coach') >= 0 ? '<span class="xs mut">Aucun cours trouvé pour « ' + esc(e.nom_coach || e.prenom) + ' » dans les horaires</span>' : '') +
+            (cs.length ? cs.map(function (c) { return '<span class="xs" style="color:var(--ok)">✓ Compte : ' + esc(c.email) + '</span>'; }).join('') : '<span class="xs mut">Pas encore connecté à l\'appli</span>') +
+            '<button class="btn sm ' + (cs.length ? 'ghost' : 'line') + '" data-eqc="' + e.id + '" style="align-self:flex-start">' + (cs.length ? 'Relier un autre compte' : 'Relier son compte') + '</button></div>';
+        }).join('') + '</div>';
+      }).join('');
+      $('eq-l').innerHTML = (h || '<div class="card empty">Aucun membre pour le moment.</div>') + '<p class="mut xs" style="margin-top:16px">Les accès particuliers (coach d\'un groupe CLOC\'ARENA précis, responsable d\'une animation) se règlent dans « Accès particuliers ».</p>';
+      all('[data-eqe]').forEach(function (b) { b.onclick = function () { form(EQ.filter(function (e) { return e.id === b.dataset.eqe; })[0]); }; });
+      all('[data-eqc]').forEach(function (b) { b.onclick = function () { relierCompte(EQ.filter(function (e) { return e.id === b.dataset.eqc; })[0]); }; });
+    }).catch(function () { $('eq-l').innerHTML = '<div class="card empty">Impossible de charger l\'équipe.</div>'; });
+  };
+  $('eq-new').onclick = function () { chargerPers().then(function () { form(null); }); };
+  charger();
+}
+
 function vueAcces(m) {
   var ROLES_AC = [['direction', 'Direction sportive (tout)'], ['bureau', 'Bureau / président (adhérents, actus, événements, annonces)'], ['accueil', 'Accueil (club house, annonces, cordage, inscriptions, actus)'], ['cordeur', 'Cordeur'], ['enseignant', 'Coach des cours (ses cours dans son agenda, ses groupes, notes, missions)'], ['coach', 'Coach d\'un groupe CLOC\'ARENA ou d\'une animation (saisit les scores, voit les joueurs du groupe)'], ['responsable', 'Responsable d\'un groupe (même chose, sans être coach)']];
-  m.innerHTML = entete('Accès et rôles', 'Qui peut faire quoi. Une même personne peut cumuler plusieurs rôles et plusieurs groupes. Elle doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
+  m.innerHTML = entete('Accès particuliers', 'Qui peut faire quoi. Une même personne peut cumuler plusieurs rôles et plusieurs groupes. Elle doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
     '<div class="two"><div id="ac-l"><div class="skel"></div></div><div class="card stack"><b>Donner des rôles</b><label class="l">Adresse mail<input class="f" id="ac-m" type="email"></label>' +
     '<div class="l">Rôles (plusieurs possibles)<div class="stack" style="gap:6px;margin-top:6px">' + ROLES_AC.map(function (r) { return '<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-acrole="' + r[0] + '"> ' + r[1] + '</label>'; }).join('') + '</div></div>' +
     '<div class="l" id="ac-gl" hidden>Groupes concernés (plusieurs possibles)<input class="f" id="ac-gq" placeholder="Filtrer les groupes…" style="margin-top:6px"><div id="ac-g" class="stack" style="gap:4px;max-height:220px;overflow:auto;margin-top:6px;padding:6px;border:1px solid var(--line);border-radius:10px"></div></div>' +
@@ -1629,7 +1719,7 @@ var JCAT = {
   nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
   club_presence: ['Présence au club', 'changement', 'changements'],
   messages: ['Messagerie', 'message', 'messages'], adresses_reponse: ['Messagerie', 'adresse de réponse', 'adresses de réponse', 1],
-  comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
+  equipe: ['Comptes et accès', 'membre de l\'équipe', 'membres de l\'équipe'], comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
 };
 var JACT = { ajout: ['ajouté', 'ajoutés', 'b-ok', 'ajoutée', 'ajoutées'], modif: ['modifié', 'modifiés', '', 'modifiée', 'modifiées'], suppr: ['supprimé', 'supprimés', 'b-ko', 'supprimée', 'supprimées'] };
 function jValeur(v) {
@@ -1684,7 +1774,7 @@ function vueHistorique(m) {
   $('hi-q').oninput = function () { HIF.txt = this.value; afficher(); };
 }
 
-var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, acces: vueAcces, historique: vueHistorique };
+var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique };
 function router() {
   if (!A.user) return;
   fermer();
