@@ -522,7 +522,7 @@ function comptesAppli(focus) {
         var cand = fam.concat(c.voit.filter(function (id) { return !fam.some(function (p) { return p.id === id; }); }).map(function (id) { return P[id]; }).filter(Boolean));
         return '<div class="card stack" style="gap:8px" data-caf="' + c.user_id + '"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b class="small" style="word-break:break-all">' + esc(c.email) + '</b>' +
           '<div class="xs mut">' + (c.personne_id ? 'Compte de <b>' + esc(nomP(c.personne_id)) + '</b>' : c.foyer_id ? 'Compte famille (parent)' : 'Pas encore relié') + (c.prenom ? ' · nom indiqué : ' + esc(c.prenom + ' ' + c.nom) : '') + '</div></div>' +
-          '<button class="btn sm line" data-cft="' + c.user_id + '">' + (c.foyer_id || c.personne_id ? 'Changer' : 'Relier') + '</button></div>' +
+          '<span style="display:flex;gap:6px"><button class="btn sm line" data-cft="' + c.user_id + '">' + (c.foyer_id || c.personne_id ? 'Changer' : 'Relier') + '</button><button class="btn sm ko" data-cfx="' + c.user_id + '">Supprimer</button></span></div>' +
           (cand.length ? '<div class="xs mut">Ce compte voit :</div><div class="chips" style="flex-wrap:wrap">' + cand.map(function (p) {
             var on = c.voit.indexOf(p.id) >= 0;
             return '<label class="chip' + (on ? ' on' : '') + '" style="cursor:pointer"><input type="checkbox" data-cfv="' + c.user_id + '|' + p.id + '"' + (on ? ' checked' : '') + ' hidden>' + esc(p.prenom + ' ' + p.nom) + (mineur(p) ? ' <span class="xs">(mineur)</span>' : '') + '</label>';
@@ -543,6 +543,7 @@ function comptesAppli(focus) {
           var x = i.dataset.cfv.split('|');
           q(sb.from('compte_visibilite').upsert({ user_id: x[0], personne_id: x[1], voit: i.checked })).then(function () { toast(i.checked ? 'Ajouté à ce compte' : 'Retiré de ce compte'); comptesAppli(); }).catch(function () { toast('Action impossible'); });
         }; });
+        all('[data-cfx]', root).forEach(function (b) { b.onclick = function () { supprimerCompte(L.filter(function (x) { return x.user_id === b.dataset.cfx; })[0], function () { comptesAppli(); }); }; });
         all('[data-cfr]', root).forEach(function (b) { b.onclick = function () { q(sb.from('compte_visibilite').delete().eq('user_id', b.dataset.cfr)).then(function () { toast('Réglage normal rétabli'); comptesAppli(); }); }; });
         all('[data-cfa]', root).forEach(function (box) { chercheurPers(box, function (p) {
           q(sb.from('compte_visibilite').upsert({ user_id: box.dataset.cfa, personne_id: p.id, voit: true })).then(function () { toast(p.prenom + ' ajouté à ce compte'); comptesAppli(); });
@@ -553,6 +554,11 @@ function comptesAppli(focus) {
   }).catch(function () { toast('Liste indisponible'); });
 }
 
+function supprimerCompte(c, apres) {
+  if (!confirm('Supprimer le compte ' + c.email + ' ?\n\nLa personne ne pourra plus se connecter avec cette adresse (elle pourra en recréer un plus tard si besoin). Rien d\'autre n\'est effacé.')) return;
+  q(sb.rpc('compte_supprimer', { p_user: c.user_id })).then(function () { toast('Compte supprimé'); if (apres) apres(); })
+    .catch(function (e) { toast(String(e && e.message || '').indexOf('rôle') >= 0 ? 'Ce compte a un rôle : retire-le d\'abord' : 'Suppression impossible'); });
+}
 // Comptes créés dans l'appli mais pas encore reliés à une famille : nom déclaré + suggestions
 function comptesARattacher() {
   Promise.all([q(sb.rpc('comptes_a_rattacher')), chargerPers()]).then(function (r) {
@@ -579,11 +585,13 @@ function comptesARattacher() {
         return '<div class="card stack" style="gap:8px"><div><b>' + (c.prenom ? esc(c.prenom + ' ' + c.nom) : '<span class="mut">Nom pas encore indiqué</span>') + '</b>' + (c.qualite ? ' <span class="badge">' + QUAL[c.qualite] + '</span>' : '') +
           '<div class="xs mut">' + esc(c.email) + ' · inscrit le ' + esc(fmtJour(new Date(c.created_at))) + '</div>' + (c.enfants ? '<div class="small">Enfants : <b>' + esc(c.enfants) + '</b></div>' : '') + '</div>' +
           (sg.length ? '<div class="stack" style="gap:6px"><span class="xs mut">Suggestions :</span>' + sg.map(function (x, j) { return '<button class="btn sm line" data-rsug="' + i + '|' + j + '" style="justify-content:flex-start;text-align:left">Relier à ' + (x.foyer ? 'la famille ' : '') + esc(x.l.map(function (p) { return p.prenom + ' ' + p.nom; }).join(', ')) + '</button>'; }).join('') + '</div>' : '') +
-          '<div data-rch="' + i + '">' + CHERCHEUR + '</div></div>';
+          '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><div data-rch="' + i + '" style="flex:1;min-width:200px">' + CHERCHEUR + '</div><button class="btn sm ko" data-rsup="' + i + '">Supprimer ce compte</button></div></div>';
       }).join('') : '<div class="card empty">Tous les comptes sont rattachés. 👍</div>') + '</div>', function (root) {
       L.forEach(function (c, i) {
         var sg = sugg(c);
         all('[data-rsug^="' + i + '|"]', root).forEach(function (b) { b.onclick = function () { lier(c, sg[+b.dataset.rsug.split('|')[1]]); }; });
+        var sup = root.querySelector('[data-rsup="' + i + '"]');
+        if (sup) sup.onclick = function () { supprimerCompte(c, comptesARattacher); };
         var box = root.querySelector('[data-rch="' + i + '"]');
         if (box) chercheurPers(box, function (p) { if (confirm('Relier ' + c.email + ' à ' + (p.foyer_id ? 'la famille de ' : '') + p.prenom + ' ' + p.nom + ' ?')) lier(c, { foyer: p.foyer_id, pid: p.id }); });
       });
