@@ -1526,7 +1526,7 @@ var JCAT = {
   nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
   club_presence: ['Présence au club', 'changement', 'changements'],
   messages: ['Messagerie', 'message', 'messages'], adresses_reponse: ['Messagerie', 'adresse de réponse', 'adresses de réponse', 1],
-  comptes: ['Comptes et accès', 'compte', 'comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
+  comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
 };
 var JACT = { ajout: ['ajouté', 'ajoutés', 'b-ok', 'ajoutée', 'ajoutées'], modif: ['modifié', 'modifiés', '', 'modifiée', 'modifiées'], suppr: ['supprimé', 'supprimés', 'b-ko', 'supprimée', 'supprimées'] };
 function jValeur(v) {
