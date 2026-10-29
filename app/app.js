@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 18h40';
+var VERSION_APPLI = '29/10 18h45';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1102,11 +1102,12 @@ function ordreMatchs(eqs) {
 }
 function disposDe(eq) { return DB2.dispos.filter(function (d) { return d.equipe_id === eq.id; }); }
 function creneauxCommuns(e1, e2) {
-  var ds = disposDe(e1).concat(disposDe(e2)), att = (e1.joueur2 ? 2 : 1) + (e2.joueur2 ? 2 : 1);
-  if (!ds.length) return { ok: [], manque: att };
+  // Un créneau n'est « en commun » que si les 4 joueurs ont donné leurs dispos et sont tous libres
+  var ds = disposDe(e1).concat(disposDe(e2)), manquants = [];
+  [e1, e2].forEach(function (e) { [1, 2].forEach(function (j) { var nom = j === 1 ? e.joueur1 : e.joueur2; if (nom && !disposDe(e).some(function (d) { return d.joueur === j; })) manquants.push(nom); }); });
   var ok = [];
-  for (var k = 0; k < 21; k++) if (ds.every(function (d) { return d.creneaux.charAt(k) === '1'; })) ok.push(k);
-  return { ok: ok, manque: att - ds.length };
+  if (ds.length) for (var k = 0; k < 21; k++) if (ds.every(function (d) { return d.creneaux.charAt(k) === '1'; })) ok.push(k);
+  return { ok: manquants.length ? [] : ok, possibles: manquants.length === 1 ? ok : [], manque: manquants.length, manquants: manquants };
 }
 function scoreValide(sets, forfait) {
   if (forfait) return { ok: true, score: 'forfait' };
@@ -1168,7 +1169,9 @@ function remplirDouble(box) {
           var cc = creneauxCommuns(m[0], m[1]);
           return '<section class="card stack" style="gap:6px"><b class="small">' + esc(nomEq(m[0])) + '<br><span class="mut">contre</span> ' + esc(nomEq(m[1])) + '</b>' +
             (r ? '<span class="small" style="color:' + (r.statut === 'validé' ? 'var(--ok)' : 'var(--ac)') + ';font-weight:600">' + (r.statut === 'validé' ? '✓ ' : '⏳ ') + esc(nomEq(eqDe(r.gagnant)).split(' / ')[0]) + '… gagne ' + esc(r.forfait ? 'par forfait' : r.score) + (r.statut === 'validé' ? '' : ' · en attente de validation') + '</span>'
-              : '<span class="xs mut">Créneaux en commun' + (cc.manque ? ' (' + cc.manque + ' joueur' + (cc.manque > 1 ? 's' : '') + ' sans dispos)' : '') + ' :</span><span style="display:flex;flex-wrap:wrap;gap:4px">' + (cc.ok.length ? cc.ok.map(function (k) { return '<span class="badge" style="background:var(--ok);color:#fff">' + JOURS_D[Math.floor(k / 3)] + ' ' + MOMENTS[k % 3].toLowerCase() + '</span>'; }).join('') : '<span class="xs mut">aucun pour l\'instant</span>') + '</span>') + '</section>';
+              : (cc.manque ? '<span class="xs" style="color:var(--ac);font-weight:600">En attente des dispos de : ' + esc(cc.manquants.join(', ')) + '</span>' +
+                  (cc.possibles.length ? '<span class="xs mut">Possible pour ceux qui ont répondu (à confirmer) :</span><span style="display:flex;flex-wrap:wrap;gap:4px">' + cc.possibles.map(function (k) { return '<span class="badge" style="background:transparent;border:1px dashed var(--mut);color:var(--mut)">' + JOURS_D[Math.floor(k / 3)] + ' ' + MOMENTS[k % 3].toLowerCase() + '</span>'; }).join('') + '</span>' : '')
+                : '<span class="xs mut">Créneaux en commun (les 4 joueurs) :</span><span style="display:flex;flex-wrap:wrap;gap:4px">' + (cc.ok.length ? cc.ok.map(function (k) { return '<span class="badge" style="background:var(--ok);color:#fff">' + JOURS_D[Math.floor(k / 3)] + ' ' + MOMENTS[k % 3].toLowerCase() + '</span>'; }).join('') : '<span class="xs mut">aucun créneau commun : à caler sur WhatsApp</span>') + '</span>')) + '</section>';
         }).join('');
       }).join('') + '<p class="mut xs" style="text-align:center">Calez la date dans le groupe WhatsApp de la poule et réservez un terrain sur Ten\'Up.</p>';
     }
