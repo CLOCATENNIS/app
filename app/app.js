@@ -101,8 +101,11 @@ function chargerPublic() {
   return Promise.all([
     q(sb.from('publications').select('*').order('epingle', { ascending: false }).order('publie_le', { ascending: false }).limit(20)).catch(function () { return []; }),
     q(sb.from('evenements').select('*, groupes!evenements_groupe_id_fkey(nom,couleur), evenement_groupes(groupe_id, groupes(nom,couleur))').gte('debut', depuis.toISOString()).order('debut')).catch(function () { return []; })
-  ]).then(function (r) { S.pubs = r[0]; S.evts = r[1]; });
+  ]).then(function (r) { S.pubs = r[0]; S.evts = r[1]; return q(sb.from('reglages_publics').select('cle, valeur')).catch(function () { return []; }); })
+    .then(function (l) { S.reglages = {}; (l || []).forEach(function (x) { S.reglages[x.cle] = x.valeur; }); });
 }
+// Le cordage via l'appli peut être mis en pause par le club (prix pas encore prêts…) ; l'équipe garde l'accès
+function cordageOuvert() { return !S.reglages || S.reglages.cordage_ouvert !== false || (S.user && (estCordeur() || S.isStaff)); }
 
 function chargerUtilisateur() {
   S.compte = null; S.pers = []; S.roles = []; S.groupesDe = {}; S.couleur = {}; S.isDir = false; S.isStaff = false; S.gere = [];
@@ -1654,6 +1657,7 @@ function estCordeur() { return S.roles.some(function (x) { return (x.role === 'c
 function aMoi(d) { return d.cree_par === S.user.id || S.pers.some(function (p) { return p.id === d.personne_id; }); }
 function tarifPose() { var t = C && C.tarifs.filter(function (x) { return x.code === 'pose'; })[0]; return t ? +t.prix : null; }
 function resumeCordage() {
+  if (!cordageOuvert()) return 'Bientôt disponible';
   if (!C) return 'Déposer une raquette';
   var mien = C.file.filter(function (x) { return x.a_moi; });
   var prete = mien.filter(function (x) { return x.statut === 'fini'; })[0];
@@ -1665,6 +1669,8 @@ function resumeCordage() {
 }
 
 function pageCordage(sous) {
+  if (!cordageOuvert()) return '<div class="darkhead"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) + '<div class="kicker" style="margin-top:4px">ATELIER CORDAGE</div><h1>Cordage</h1></div></div><main>' +
+    '<section class="card stack" style="gap:10px;text-align:center"><span style="font-size:42px">🎾</span><b style="font-size:19px">Bientôt disponible</b><span class="small">Le dépôt de raquette via l\'appli arrive très bientôt : tu pourras choisir ton cordage, voir le prix et être prévenu quand ta raquette est prête.</span><span class="mut small">En attendant, dépose ta raquette au club house, avec une étiquette à ton nom.</span></section></main>';
   if (sous) S.cordTab = sous;
   var cordeur = S.user && estCordeur();
   var tabsC = [['deposer', 'Déposer'], ['attente', cordeur ? 'Attente' : 'En attente'], ['pretes', 'Prêtes']];

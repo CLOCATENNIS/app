@@ -985,7 +985,20 @@ function vueAnnonces(m) {
 
 // ---------- Cordage ----------
 function vueCordage(m) {
-  m.innerHTML = entete('Cordage', 'Raquettes déposées, à corder, à rendre et à encaisser.', '<a class="btn line" href="../#/cordage/reglages">Tarifs et cordeurs</a>') + '<div id="co-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Cordage', 'Raquettes déposées, à corder, à rendre et à encaisser.', '<a class="btn line" href="../#/cordage/reglages">Tarifs et cordeurs</a>') +
+    '<div class="card" id="co-ouv" style="margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span class="small mut">Chargement…</span></div><div id="co-l"><div class="skel"></div></div>';
+  var majOuv = function () {
+    q(sb.from('reglages_publics').select('valeur').eq('cle', 'cordage_ouvert').maybeSingle()).then(function (r) {
+      var ouvert = !r || r.valeur !== false;
+      $('co-ouv').innerHTML = '<span class="small"><b>' + (ouvert ? '✅ Cordage ouvert aux familles' : '⏸ Cordage en pause : les familles voient « Bientôt disponible »') + '</b><br><span class="mut xs">' + (ouvert ? 'Les familles peuvent déposer une demande et voir les prix.' : 'Toi, les cordeurs et l\'accueil gardez l\'accès complet pour préparer les prix.') + '</span></span>' +
+        '<button class="btn ' + (ouvert ? 'line' : '') + '" id="co-sw">' + (ouvert ? 'Mettre en pause' : 'Ouvrir aux familles') + '</button>';
+      $('co-sw').onclick = function () {
+        if (!ouvert && !confirm('Ouvrir le dépôt de raquette aux familles ? Vérifie d\'abord les tarifs.')) return;
+        q(sb.from('reglages_publics').upsert({ cle: 'cordage_ouvert', valeur: !ouvert, maj_le: new Date().toISOString() })).then(function () { toast(ouvert ? 'Cordage en pause' : 'Cordage ouvert aux familles'); majOuv(); }).catch(function () { toast('Action impossible'); });
+      };
+    }).catch(function () { $('co-ouv').innerHTML = ''; });
+  };
+  majOuv();
   var charger = function () {
     q(sb.from('cordage_demandes').select('*, cordages(nom)').or('statut.eq.attente,statut.eq.fini,and(statut.eq.recupere,paye.eq.false)').order('created_at')).then(function (l) {
       var ligne = function (d) {
