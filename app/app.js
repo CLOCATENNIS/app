@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 16h03';
+var VERSION_APPLI = '29/10 16h05';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -360,7 +360,7 @@ function pageAccueil() {
   if (S.user && estMobile() && !estInstallee() && !localStorageGet('cloca-install-masque')) h += '<section class="card stack" style="gap:8px"><b>📲 Installe l\'appli sur ton téléphone</b><span class="mut small">Une icône sur l\'écran d\'accueil, et les notifications du club.</span><div style="display:flex;gap:8px"><button class="btn" data-guide="1" style="flex:2">Me montrer comment</button><button class="btn line" id="inst-masq" style="flex:1">Plus tard</button></div></section>';
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
   if (actu) h += carteActu(actu, 'Dernière actu');
-  if (nomCoachCompte() || S.isDir) h += '<a class="card stack" href="#/coach" style="gap:4px;text-decoration:none;color:inherit"><span class="eyebrow">Espace coach</span><b>Mes groupes et mes missions</b><span class="mut small" id="coach-resume">Notes de groupe, joueurs, missions de la direction</span></a>';
+  // (l'espace coach est dans l'onglet Gestion)
   h += '<div id="reseaux"></div>';
   h += '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></main>';
   return h;
