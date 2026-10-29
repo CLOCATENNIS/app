@@ -29,6 +29,7 @@ var MODULES = [
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['equipe', 'Équipe du club', ['direction']],
   ['acces', 'Accès particuliers', ['direction']],
+  ['retours', 'Idées et bugs', ['direction']],
   ['historique', 'Historique', ['direction']]
 ];
 // Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
@@ -40,7 +41,7 @@ var RUBRIQUES = [
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
   ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
-  ['Administration', ['equipe', 'acces', 'historique'], 'admin', 'shield', 'Équipe du club (organigramme), accès particuliers et historique de toutes les actions.']
+  ['Administration', ['equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
   accueil: 'Ce qui demande ton attention aujourd\'hui.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
@@ -48,7 +49,7 @@ var DESC_MOD = {
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Matchs, points et classements CLOC\'ARENA.',
   double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
-  cordage: 'Raquettes à corder, prêtes et à encaisser.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
+  cordage: 'Raquettes à corder, prêtes et à encaisser.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
 };
 var ICG = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -179,6 +180,7 @@ function compteurs() {
   if (peut('annonces')) p.push(nb(sb.from('annonces').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.annonces = n; }).catch(function () { }));
   if (peut('cordage')) p.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.cordage = n; }).catch(function () { }));
   if (peut('adherents')) p.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { c.adherents = (l || []).length; }).catch(function () { }));
+  if (peut('retours')) p.push(nb(sb.from('retours').select('id', { count: 'exact', head: true }).eq('statut', 'nouveau')).then(function (n) { c.retours = n; }).catch(function () { }));
   if (peut('arena')) p.push(nb(sb.from('arena_matchs').select('id', { count: 'exact', head: true }).eq('statut', 'propose')).then(function (n) { c.arena = n; }).catch(function () { }));
   return Promise.all(p).then(function () { return c; });
 }
@@ -1725,6 +1727,7 @@ function vueMessages(m) {
 // ---------- Historique : tout ce qui change dans l'appli, regroupé par jour, par personne et par type
 var HIF = { periode: 7, cat: '', txt: '' };
 var JCAT = {
+  retours: ['Idées et bugs', 'retour d\'adhérent', 'retours d\'adhérents'],
   inscriptions: ['Inscriptions', 'inscription', 'inscriptions', 1], participations: ['Inscriptions', 'réponse présent/absent', 'réponses présent/absent', 1],
   evenements: ['Agenda', 'événement / séance', 'événements / séances'], evenement_groupes: ['Agenda', 'groupe d\'événement', 'groupes d\'événements'], evenement_quotas: ['Agenda', 'quota de places', 'quotas de places'],
   creneaux: ['Agenda', 'créneau de cours', 'créneaux de cours'], periodes_sans_cours: ['Agenda', 'période sans cours', 'périodes sans cours', 1],
@@ -1795,7 +1798,43 @@ function vueHistorique(m) {
   $('hi-q').oninput = function () { HIF.txt = this.value; afficher(); };
 }
 
-var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique };
+// ---------- Idées et bugs ----------
+function vueRetours(m) {
+  var F = { statut: 'ouverts', type: '' };
+  m.innerHTML = entete('Idées et bugs', 'Ce que les adhérents envoient depuis Profil → « Boîte à idées » et « Signaler un bug ». Chaque envoi part aussi par mail à contact@clocatennis.fr.') +
+    '<div class="chips" id="rt-f" style="margin-bottom:12px"></div><div id="rt-l"><div class="skel"></div></div>';
+  var filtres = function () {
+    $('rt-f').innerHTML = [['ouverts', 'À traiter'], ['traite', 'Traités'], ['tous', 'Tout']].map(function (x) { return '<button class="chip' + (F.statut === x[0] ? ' on' : '') + '" data-rfs="' + x[0] + '">' + x[1] + '</button>'; }).join('') + ' · ' +
+      [['', 'Idées et bugs'], ['idee', 'Idées'], ['bug', 'Bugs']].map(function (x) { return '<button class="chip' + (F.type === x[0] ? ' on' : '') + '" data-rft="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+    all('[data-rfs]').forEach(function (b) { b.onclick = function () { F.statut = b.dataset.rfs; filtres(); charger(); }; });
+    all('[data-rft]').forEach(function (b) { b.onclick = function () { F.type = b.dataset.rft; filtres(); charger(); }; });
+  };
+  var charger = function () {
+    var r = sb.from('retours').select('*').order('cree_le', { ascending: false }).limit(300);
+    if (F.statut === 'ouverts') r = r.in('statut', ['nouveau', 'lu']); else if (F.statut === 'traite') r = r.eq('statut', 'traite');
+    if (F.type) r = r.eq('type', F.type);
+    q(r).then(function (l) {
+      $('rt-l').innerHTML = l.length ? '<div class="list">' + l.map(function (x) {
+        var qui = [x.prenom, x.nom].filter(Boolean).join(' ');
+        var mt = 'mailto:' + encodeURIComponent(x.email || '') + '?subject=' + encodeURIComponent('Re : ' + (x.type === 'bug' ? 'ton signalement' : 'ton idée') + ' (' + x.categorie + ')') + '&body=' + encodeURIComponent('Bonjour ' + (x.prenom || '') + ',\n\n\n\n—\nTon message : « ' + x.texte.slice(0, 500) + ' »');
+        return '<div class="card" style="margin-bottom:10px;' + (x.statut === 'nouveau' ? 'border-left:4px solid var(--ac)' : '') + '"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">' +
+          '<span><span class="badge ' + (x.type === 'bug' ? 'b-ko' : 'b-ac') + '">' + (x.type === 'bug' ? 'Bug' : 'Idée') + '</span> <b>' + esc(x.categorie) + '</b> · ' + esc(qui || 'Adhérent') + (x.statut === 'nouveau' ? ' <span class="badge b-ac">Nouveau</span>' : '') + '</span>' +
+          '<span class="mut xs">' + esc(new Date(x.cree_le).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + (x.mail_envoye ? ' · mail envoyé' : ' · <span title="Le mail n\'est pas parti : vérifie les réglages SMTP de la fonction retour">pas de mail</span>') + '</span></div>' +
+          '<div style="white-space:pre-wrap;margin:8px 0">' + esc(x.texte) + '</div>' +
+          (x.contexte ? '<details class="xs mut"><summary>Appareil</summary>' + esc(x.contexte) + '</details>' : '') +
+          '<div class="chips" style="margin-top:8px">' + (x.email ? '<a class="btn sm line" href="' + mt + '">Répondre par mail</a>' : '') +
+          (x.statut === 'nouveau' ? '<button class="btn sm ghost" data-rts="' + x.id + '|lu">Marquer lu</button>' : '') +
+          (x.statut !== 'traite' ? '<button class="btn sm ok" data-rts="' + x.id + '|traite">Traité</button>' : '<button class="btn sm ghost" data-rts="' + x.id + '|lu">Rouvrir</button>') +
+          '<button class="btn sm ko" data-rtd="' + x.id + '">Supprimer</button></div></div>';
+      }).join('') + '</div>' : '<div class="card empty">' + (F.statut === 'ouverts' ? 'Rien à traiter pour l\'instant.' : 'Aucun retour.') + '</div>';
+      all('[data-rts]').forEach(function (b) { b.onclick = function () { var v = b.dataset.rts.split('|'); q(sb.from('retours').update({ statut: v[1] }).eq('id', v[0])).then(function () { toast(v[1] === 'traite' ? 'Marqué traité' : 'Mis à jour'); charger(); }).catch(function () { toast('Action impossible'); }); }; });
+      all('[data-rtd]').forEach(function (b) { b.onclick = function () { if (!confirm('Supprimer ce retour ?')) return; q(sb.from('retours').delete().eq('id', b.dataset.rtd)).then(function () { toast('Supprimé'); charger(); }).catch(function () { toast('Suppression impossible'); }); }; });
+    }).catch(function () { $('rt-l').innerHTML = '<div class="card empty">Impossible de charger les retours.</div>'; });
+  };
+  filtres(); charger();
+}
+
+var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours };
 function router() {
   if (!A.user) return;
   fermer();

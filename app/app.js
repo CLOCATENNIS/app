@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 16h10';
+var VERSION_APPLI = '29/10 17h40';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1426,7 +1426,7 @@ function pageProfil() {
     if (S.loginStep === 1) h += '<label class="f">Adresse mail<input class="f" id="lg-mail" type="email" autocomplete="email" inputmode="email" placeholder="prenom.nom@exemple.fr" value="' + esc(S.loginEmail) + '"></label><button class="btn" id="lg-send">Recevoir mon code</button>';
     else h += '<label class="f">Code reçu par mail<input class="f" id="lg-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></label><button class="btn" id="lg-ok">Me connecter</button><button class="btn line" id="lg-back">Changer d\'adresse</button>';
     h += '<p class="mut small" id="lg-msg" style="margin:0">' + (S.loginStep === 2 ? 'Un mail vient de partir vers ' + esc(S.loginEmail) + '. Il arrive en moins d\'une minute : regarde aussi dans les spams ou l\'onglet Promotions. Tape le code à 6 chiffres ci-dessus.' : '') + '</p></section>' +
-      '<section class="card stack" style="gap:8px"><b>Besoin d\'aide ?</b><span class="mut small">Installer l\'appli, se connecter, activer les notifications : on te montre où appuyer.</span><a class="btn line" href="#/aide">Voir le guide pas à pas</a></section></main>';
+      '<section class="card stack" style="gap:8px"><b>Besoin d\'aide ?</b><span class="mut small">Installer l\'appli, se connecter, activer les notifications : on te montre où appuyer.</span><a class="btn line" href="#/aide">Voir le guide pas à pas</a><span class="mut xs">Le code n\'arrive pas, ou un autre souci ? Écris à <a href="mailto:contact@clocatennis.fr?subject=Appli%20CLOCA%20Tennis%20%3A%20probl%C3%A8me%20de%20connexion">contact@clocatennis.fr</a></span></section></main>';
     setTimeout(lierLogin);
     return h;
   }
@@ -1447,9 +1447,11 @@ function pageProfil() {
   if (S.compte && !S.compte.foyer_id && !S.compte.personne_id && !S.isStaff) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
   h += blocInstaller() + blocPush();
   h += '<a class="btn ghost" href="#/aide">' + ic('alert', 18) + ' Aide et guide pas à pas</a>';
+  h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Ton avis compte</span><span class="mut small">L\'appli est en version bêta : une idée, un souci ? Ton message part directement au club.</span>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn line" id="rt-idee">💡 Boîte à idées</button><button class="btn line" id="rt-bug">🐞 Signaler un bug</button></div></section>';
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
     '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a> · version ' + VERSION_APPLI + '</p></main>';
-  setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
+  setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('rt-idee').onclick = function () { ouvrirRetour('idee'); }; $('rt-bug').onclick = function () { ouvrirRetour('bug'); }; $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
 function apercu(foyer, nom) {
@@ -2244,6 +2246,36 @@ function etapesGuide() {
   E.push({ t: 'Ce que tu trouves dans l\'appli', x: '<div class="stack" style="gap:8px;text-align:left">' + [['home', 'Accueil', 'le prochain rendez-vous, les actus, qui est au club'], ['cal', 'Agenda', 'les cours et séances de toute la famille'], ['bell', 'Messages', 'la cloche 🔔 en haut : les messages du club et des coachs'], ['check', 'Inscriptions', 'stages, CLOC\'ARENA et événements'], ['user', 'Profil', 'ta famille, les notifications et ce guide']].map(function (x) { return '<div style="display:flex;gap:10px;align-items:center">' + ic(x[0], 22, '#b4532a') + '<span class="small"><b>' + x[1] + '</b> : ' + x[2] + '</span></div>'; }).join('') + '</div>' });
   E.push({ t: 'C\'est tout ! 👏', x: 'Une question ? Écris au club depuis <b>Profil</b> ou demande à l\'accueil du club house. Tu retrouves ce guide dans <b>Profil → Aide</b>.' });
   return E;
+}
+// ---------- Boîte à idées et signalement de bug ----------
+var CAT_RETOUR = {
+  idee: ['L\'appli', 'Cours et entraînements', 'CLOC\'ARENA', 'Stages et événements', 'Vie du club et club house', 'Autre'],
+  bug: ['Connexion ou code', 'Notifications', 'Agenda et cours', 'CLOC\'ARENA', 'Inscriptions', 'Messages', 'Affichage', 'Autre']
+};
+function ouvrirRetour(type) {
+  var c = S.compte || {}, moi = (S.pers || []).filter(function (p) { return p.id === c.personne_id; })[0];
+  var pr = moi ? moi.prenom : c.prenom_declare || '', nm = moi ? moi.nom : c.nom_declare || '';
+  var bug = type === 'bug';
+  modale('<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">' + (bug ? '🐞 Signaler un bug' : '💡 Boîte à idées') + '</h2>' +
+    '<span class="mut small">' + (bug ? 'Dis-nous ce qui ne marche pas : où tu étais, ce que tu as touché, ce qui s\'est passé. On corrige au plus vite.' : 'Une envie, une amélioration, une idée pour le club ou pour l\'appli ? Le club lit tout.') + '</span>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Prénom<input class="f" id="rt-p" autocomplete="given-name" maxlength="60" value="' + esc(pr) + '"></label><label class="f">Nom<input class="f" id="rt-n" autocomplete="family-name" maxlength="60" value="' + esc(nm) + '"></label></div>' +
+    '<label class="f">Catégorie<select class="f" id="rt-c"><option value="">Choisir…</option>' + CAT_RETOUR[type].map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="f">' + (bug ? 'Que s\'est-il passé ?' : 'Ton idée') + '<textarea class="f" id="rt-t" rows="5" maxlength="3000" placeholder="' + (bug ? 'Ex. Quand je touche « Absent à ce cours », rien ne se passe.' : 'Ex. Pouvoir voir la météo du court dans l\'agenda.') + '"></textarea></label>' +
+    '<span class="mut xs">Envoyé au club avec ton adresse ' + esc(S.user ? S.user.email : '') + ', pour qu\'on puisse te répondre.</span>' +
+    '<button class="btn" id="rt-ok">Envoyer</button></div>', function () {
+    $('rt-ok').onclick = function () {
+      var p = $('rt-p').value.trim(), n = $('rt-n').value.trim(), cat = $('rt-c').value, t = $('rt-t').value.trim();
+      if (!p || !n) return toast('Indique ton prénom et ton nom');
+      if (!cat) return toast('Choisis une catégorie');
+      if (t.length < 3) return toast(bug ? 'Décris le problème' : 'Écris ton idée');
+      $('rt-ok').disabled = true; $('rt-ok').textContent = 'Envoi…';
+      var ctx = 'Version ' + VERSION_APPLI + ' · ' + (estInstallee() ? 'appli installée' : 'navigateur') + ' · ' + navigator.userAgent.replace(/\s+/g, ' ').slice(0, 300);
+      q(sb.from('retours').insert({ type: type, categorie: cat, texte: t, prenom: p, nom: n.toUpperCase(), email: S.user ? S.user.email : null, contexte: ctx, user_id: S.user.id }).select('id').single()).then(function (r) {
+        sb.functions.invoke('retour', { body: { retour_id: r.id } }).catch(function () { });
+        fermerModale(); toast(bug ? 'Merci, le bug est signalé 🙏' : 'Merci pour ton idée 💡');
+      }).catch(function () { toast('Envoi impossible, réessaie'); $('rt-ok').disabled = false; $('rt-ok').textContent = 'Envoyer'; });
+    };
+  });
 }
 function modale(html, lier, fermable) {
   fermerModale();
