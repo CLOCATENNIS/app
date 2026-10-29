@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 17h40';
+var VERSION_APPLI = '29/10 18h40';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1126,8 +1126,8 @@ function scoreValide(sets, forfait) {
 }
 function pageDouble() {
   var D = S.dbl = S.dbl || { tab: 'classement', cat: 'Hommes', poule: 1 };
-  var tabs = [['classement', 'Classement'], ['matchs', 'Matchs'], ['dispos', 'Mes dispos'], ['score', 'Envoyer un score']];
-  if (S.isDir && !S.apercu) tabs.push(['orga', 'Organisateur']);
+  var tabs = [['classement', 'Classement', 'trophy'], ['matchs', 'Matchs', 'racket'], ['dispos', 'Mes dispos', 'cal'], ['score', 'Envoyer un score', 'check']];
+  if (S.isDir && !S.apercu) tabs.push(['orga', 'Organisateur', 'tool']);
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-dtab]'), function (b) { b.onclick = function () { D.tab = b.dataset.dtab; render(); }; });
     var box = $('dbl-main');
@@ -1135,15 +1135,15 @@ function pageDouble() {
     chargerDouble().then(function () { remplirDouble(box); }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger le tournoi pour le moment.</section>'; });
   });
   return '<div class="darkhead"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) + '<div class="kicker" style="margin-top:8px">TOURNOI INTERNE · SAISON 2026-2027</div><h1>Double interne</h1>' +
-    '<div class="seg" style="margin-top:14px;overflow-x:auto">' + tabs.map(function (t) { return '<button data-dtab="' + t[0] + '" class="' + (D.tab === t[0] ? 'on' : '') + '" style="white-space:nowrap">' + t[1] + '</button>'; }).join('') + '</div></div></div><main id="dbl-main"><div class="skel"></div></main>';
+    '<div class="cases">' + tabs.map(function (t) { return '<button data-dtab="' + t[0] + '" class="' + (D.tab === t[0] ? 'on' : '') + '">' + ic(t[2], 20) + '<span>' + t[1] + '</span></button>'; }).join('') + '</div></div></div><main id="dbl-main"><div class="skel"></div></main>';
 }
 function choixPoule(D) {
   var cats = ['Dames', 'Hommes', 'Mixte'].filter(function (c) { return DB2.eq.some(function (e) { return e.categorie === c; }); });
   if (cats.indexOf(D.cat) < 0) D.cat = cats[0];
   var poules = []; DB2.eq.forEach(function (e) { if (e.categorie === D.cat && poules.indexOf(e.poule) < 0) poules.push(e.poule); }); poules.sort(function (a, b) { return a - b; });
   if (poules.indexOf(D.poule) < 0) D.poule = poules[0];
-  return '<div class="chips">' + cats.map(function (c) { return '<button class="chip' + (D.cat === c ? ' on' : '') + '" data-dcat="' + c + '">' + c + '</button>'; }).join('') + '</div>' +
-    '<div class="chips">' + poules.map(function (p) { return '<button class="chip' + (D.poule === p ? ' on' : '') + '" data-dpoule="' + p + '">Poule ' + p + '</button>'; }).join('') + '</div>';
+  return '<div class="tuiles t3">' + cats.map(function (c) { var n = DB2.eq.filter(function (e) { return e.categorie === c; }).length; return '<button class="' + (D.cat === c ? 'on' : '') + '" data-dcat="' + c + '"><b>' + c + '</b><span>' + n + ' équipes</span></button>'; }).join('') + '</div>' +
+    '<div class="tuiles tp">' + poules.map(function (p) { return '<button class="' + (D.poule === p ? 'on' : '') + '" data-dpoule="' + p + '"><span>Poule</span><b>' + p + '</b></button>'; }).join('') + '</div>';
 }
 function remplirDouble(box) {
   var D = S.dbl;
