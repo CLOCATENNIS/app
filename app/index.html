@@ -150,6 +150,12 @@ button.pick{width:100%;background:var(--card);color:var(--tx);font:inherit;font-
 .an-ph .th{position:relative;width:76px;height:76px}
 .an-ph .th img{width:100%;height:100%;object-fit:cover;border-radius:10px}
 .an-ph .th button{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:0;background:var(--navy);color:#fff;font-size:15px;line-height:1;cursor:pointer}
+.cases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
+.cases button{display:flex;align-items:center;gap:8px;min-height:52px;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font:inherit;font-weight:600;font-size:14px;text-align:left;cursor:pointer}
+.cases button span{flex:1}
+.cases button b{background:var(--ac);color:#fff;border-radius:10px;font-size:12px;padding:1px 8px}
+.cases button b:empty{display:none}
+.cases button.on{background:#fff;color:var(--navy);border-color:#fff}
 .cloche{position:relative;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.12);flex:none}
 .cloche .nb{position:absolute;top:2px;right:0;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--ac);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--navy)}
 .pastille{position:absolute;top:6px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--ac)}
@@ -170,6 +176,6 @@ nav.tabs a.on{color:var(--ac);font-weight:600}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="in" id="tabs-in"></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202610291605"></script>
+<script src="app.js?v=202610291610"></script>
 </body>
 </html>

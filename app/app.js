@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 16h05';
+var VERSION_APPLI = '29/10 16h10';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1007,10 +1007,10 @@ function vueCoach(e) {
       var vus = {}, mb = r[0].filter(function (m) { if (vus[m.personne_id]) return false; vus[m.personne_id] = 1; return true; });
       var rep = {}; r[1].forEach(function (x) { rep[x.personne_id] = x.reponse; });
       var oui = mb.filter(function (m) { return rep[m.personne_id] === 'oui'; }), non = mb.filter(function (m) { return rep[m.personne_id] === 'non'; }), sans = mb.filter(function (m) { return !rep[m.personne_id]; });
-      h += '<div style="display:flex;gap:14px;flex-wrap:wrap"><b style="color:var(--ok)">✓ ' + oui.length + ' présent' + (oui.length > 1 ? 's' : '') + '</b><b style="color:var(--ko)">✗ ' + non.length + ' absent' + (non.length > 1 ? 's' : '') + '</b><b class="mut">? ' + sans.length + ' sans réponse</b></div>' +
+      h += '<div style="display:flex;gap:14px;flex-wrap:wrap"><b style="color:var(--ok)">✓ ' + oui.length + ' présent' + (oui.length > 1 ? 's' : '') + '</b><b style="color:var(--ko)">✗ ' + non.length + ' absent' + (non.length > 1 ? 's' : '') + '</b></div>' +
         (oui.length ? '<span class="small"><b>Présents :</b> ' + oui.map(function (m) { return nom(m.personnes); }).join(', ') + '</span>' : '') +
         (non.length ? '<span class="small"><b>Absents :</b> ' + non.map(function (m) { return nom(m.personnes); }).join(', ') + '</span>' : '') +
-        (sans.length ? '<span class="small mut"><b>Sans réponse :</b> ' + sans.map(function (m) { return nom(m.personnes); }).join(', ') + '</span>' : '');
+        (sans.length ? '<details class="small mut"><summary style="cursor:pointer">' + sans.length + ' sans réponse ▾</summary><div style="margin-top:4px">' + sans.map(function (m) { return nom(m.personnes); }).join(', ') + '</div></details>' : '');
     }
     box.innerHTML = h;
   });
@@ -2366,9 +2366,9 @@ function evtsDuCoach(du, au) {
 var CO = { jour: 0, tab: 'jour' };
 function pageCoach() {
   var nc = nomCoachCompte();
-  var tabs = [['jour', 'Mes cours'], ['evts', 'Séances et événements']].concat(S.gere.length || S.isDir ? [['saisie', 'Saisie CLOC\'ARENA']] : []).concat([['missions', 'Missions'], ['groupes', 'Mes groupes']]);
+  var tabs = [['jour', 'Mes cours', 'cal'], ['evts', 'Séances et événements', 'trophy']].concat(S.gere.length || S.isDir ? [['saisie', 'Saisie CLOC\'ARENA', 'tool']] : []).concat([['missions', 'Missions', 'check'], ['groupes', 'Mes groupes', 'user']]);
   var h = '<div class="darkhead"><div class="wrap">' + backLink('#/gestion', 'Mes espaces', true) + '<div class="kicker" style="margin-top:8px">ESPACE COACH' + (nc ? ' · ' + esc(nc.toUpperCase()) : '') + '</div><h1>Mon espace coach</h1>' +
-    '<div class="seg" style="margin-top:14px;overflow-x:auto">' + tabs.map(function (t) { return '<button style="white-space:nowrap" data-cot="' + t[0] + '" class="' + (CO.tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div></div></div><main id="co-main">';
+    '<div class="cases">' + tabs.map(function (t) { return '<button data-cot="' + t[0] + '" class="' + (CO.tab === t[0] ? 'on' : '') + '">' + ic(t[2], 20) + '<span>' + t[1] + '</span></button>'; }).join('') + '</div></div></div><main id="co-main">';
   if (CO.tab === 'jour') {
     var j = new Date(); j.setHours(12, 0, 0, 0); j.setDate(j.getDate() + CO.jour);
     var c = coursDuJour(j), ev = evtsDuCoach(debutJour(j), new Date(debutJour(j).getTime() + 864e5));
@@ -2418,7 +2418,7 @@ function remplirComptesEvt() {
     Array.prototype.forEach.call(els, function (el) {
       var id = el.dataset.cevt;
       if (el.dataset.insc === '1') { var n = (r[1] || []).filter(function (x) { return x.evenement_id === id && x.statut === 'inscrit'; }).length, at = (r[1] || []).filter(function (x) { return x.evenement_id === id && x.statut === 'attente'; }).length; el.innerHTML = '<span style="color:var(--ok)">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</span>' + (at ? ' · ' + at + ' en attente' : ''); }
-      else { var p = (r[0] || []).filter(function (x) { return x.evenement_id === id; }), oui = p.filter(function (x) { return x.reponse === 'present'; }).length, non = p.length - oui; el.innerHTML = '<span style="color:var(--ok)">' + oui + ' présent' + (oui > 1 ? 's' : '') + '</span> · <span style="color:var(--ko)">' + non + ' absent' + (non > 1 ? 's' : '') + '</span>'; }
+      else { var p = (r[0] || []).filter(function (x) { return x.evenement_id === id; }), oui = p.filter(function (x) { return x.reponse === 'oui'; }).length, non = p.filter(function (x) { return x.reponse === 'non'; }).length; el.innerHTML = '<span style="color:var(--ok)">' + oui + ' présent' + (oui > 1 ? 's' : '') + '</span> · <span style="color:var(--ko)">' + non + ' absent' + (non > 1 ? 's' : '') + '</span>'; }
     });
   });
 }
@@ -2429,7 +2429,7 @@ function pageCordeur() {
   if (!S.user || !estCordeurSeul()) return '<div class="pagehead wrap"><h1>Espace cordeur</h1></div><main><section class="card empty">Réservé aux cordeurs du club.</section></main>';
   var tabs = [['attente', 'À corder'], ['pretes', 'Prêtes'], ['regler', 'À régler'], ['histo', 'Historique']];
   var h = '<div class="darkhead"><div class="wrap">' + backLink('#/gestion', 'Mes espaces', true) + '<div class="kicker" style="margin-top:8px">ESPACE CORDEUR</div><h1>Atelier cordage</h1>' +
-    '<div class="seg" style="margin-top:14px;overflow-x:auto">' + tabs.map(function (t) { return '<button style="white-space:nowrap" data-cdt="' + t[0] + '" class="' + (CDR.tab === t[0] ? 'on' : '') + '">' + t[1] + '<span data-cdn="' + t[0] + '"></span></button>'; }).join('') + '</div></div></div><main id="cdr-main"><div class="skel"></div></main>';
+    '<div class="cases">' + tabs.map(function (t) { return '<button data-cdt="' + t[0] + '" class="' + (CDR.tab === t[0] ? 'on' : '') + '"><span>' + t[1] + '</span><b data-cdn="' + t[0] + '"></b></button>'; }).join('') + '</div></div></div><main id="cdr-main"><div class="skel"></div></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-cdt]'), function (b) { b.onclick = function () { CDR.tab = b.dataset.cdt; render(); }; });
     Promise.all([chargerCordage(), q(sb.from('cordage_demandes').select('*, cordages(nom)').eq('statut', 'recupere').eq('paye', true).order('paye_le', { ascending: false, nullsFirst: false }).limit(60)).catch(function () { return []; })]).then(function (r) { remplirCordeur(r[1] || []); })
@@ -2440,7 +2440,7 @@ function pageCordeur() {
 function remplirCordeur(histo) {
   var box = $('cdr-main'); if (!box) return;
   var L = { attente: C.dem.filter(function (d) { return d.statut === 'attente'; }), pretes: C.dem.filter(function (d) { return d.statut === 'fini'; }), regler: C.dem.filter(function (d) { return d.statut === 'recupere' && !d.paye; }), histo: histo };
-  ['attente', 'pretes', 'regler'].forEach(function (k) { var e = document.querySelector('[data-cdn="' + k + '"]'); if (e && L[k].length) e.textContent = ' · ' + L[k].length; });
+  ['attente', 'pretes', 'regler'].forEach(function (k) { var e = document.querySelector('[data-cdn="' + k + '"]'); if (e && L[k].length) e.textContent = L[k].length; });
   var l = L[CDR.tab];
   if (CDR.tab === 'attente') l.sort(function (a, b) { return (a.besoin_avant || '9999') < (b.besoin_avant || '9999') ? -1 : (a.besoin_avant || '9999') > (b.besoin_avant || '9999') ? 1 : (a.created_at < b.created_at ? -1 : 1); });
   var vide = { attente: 'Aucune raquette à corder. 👌', pretes: 'Aucune raquette qui attend d\'être récupérée.', regler: 'Tout est réglé.', histo: 'Aucun paiement enregistré.' };
