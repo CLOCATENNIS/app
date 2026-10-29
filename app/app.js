@@ -298,7 +298,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 13h03';
+var VERSION_APPLI = '29/10 13h07';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1431,7 +1431,7 @@ function pageProfil() {
 }
 function apercu(foyer, nom) {
   S.apercu = foyer ? { foyer: foyer, nom: nom } : null; S.sel = 'all'; S.agTab = null; AG = null;
-  chargerUtilisateur().then(chargerAgenda).then(function () { toast(foyer ? 'Aperçu : ' + nom : 'Retour à ton compte'); go('#/accueil'); render(); });
+  chargerUtilisateur().then(chargerAgenda).then(chargerMessages).then(function () { toast(foyer ? 'Aperçu : ' + nom : 'Retour à ton compte'); go('#/accueil'); render(); });
 }
 function lierApercu() {
   if (!$('ap-q')) return;
@@ -2064,14 +2064,22 @@ function infosAtelier() {
 // ---------- Messagerie : messages du club, des coachs, actus et séances ----------
 function chargerMessages() {
   S.msgs = [];
-  if (!S.user || S.apercu) return Promise.resolve();
-  return q(sb.from('message_destinataires').select('pour, lu_le, messages(id, created_at, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source)').eq('user_id', S.user.id).limit(300))
-    .then(function (l) { S.msgs = (l || []).filter(function (x) { return x.messages; }).sort(function (a, b) { return a.messages.created_at < b.messages.created_at ? 1 : -1; }); })
+  if (!S.user) return Promise.resolve();
+  var champs = 'user_id, pour, lu_le, messages(id, created_at, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source)';
+  // En aperçu, la direction voit les messages reçus par les comptes de cette famille (sans les marquer comme lus)
+  var req = S.apercu ? q(sb.rpc('comptes_liste')).then(function (l) {
+      var ids = (l || []).filter(function (c) { return c.foyer_id === S.apercu.foyer; }).map(function (c) { return c.user_id; });
+      return ids.length ? q(sb.from('message_destinataires').select(champs).in('user_id', ids).limit(300)) : [];
+    }) : q(sb.from('message_destinataires').select(champs).eq('user_id', S.user.id).limit(300));
+  return req.then(function (l) {
+      var vu = {};
+      S.msgs = (l || []).filter(function (x) { if (!x.messages || vu[x.messages.id]) return false; vu[x.messages.id] = 1; return true; }).sort(function (a, b) { return a.messages.created_at < b.messages.created_at ? 1 : -1; });
+    })
     .catch(function () { S.msgs = []; });
 }
 function nonLus() { return (S.msgs || []).filter(function (x) { return !x.lu_le; }); }
 function cloche() {
-  if (!S.user || S.apercu) return '';
+  if (!S.user) return '';
   var n = nonLus().length;
   return '<a href="#/messages" class="cloche" aria-label="Messages' + (n ? ', ' + n + ' non lu' + (n > 1 ? 's' : '') : '') + '">' + ic('bell', 24, '#fff') + (n ? '<span class="nb">' + (n > 9 ? '9+' : n) + '</span>' : '') + '</a>';
 }
