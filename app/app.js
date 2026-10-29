@@ -302,6 +302,7 @@ function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
   if (moi) return moi.prenom;
+  if (S.compte && S.compte.prenom_declare && !S.apercu) return S.compte.prenom_declare;
   if (S.pers.length) return 'Famille ' + S.pers[0].nom.charAt(0) + S.pers[0].nom.slice(1).toLowerCase();
   return S.isDir ? 'Direction sportive' : 'Bienvenue';
 }
