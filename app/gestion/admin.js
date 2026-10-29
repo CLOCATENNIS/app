@@ -1737,7 +1737,7 @@ var JCAT = {
   cordage_demandes: ['Cordage', 'demande de cordage', 'demandes de cordage', 1], cordages: ['Cordage', 'cordage', 'cordages'], cordage_tarifs: ['Cordage', 'tarif', 'tarifs'],
   boutique_ventes: ['Boutique', 'vente', 'ventes', 1], boutique_articles: ['Boutique', 'article', 'articles'], boutique_mouvements: ['Boutique', 'mouvement de stock', 'mouvements de stock'],
   coach_missions: ['Coachs', 'mission', 'missions', 1], notes_coach: ['Coachs', 'note de coach', 'notes de coach', 1],
-  nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
+  absences_cours: ['Agenda', 'absence à un cours', 'absences aux cours', 1], nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
   club_presence: ['Présence au club', 'changement', 'changements'],
   messages: ['Messagerie', 'message', 'messages'], adresses_reponse: ['Messagerie', 'adresse de réponse', 'adresses de réponse', 1],
   equipe: ['Comptes et accès', 'membre de l\'équipe', 'membres de l\'équipe'], comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']

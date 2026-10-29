@@ -229,8 +229,9 @@ function chargerAgenda() {
     q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; }),
     q(sb.from('participations').select('evenement_id, personne_id, reponse').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
     q(sb.from('nextgen').select('*').in('personne_id', S.pers.map(function (p) { return p.id; }))).catch(function () { return []; }),
-    q(sb.from('nextgen_absences').select('id, nextgen_id, jour, motif')).catch(function () { return []; })
-  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [], ng: r[4] || [], ngabs: r[5] || [] }; return AG; });
+    q(sb.from('nextgen_absences').select('id, nextgen_id, jour, motif')).catch(function () { return []; }),
+    q(sb.from('absences_cours').select('creneau_id, jour, personne_id, personnes(prenom, nom)').gte('jour', isoJour(new Date(Date.now() - 14 * 864e5)))).catch(function () { return []; })
+  ]).then(function (r) { AG = { creneaux: r[0], insc: r[1], pauses: r[2] || [], part: r[3] || [], ng: r[4] || [], ngabs: r[5] || [], abs: r[6] || [] }; return AG; });
 }
 
 function mesItems(du, au) {
@@ -255,7 +256,7 @@ function mesItems(du, au) {
       if (!qui.length && !jeCoache) continue;
       var a = cr.heure_debut.split(':'), b = cr.heure_fin.split(':');
       var d = new Date(j); d.setHours(+a[0], +a[1], 0, 0); var f = new Date(j); f.setHours(+b[0], +b[1], 0, 0);
-      items.push({ d: d, f: f, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [], gid: cr.groupe_id, coach: !qui.length });
+      items.push({ d: d, f: f, titre: cr.groupes ? String(cr.groupes.nom).replace(/^.*?·\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : 'Cours', lieu: cr.lieu, enc: cr.encadrant, statut: 'prevu', qui: qui, gs: cr.groupes ? [cr.groupes] : [], gid: cr.groupe_id, coach: !qui.length || !!jeCoache, crid: cr.id, jour: iso, eleve: qui.length > 0 });
     }
   });
   // Encadrement Next Gen : le jeune vient aider sur un cours, avec ses propres horaires
@@ -301,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 13h07';
+var VERSION_APPLI = '29/10 15h15';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -388,6 +389,16 @@ function carteAgenda(it, couleur, quiHtml) {
   var det = [fmtH(it.d) + (it.f ? ' – ' + fmtH(it.f) : '')]; if (it.lieu) det.push(esc(it.lieu)); if (it.enc) det.push('avec ' + esc(it.enc));
   var href = it.id ? '#/evenement/' + it.id : it.gid && voitGroupe(it.gid) ? '#/groupe/' + it.gid : null;
   if (it.coach) quiHtml = (quiHtml || '') + '<span class="small" style="color:var(--navy);font-weight:600">Tu encadres' + (href && !it.id ? ' · clique pour voir le groupe' : '') + '</span>';
+  if (it.crid) {
+    var absL = ((AG && AG.abs) || []).filter(function (x) { return x.creneau_id === it.crid && x.jour === it.jour; });
+    var futur = it.d > new Date() && !S.apercu;
+    if (it.eleve) quiHtml = (quiHtml || '') + '<span style="display:flex;gap:6px;flex-wrap:wrap">' + it.qui.map(function (p) {
+      var ab = absL.some(function (x) { return x.personne_id === p.id; }), nom = it.qui.length > 1 || S.pers.length > 1 ? esc(p.prenom) + ' : ' : '';
+      return ab ? '<span class="chip" style="min-height:32px;border-color:var(--ko);color:var(--ko)">' + nom + 'Absent' + (futur ? ' · <u data-absx="' + it.crid + '|' + it.jour + '|' + p.id + '">annuler</u>' : '') + '</span>'
+        : futur ? '<button class="chip" data-absc="' + it.crid + '|' + it.jour + '|' + p.id + '" style="min-height:32px">' + nom + 'Absent à ce cours</button>' : '';
+    }).join('') + '</span>';
+    if (it.coach && nomCoachCompte()) quiHtml = (quiHtml || '') + '<span class="small" style="color:' + (absL.length ? 'var(--ko)' : 'var(--mut)') + ';font-weight:600">' + (absL.length ? absL.length + ' absent' + (absL.length > 1 ? 's' : '') + ' : ' + esc(absL.map(function (x) { return x.personnes ? x.personnes.prenom + ' ' + x.personnes.nom.charAt(0) + '.' : '?'; }).join(', ')) : 'Aucune absence signalée') + '</span>';
+  }
   if (it.ng) quiHtml = (quiHtml || '') + (it.ngAbs ? '<span class="small" style="color:var(--ko);font-weight:600">Absence signalée' + (it.ngAbs.motif ? ' · ' + esc(it.ngAbs.motif) : '') + '</span>' : it.d > new Date() && !S.apercu ? '<button class="chip" data-ngabs="' + it.ng + '|' + it.ngJour + '" style="align-self:flex-start;min-height:34px">Je serai absent</button>' : '');
   return '<' + (href ? 'a href="' + href + '"' : 'div') + ' class="ev' + (it.statut === 'annule' ? ' off' : '') + (it.possible ? ' possible' : '') + '"><span class="bar" style="background:' + couleur + '"></span><div class="stack" style="flex:1;min-width:0">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="t">' + esc(it.titre) + '</b>' + etat + '</div>' +
@@ -430,7 +441,7 @@ function pageAgenda() {
     h += carteAgenda(it, c, (S.pers.length > 1 && !(evo && peutRepondre(evo)) ? '<span class="small">' + it.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') + (evo ? boutonsPart(evo, it.qui) : ''));
   });
   h += blocSynchro() + '</main>';
-  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); lierPart(); lierAbsenceNg(); });
+  setTimeout(function () { lierAgenda(); lierSynchro(); lierSel(); lierPart(); lierAbsenceNg(); lierAbsenceCours(); });
   return h;
 }
 function lierAgenda() {
@@ -1013,6 +1024,22 @@ function voitGroupe(gid) {
   var nc = nomCoachCompte();
   return !!nc && ((AG && AG.creneaux) || []).some(function (cr) { return cr.groupe_id === gid && encadrePar(cr.encadrant, nc); });
 }
+function lierAbsenceCours() {
+  var maj = function () { return chargerAgenda().then(render); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-absc]'), function (b) {
+    b.onclick = function (ev) {
+      ev.preventDefault(); ev.stopPropagation(); var x = b.dataset.absc.split('|'); b.disabled = true;
+      q(sb.from('absences_cours').insert({ creneau_id: x[0], jour: x[1], personne_id: x[2] })).then(function () { toast('Absence signalée au coach'); return maj(); })
+        .catch(function () { toast('Trop tard : le cours a commencé, préviens le coach directement'); b.disabled = false; });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-absx]'), function (b) {
+    b.onclick = function (ev) {
+      ev.preventDefault(); ev.stopPropagation(); var x = b.dataset.absx.split('|');
+      q(sb.from('absences_cours').delete().eq('creneau_id', x[0]).eq('jour', x[1]).eq('personne_id', x[2])).then(function () { toast('Absence annulée'); return maj(); }).catch(function () { toast('Action impossible'); });
+    };
+  });
+}
 function lierAbsenceNg() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-ngabs]'), function (b) {
     b.onclick = function (ev) {
@@ -1231,13 +1258,19 @@ function remplirGroupe(gid) {
   Promise.all([
     q(sb.from('groupe_membres').select('personne_id, personnes(prenom, nom, niveau_arena, date_naissance)').eq('groupe_id', gid)),
     q(sb.from('notes_coach').select('*').eq('groupe_id', gid).order('created_at', { ascending: false })).catch(function () { return []; }),
-    q(sb.from('nextgen').select('grade, arrivee, depart, personnes(prenom, nom)').eq('groupe_id', gid)).catch(function () { return []; })
+    q(sb.from('nextgen').select('grade, arrivee, depart, personnes(prenom, nom)').eq('groupe_id', gid)).catch(function () { return []; }),
+    q(sb.from('absences_cours').select('jour, personne_id, creneau_id, personnes(prenom, nom), creneaux!inner(groupe_id, heure_debut)').eq('creneaux.groupe_id', gid).gte('jour', isoJour(new Date())).order('jour')).catch(function () { return []; })
   ]).then(function (r) {
+    var absG = r[3] || [];
     var mb = (r[0] || []).filter(function (m) { return m.personnes; }).sort(function (a, b) { return a.personnes.prenom.localeCompare(b.personnes.prenom, 'fr'); });
     var notes = r[1] || [], ng = r[2] || [];
     var nomP = function (id) { var m = mb.filter(function (x) { return x.personne_id === id; })[0]; return m ? m.personnes.prenom + ' ' + m.personnes.nom.charAt(0) + '.' : ''; };
     var age = function (d) { if (!d) return ''; var n = new Date(d), t = new Date(); var a = t.getFullYear() - n.getFullYear() - ((t.getMonth() < n.getMonth() || (t.getMonth() === n.getMonth() && t.getDate() < n.getDate())) ? 1 : 0); return a + ' ans'; };
-    var h = formEcrireGroupe(gid) + '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
+    var parJour = {}; absG.forEach(function (a) { (parJour[a.jour] = parJour[a.jour] || []).push(a); });
+    var hAbs = '<section class="card stack" style="gap:6px"><span class="eyebrow">Absences signalées</span>' + (Object.keys(parJour).length ? Object.keys(parJour).sort().map(function (j) {
+      return '<div class="small" style="padding:6px 0;border-top:1px solid var(--line)"><b>' + esc(fmtJour(new Date(j + 'T12:00:00'))) + '</b> · ' + parJour[j].length + ' absent' + (parJour[j].length > 1 ? 's' : '') + ' : ' + esc(parJour[j].map(function (a) { return a.personnes ? a.personnes.prenom + ' ' + a.personnes.nom.charAt(0) + '.' : '?'; }).join(', ')) + '</div>';
+    }).join('') : '<span class="mut small">Aucune absence signalée pour les prochains cours.</span>') + '</section>';
+    var h = hAbs + formEcrireGroupe(gid) + '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
       '<label class="f">Pour<select class="f" id="nt-p"><option value="">Tout le groupe</option>' + mb.map(function (m) { return '<option value="' + m.personne_id + '">' + esc(m.personnes.prenom + ' ' + m.personnes.nom) + '</option>'; }).join('') + '</select></label>' +
       '<label class="f">Séance du (facultatif)<input class="f" type="date" id="nt-j"></label>' +
       '<label class="f">Note<textarea class="f" id="nt-t" rows="3" maxlength="2000" placeholder="Ex. Nicolas : changement de prise en coup droit. Absent les 2 prochaines semaines."></textarea></label>' +
