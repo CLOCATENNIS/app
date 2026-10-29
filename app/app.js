@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 18h45';
+var VERSION_APPLI = '29/10 20h40';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -687,10 +687,10 @@ function pageFiche(id) {
         return '<div class="row"><div class="stack"><b class="small">' + (m.partenaires ? 'avec ' + esc(m.partenaires) + ' ' : '') + 'contre ' + esc(m.adversaires || '—') + '</b><span class="mut xs">' + esc(fmtCourt(new Date(m.date + 'T12:00:00'))) + ' · ' + esc(m.format.toLowerCase()) + (m.invite ? ' · invité' : '') + '</span></div>' +
           '<div style="display:flex;gap:8px;align-items:center"><b class="small">' + esc(scorePour(m.score, m.equipe)) + '</b><span class="badge" style="background:' + (m.gagne ? 'var(--ok)' : '#f3dcc8') + ';color:' + (m.gagne ? '#fff' : '#5d3a17') + '">' + (m.gagne ? 'Gagné' : 'Perdu') + '</span></div></div>';
       }).join('') : '<div class="empty">Pas encore de match.</div>') + '</section>' +
-        '<p class="mut xs" style="display:flex;gap:6px;align-items:center;justify-content:center">' + ic('lock', 14) + 'Fiche visible seulement par la famille, les coachs et la direction sportive.</p></main>';
+        '<p class="mut xs" style="text-align:center">Fiche CLOC\'ARENA visible par tous les adhérents.</p></main>';
       $('app').innerHTML = h;
     }).catch(function () {
-      $('app').innerHTML = '<div class="pagehead">' + backLink('#/arena/tweener', 'Classement') + '</div><main><section class="card empty">Cette fiche n\'est visible que par la famille du joueur, ses coachs et la direction sportive.</section></main>';
+      $('app').innerHTML = '<div class="pagehead">' + backLink('#/arena/tweener', 'Classement') + '</div><main><section class="card empty">Fiche introuvable : ce joueur n\'a pas (ou plus) de niveau CLOC\'ARENA.</section></main>';
     });
   });
   return '<div style="padding:40px 16px"><div class="skel"></div></div>';
