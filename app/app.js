@@ -298,6 +298,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
+var VERSION_APPLI = '29/10 13h03';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1424,7 +1425,7 @@ function pageProfil() {
   h += blocInstaller() + blocPush();
   h += '<a class="btn ghost" href="#/aide">' + ic('alert', 18) + ' Aide et guide pas à pas</a>';
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
-    '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p></main>';
+    '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a> · version ' + VERSION_APPLI + '</p></main>';
   setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
