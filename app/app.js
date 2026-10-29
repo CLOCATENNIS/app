@@ -1419,7 +1419,7 @@ function pageProfil() {
     (estCordeur() ? '<a class="btn ghost" href="#/cordage/attente">' + ic('racket', 18) + 'Atelier cordage</a>' : '') + '</section>';
   if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
     '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
-  h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
+  if (S.compte && !S.compte.foyer_id && !S.compte.personne_id && !S.isStaff) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
   h += blocInstaller() + blocPush();
   h += '<a class="btn ghost" href="#/aide">' + ic('alert', 18) + ' Aide et guide pas à pas</a>';
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
@@ -2264,7 +2264,8 @@ function lierIdentite(apres) {
 function guidesAuto() {
   if (S.apercu || $('modale')) return;
   var ss = function (k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, ssSet = function (k) { try { sessionStorage.setItem(k, '1'); } catch (e) { } };
-  if (S.user && S.compte && !S.compte.identite_le && !ss('cloca-identite-plus-tard')) return modale(formIdentite(false), function () { lierIdentite(fermerModale); }, false);
+  var inconnu = S.compte && !S.compte.foyer_id && !S.compte.personne_id && !S.isStaff && !S.roles.length;
+  if (S.user && inconnu && !S.compte.identite_le && !ss('cloca-identite-plus-tard')) return modale(formIdentite(false), function () { lierIdentite(fermerModale); }, false);
   if (!S.user && !localStorageGet('cloca-guide-vu')) return modale('<div class="stack" style="gap:14px;text-align:center"><img src="' + LOGO + '" alt="" style="width:84px;height:84px;border-radius:50%;background:#fff;margin:0 auto"><h2 style="margin:0;font-size:22px">Bienvenue dans l\'appli du club !</h2>' +
     '<span class="small">Laisse-toi guider : en 2 minutes, l\'appli est sur ton téléphone et tu es connecté.</span><button class="btn" id="w-go">C\'est parti, guide-moi</button><button class="btn line" id="w-non">Je sais déjà faire</button></div>', function () {
     $('w-go').onclick = function () { ouvrirGuide(0); };
