@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '29/10 20h40';
+var VERSION_APPLI = '30/10 10h30';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1070,8 +1070,61 @@ function chargerDouble(force) {
   return Promise.all([
     q(sb.from('double_equipes').select('*').order('categorie').order('poule').order('numero')),
     q(sb.from('double_dispos').select('*')),
-    q(sb.from('double_resultats').select('*').order('date'))
-  ]).then(function (r) { DB2 = { eq: r[0] || [], dispos: r[1] || [], res: r[2] || [] }; return DB2; });
+    q(sb.from('double_resultats').select('*').order('date')),
+    q(sb.from('double_reservations').select('*').order('cree_le', { ascending: false })).catch(function () { return []; })
+  ]).then(function (r) { DB2 = { eq: r[0] || [], dispos: r[1] || [], res: r[2] || [], resa: r[3] || [] }; return DB2; });
+}
+// ---------- Réservation d'un terrain pour un match du double ----------
+function creneauResa(x) {
+  var j = new Date(x.jour + 'T12:00:00'), h = String(x.heure).slice(0, 5).split(':'), hd = +h[0], md = h[1];
+  var hh = function (H) { return H + 'h' + (md !== '00' ? md : ''); };
+  return j.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' + hh(hd) + '–' + hh(hd + 2) + ' · ' + x.terrain;
+}
+function resasDuMatch(a, b) { return (DB2.resa || []).filter(function (x) { return (x.equipe_a === a.id && x.equipe_b === b.id) || (x.equipe_a === b.id && x.equipe_b === a.id); }); }
+function blocResa(a, b) {
+  var l = resasDuMatch(a, b), act = l.filter(function (x) { return x.statut === 'confirmee' || x.statut === 'demande'; })[0];
+  if (act && act.statut === 'confirmee') return '<div class="resa ok">' + ic('check', 16) + '<span><b>Terrain réservé</b><br>' + esc(creneauResa(act)) + '</span></div>';
+  if (act) return '<div class="resa att"><span><b>⏳ Demande envoyée au club</b><br>' + esc(creneauResa(act)) + '</span>' + (S.user && act.cree_par === S.user.id ? '<button class="chip" data-resa-x="' + act.id + '">Annuler</button>' : '') + '</div>';
+  var ref = l.filter(function (x) { return x.statut === 'refusee'; })[0];
+  return (ref ? '<span class="xs" style="color:var(--ko)">Demande du ' + esc(creneauResa(ref)) + ' refusée' + (ref.motif ? ' : ' + esc(ref.motif) : '') + '</span>' : '') +
+    (S.user ? '<button class="btn line" style="min-height:40px" data-resa="' + a.id + '|' + b.id + '">' + ic('cal', 18) + ' Demander une réservation</button>' : '');
+}
+function formResa(a, b, box) {
+  if (!a || !b) return;
+  if (S.apercu) return toast('Aperçu : rien n\'est envoyé');
+  var terrains = (S.reglages && Array.isArray(S.reglages.terrains_double) && S.reglages.terrains_double.length) ? S.reglages.terrains_double : ['Court couvert 1', 'Court couvert 2'];
+  var joueurs = [[a.id, 1, a.joueur1], [a.id, 2, a.joueur2], [b.id, 1, b.joueur1], [b.id, 2, b.joueur2]].filter(function (x) { return x[2]; });
+  var moiEq = localStorageGet('dbl-eq') || '', moiJ = localStorageGet('dbl-j') || '1';
+  var heures = []; for (var H = 8; H <= 20; H++) ['00', '30'].forEach(function (mm) { if (!(H === 20 && mm === '30')) heures.push((H < 10 ? '0' : '') + H + ':' + mm); });
+  var demain = new Date(); var iso = isoJour(demain);
+  modale('<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">Demander une réservation</h2>' +
+    '<span class="small"><b>' + esc(nomEq(a)) + '</b><br><span class="mut">contre</span> <b>' + esc(nomEq(b)) + '</b></span>' +
+    '<span class="mut small">Créneau de 2 heures. Mettez-vous d\'accord à 4 avant d\'envoyer : le club réserve le terrain et vous prévient par notification.</span>' +
+    '<label class="f">Jour<input class="f" type="date" id="rs-j" min="' + iso + '"></label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Début<select class="f" id="rs-h">' + heures.map(function (h) { return '<option' + (h === '10:00' ? ' selected' : '') + '>' + h + '</option>'; }).join('') + '</select></label><label class="f">Fin<input class="f" id="rs-f" disabled></label></div>' +
+    '<label class="f">Terrain<select class="f" id="rs-t">' + terrains.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="f">Je suis<select class="f" id="rs-m"><option value="">Choisir…</option>' + joueurs.map(function (x) { var v = x[0] + '|' + x[1]; return '<option value="' + esc(v) + '"' + (x[0] === moiEq && String(x[1]) === moiJ ? ' selected' : '') + '>' + esc(x[2]) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="f">Un mot pour le club (facultatif)<input class="f" id="rs-n" maxlength="300" placeholder="Ex. sinon 11h possible"></label>' +
+    '<label style="display:flex;gap:10px;align-items:flex-start" class="small"><input type="checkbox" id="rs-ok" style="width:20px;height:20px;flex:none;margin-top:1px"> Les 4 joueurs sont d\'accord sur ce jour, cette heure et ce terrain.</label>' +
+    '<button class="btn" id="rs-go">Envoyer la demande</button></div>', function () {
+    var fin = function () { var h = $('rs-h').value.split(':'); $('rs-f').value = (+h[0] + 2) + ':' + h[1]; };
+    $('rs-h').onchange = fin; fin();
+    $('rs-go').onclick = function () {
+      var j = $('rs-j').value, me = $('rs-m').value;
+      if (!j) return toast('Choisis le jour');
+      if (j < isoJour(new Date())) return toast('Ce jour est déjà passé');
+      if (!me) return toast('Indique qui tu es');
+      if (!$('rs-ok').checked) return toast('Mettez-vous d\'accord à 4 avant d\'envoyer');
+      var mm = me.split('|'), nomMoi = (joueurs.filter(function (x) { return x[0] + '|' + x[1] === me; })[0] || [])[2] || null;
+      localStorageSet('dbl-eq', mm[0]); localStorageSet('dbl-j', mm[1]);
+      $('rs-go').disabled = true; $('rs-go').textContent = 'Envoi…';
+      q(sb.from('double_reservations').insert({ equipe_a: a.id, equipe_b: b.id, jour: j, heure: $('rs-h').value, terrain: $('rs-t').value, note: $('rs-n').value.trim() || null, demandeur: nomMoi, cree_par: S.user.id }).select('id').single()).then(function (r) {
+        sb.functions.invoke('notifier', { body: { mode: 'resa_double', reservation_id: r.id } }).catch(function () { });
+        fermerModale(); toast('Demande envoyée au club 👍');
+        return chargerDouble(true).then(function () { remplirDouble(box); });
+      }).catch(function () { toast('Envoi impossible, réessaie'); $('rs-go').disabled = false; $('rs-go').textContent = 'Envoyer la demande'; });
+    };
+  });
 }
 function nomEq(e) { return e ? e.joueur1 + (e.joueur2 ? ' / ' + e.joueur2 : '') : '?'; }
 function lireSets(score) { return String(score || '').trim().split(/\s+/).filter(Boolean).map(function (s) { var m = s.split('-'); return [+m[0], +m[1]]; }); }
@@ -1167,17 +1220,25 @@ function remplirDouble(box) {
         return '<div class="dayhead">Tour ' + (ti + 1) + (exempt && joue ? ' · exempt : ' + esc(nomEq(joue)) : '') + '</div>' + tour.map(function (m) {
           var r = DB2.res.filter(function (x) { return x.statut !== 'refusé' && ((x.gagnant === m[0].id && x.perdant === m[1].id) || (x.gagnant === m[1].id && x.perdant === m[0].id)); })[0];
           var cc = creneauxCommuns(m[0], m[1]);
+          var bResa = r ? '' : blocResa(m[0], m[1]);
           return '<section class="card stack" style="gap:6px"><b class="small">' + esc(nomEq(m[0])) + '<br><span class="mut">contre</span> ' + esc(nomEq(m[1])) + '</b>' +
             (r ? '<span class="small" style="color:' + (r.statut === 'validé' ? 'var(--ok)' : 'var(--ac)') + ';font-weight:600">' + (r.statut === 'validé' ? '✓ ' : '⏳ ') + esc(nomEq(eqDe(r.gagnant)).split(' / ')[0]) + '… gagne ' + esc(r.forfait ? 'par forfait' : r.score) + (r.statut === 'validé' ? '' : ' · en attente de validation') + '</span>'
               : (cc.manque ? '<span class="xs" style="color:var(--ac);font-weight:600">En attente des dispos de : ' + esc(cc.manquants.join(', ')) + '</span>' +
                   (cc.possibles.length ? '<span class="xs mut">Possible pour ceux qui ont répondu (à confirmer) :</span><span style="display:flex;flex-wrap:wrap;gap:4px">' + cc.possibles.map(function (k) { return '<span class="badge" style="background:transparent;border:1px dashed var(--mut);color:var(--mut)">' + JOURS_D[Math.floor(k / 3)] + ' ' + MOMENTS[k % 3].toLowerCase() + '</span>'; }).join('') + '</span>' : '')
-                : '<span class="xs mut">Créneaux en commun (les 4 joueurs) :</span><span style="display:flex;flex-wrap:wrap;gap:4px">' + (cc.ok.length ? cc.ok.map(function (k) { return '<span class="badge" style="background:var(--ok);color:#fff">' + JOURS_D[Math.floor(k / 3)] + ' ' + MOMENTS[k % 3].toLowerCase() + '</span>'; }).join('') : '<span class="xs mut">aucun créneau commun : à caler sur WhatsApp</span>') + '</span>')) + '</section>';
+                : '<span class="xs mut">Créneaux en commun (les 4 joueurs) :</span><span style="display:flex;flex-wrap:wrap;gap:4px">' + (cc.ok.length ? cc.ok.map(function (k) { return '<span class="badge" style="background:var(--ok);color:#fff">' + JOURS_D[Math.floor(k / 3)] + ' ' + MOMENTS[k % 3].toLowerCase() + '</span>'; }).join('') : '<span class="xs mut">aucun créneau commun : à caler sur WhatsApp</span>') + '</span>')) + bResa + '</section>';
         }).join('');
-      }).join('') + '<p class="mut xs" style="text-align:center">Calez la date dans le groupe WhatsApp de la poule et réservez un terrain sur Ten\'Up.</p>';
+      }).join('') + '<p class="mut xs" style="text-align:center">Mettez-vous d\'accord à 4 sur un jour, une heure et un terrain, puis touchez « Demander une réservation » : le club réserve et vous recevez une notification.</p>';
     }
     apres = function () {
       Array.prototype.forEach.call(box.querySelectorAll('[data-dcat]'), function (b) { b.onclick = function () { D.cat = b.dataset.dcat; D.poule = 0; remplirDouble(box); }; });
       Array.prototype.forEach.call(box.querySelectorAll('[data-dpoule]'), function (b) { b.onclick = function () { D.poule = +b.dataset.dpoule; remplirDouble(box); }; });
+      Array.prototype.forEach.call(box.querySelectorAll('[data-resa]'), function (b) { b.onclick = function () { var x = b.dataset.resa.split('|'); formResa(eqDe(x[0]), eqDe(x[1]), box); }; });
+      Array.prototype.forEach.call(box.querySelectorAll('[data-resa-x]'), function (b) {
+        b.onclick = function () {
+          if (!confirm('Annuler cette demande de réservation ?')) return;
+          q(sb.from('double_reservations').update({ statut: 'annulee' }).eq('id', b.dataset.resaX)).then(function () { toast('Demande annulée'); return chargerDouble(true); }).then(function () { remplirDouble(box); }).catch(function () { toast('Annulation impossible'); });
+        };
+      });
     };
   } else if (D.tab === 'dispos') {
     var monEq = localStorageGet('dbl-eq') || '', monJ = +(localStorageGet('dbl-j') || 1), eq = eqDe(monEq);

@@ -46,6 +46,35 @@ Deno.serve(async (req) => {
       texte = (jour + " · " + (ng.libelle || (ng.groupes ? ng.groupes.nom.replace(/^.*?·\s*/, "") : "")) + (abs.motif ? " · " + abs.motif : "")).slice(0, 200);
       url = "/app/gestion/#/nextgen";
       users = await direction();
+    } else if (b.mode === "resa_double") {
+      // Réservation d'un terrain pour un match du double interne
+      const { data: r } = await admin.from("double_reservations").select("*").eq("id", b.reservation_id).maybeSingle();
+      if (!r) return json({ erreur: "réservation introuvable" }, 404);
+      const { data: eqs } = await admin.from("double_equipes").select("id, joueur1, joueur2, personne1, personne2, categorie, poule").in("id", [r.equipe_a, r.equipe_b]);
+      const nomEq = (id: string) => { const e = (eqs || []).find((x) => x.id === id); return e ? e.joueur1 + (e.joueur2 ? " / " + e.joueur2 : "") : "?"; };
+      const quand = new Date(r.jour + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Paris" });
+      const h = String(r.heure).slice(0, 5).split(":"), hd = +h[0], md = h[1];
+      const creneau = quand + " · " + hd + "h" + (md !== "00" ? md : "") + "–" + (hd + 2) + "h" + (md !== "00" ? md : "") + " · " + r.terrain;
+      const match = nomEq(r.equipe_a) + " contre " + nomEq(r.equipe_b);
+      url = "/app/#/double";
+      if (r.statut === "demande") {
+        if (r.cree_par !== u.user.id) return json({ erreur: "non autorisé" }, 403);
+        titre = "Demande de réservation · Double";
+        texte = (creneau + " · " + match).slice(0, 200);
+        url = "/app/gestion/#/double";
+        users = ((await admin.from("responsabilites").select("user_id").in("role", ["direction", "accueil"]).is("groupe_id", null)).data || []).map((x) => x.user_id as string);
+      } else {
+        const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).in("role", ["direction", "accueil"]);
+        if (!roles?.length) return json({ erreur: "réservé à l'équipe du club" }, 403);
+        const pids = (eqs || []).flatMap((e) => [e.personne1, e.personne2]).filter(Boolean);
+        const { data: cs } = pids.length ? await admin.rpc("comptes_concernes", { pids }) : { data: [] };
+        users = ((cs || []) as { user_id: string }[]).map((x) => x.user_id);
+        if (r.cree_par) users.push(r.cree_par);
+        users = [...new Set(users)];
+        if (r.statut === "confirmee") { titre = "Terrain réservé ✅ · Double"; texte = (creneau + " · " + match).slice(0, 200); }
+        else if (r.statut === "refusee") { titre = "Réservation impossible · Double"; texte = (creneau + (r.motif ? " · " + r.motif : "") + " · Faites une nouvelle demande.").slice(0, 200); }
+        else return json({ envoyes: 0, appareils: 0 });
+      }
     } else {
       const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).in("role", ["direction", "bureau", "accueil"]);
       if (!roles?.length) return json({ erreur: "réservé à l'équipe du club" }, 403);

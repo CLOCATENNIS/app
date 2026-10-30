@@ -181,6 +181,7 @@ function compteurs() {
   if (peut('cordage')) p.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.cordage = n; }).catch(function () { }));
   if (peut('adherents')) p.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { c.adherents = (l || []).length; }).catch(function () { }));
   if (peut('retours')) p.push(nb(sb.from('retours').select('id', { count: 'exact', head: true }).eq('statut', 'nouveau')).then(function (n) { c.retours = n; }).catch(function () { }));
+  if (peut('double')) p.push(nb(sb.from('double_reservations').select('id', { count: 'exact', head: true }).eq('statut', 'demande')).then(function (n) { c.double = n; }).catch(function () { }));
   if (peut('arena')) p.push(nb(sb.from('arena_matchs').select('id', { count: 'exact', head: true }).eq('statut', 'propose')).then(function (n) { c.arena = n; }).catch(function () { }));
   return Promise.all(p).then(function () { return c; });
 }
@@ -1246,9 +1247,59 @@ function vueBoutique(m) {
 }
 
 // ---------- Double interne : équipes, poules et reprise des données de l'appli Google ----------
+// Demandes de réservation de terrain envoyées par les joueurs du double
+function reservationsDouble() {
+  var box = $('dbx-r'); if (!box) return;
+  Promise.all([
+    q(sb.from('double_reservations').select('*').order('jour').order('heure')),
+    q(sb.from('double_equipes').select('id, joueur1, joueur2, categorie, poule')),
+    q(sb.from('reglages_publics').select('valeur').eq('cle', 'terrains_double')).catch(function () { return []; })
+  ]).then(function (r) {
+    var L = r[0] || [], EQ = {}; (r[1] || []).forEach(function (e) { EQ[e.id] = e; });
+    var terrains = (r[2] && r[2][0] && Array.isArray(r[2][0].valeur)) ? r[2][0].valeur : [];
+    var nom = function (id) { var e = EQ[id]; return e ? e.joueur1 + (e.joueur2 ? ' / ' + e.joueur2 : '') : '?'; };
+    var cren = function (x) { var h = String(x.heure).slice(0, 5).split(':'), md = h[1] !== '00' ? h[1] : ''; return new Date(x.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + (+h[0]) + 'h' + md + '–' + (+h[0] + 2) + 'h' + md; };
+    var auj = new Date().toISOString().slice(0, 10);
+    var att = L.filter(function (x) { return x.statut === 'demande'; }), conf = L.filter(function (x) { return x.statut === 'confirmee' && x.jour >= auj; });
+    var ligne = function (x, actions) {
+      var e = EQ[x.equipe_a];
+      return '<div class="card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>' + esc(cren(x)) + '</b><span class="badge b-ac">' + esc(x.terrain) + '</span></div>' +
+        '<div class="small" style="margin:6px 0">' + esc(nom(x.equipe_a)) + ' <span class="mut">contre</span> ' + esc(nom(x.equipe_b)) + (e ? ' <span class="mut xs">· ' + esc(e.categorie) + ' poule ' + e.poule + '</span>' : '') + '</div>' +
+        '<div class="mut xs">Demandé par ' + esc(x.demandeur || '?') + ' le ' + esc(new Date(x.cree_le).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + (x.note ? ' · « ' + esc(x.note) + ' »' : '') + '</div>' +
+        (actions ? '<div class="chips" style="margin-top:8px">' + actions + '</div>' : '') + '</div>';
+    };
+    box.innerHTML = '<div class="sect">Réservations à faire (' + att.length + ')</div>' + (att.length ? att.map(function (x) {
+      return ligne(x, '<button class="btn sm ok" data-rsok="' + x.id + '">Réservé ✓</button><button class="btn sm line" data-rsmod="' + x.id + '">Changer le terrain</button><button class="btn sm ko" data-rsko="' + x.id + '">Impossible</button>');
+    }).join('') : '<div class="card empty">Aucune demande en attente.</div>') +
+      (conf.length ? '<details style="margin:6px 0 14px"><summary class="small"><b>Terrains réservés à venir (' + conf.length + ')</b></summary>' + conf.map(function (x) { return ligne(x, '<button class="btn sm ghost" data-rsan="' + x.id + '">Annuler la réservation</button>'); }).join('') + '</details>' : '') +
+      '<details style="margin:0 0 16px"><summary class="small">Terrains proposés aux joueurs</summary><div class="card" style="margin-top:8px"><label class="l">Un terrain par ligne<textarea class="f" id="rs-terr" rows="4">' + esc(terrains.join('\n')) + '</textarea></label><button class="btn sm" id="rs-terr-ok" style="margin-top:8px">Enregistrer</button></div></details>';
+    var maj = function (id, champs, msg) {
+      champs.traite_le = new Date().toISOString(); champs.traite_par = A.user.id;
+      return q(sb.from('double_reservations').update(champs).eq('id', id)).then(function () {
+        if (champs.statut === 'confirmee' || champs.statut === 'refusee') sb.functions.invoke('notifier', { body: { mode: 'resa_double', reservation_id: id } }).catch(function () { });
+        toast(msg); reservationsDouble(); compteurs().then(function (c) { A.cpt = c; });
+      }).catch(function () { toast('Action impossible'); });
+    };
+    all('[data-rsok]', box).forEach(function (b) { b.onclick = function () { maj(b.dataset.rsok, { statut: 'confirmee' }, 'Réservation confirmée : les joueurs sont prévenus'); }; });
+    all('[data-rsko]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Pourquoi ? (ex. terrain déjà pris, proposez 18h)'); if (m === null) return; maj(b.dataset.rsko, { statut: 'refusee', motif: m.trim().slice(0, 300) || null }, 'Demande refusée : les joueurs sont prévenus'); }; });
+    all('[data-rsan]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Annuler cette réservation ? Motif pour les joueurs :'); if (m === null) return; maj(b.dataset.rsan, { statut: 'refusee', motif: (m.trim() || 'Réservation annulée par le club').slice(0, 300) }, 'Réservation annulée : les joueurs sont prévenus'); }; });
+    all('[data-rsmod]', box).forEach(function (b) {
+      b.onclick = function () {
+        var t = prompt('Terrain réservé :' + (terrains.length ? ' (' + terrains.join(', ') + ')' : '')); if (!t || !t.trim()) return;
+        maj(b.dataset.rsmod, { statut: 'confirmee', terrain: t.trim().slice(0, 60) }, 'Réservé sur ' + t.trim() + ' : les joueurs sont prévenus');
+      };
+    });
+    $('rs-terr-ok').onclick = function () {
+      var v = $('rs-terr').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!v.length) return toast('Indique au moins un terrain');
+      q(sb.from('reglages_publics').upsert({ cle: 'terrains_double', valeur: v, maj_le: new Date().toISOString() })).then(function () { toast('Terrains enregistrés'); }).catch(function () { toast('Enregistrement impossible'); });
+    };
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les réservations.</div>'; });
+}
 function vueDouble(m) {
   m.innerHTML = entete('Double interne', 'Les équipes et les poules du tournoi interne. Les joueurs suivent le tournoi dans l\'appli (tuile Double interne de l\'accueil) ; tu valides les scores dans l\'onglet Organisateur de l\'appli.', '<button class="btn line" id="dbx-imp">Reprendre les données de l\'appli Google</button><button class="btn" id="dbx-new">Ajouter une équipe</button>') +
-    '<input type="file" id="dbx-f" accept=".xlsx,.xls" hidden><div id="dbx-l"><div class="skel"></div></div>';
+    '<input type="file" id="dbx-f" accept=".xlsx,.xls" hidden><div id="dbx-r"><div class="skel"></div></div><div id="dbx-l"><div class="skel"></div></div>';
+  reservationsDouble();
   var EQ = [], RES = [];
   var charger = function () {
     Promise.all([q(sb.from('double_equipes').select('*').order('categorie').order('poule').order('numero')), q(sb.from('double_resultats').select('gagnant, perdant, statut'))]).then(function (r) {
@@ -1298,7 +1349,7 @@ function vueDouble(m) {
       var R = res.filter(function (x) { return ids.indexOf(String(x.gagnant).trim()) >= 0 && ids.indexOf(String(x.perdant).trim()) >= 0 && String(x.gagnant).trim() !== String(x.perdant).trim(); }).map(function (x) {
         return { date: date(x.date), categorie: String(x.categorie).trim(), poule: parseInt(x.poule, 10), gagnant: String(x.gagnant).trim(), perdant: String(x.perdant).trim(), score: String(x.score || '').trim() || null, forfait: norm(x.forfait) === 'oui', saisi_nom: String(x.saisiPar || '').trim() || null, statut: st(x.statut), traite_le: x.traiteLe ? date(x.traiteLe) : null };
       });
-      if (!confirm('Reprendre ' + E.length + ' équipes, ' + Dd.length + ' dispos et ' + R.length + ' scores ? Les données du double déjà dans l\'appli du club seront remplacées.')) return;
+      if (!confirm('Reprendre ' + E.length + ' équipes, ' + Dd.length + ' dispos et ' + R.length + ' scores ? Les données du double déjà dans l\'appli du club seront remplacées (y compris les réservations de terrain et les liens avec les fiches adhérents).')) return;
       return q(sb.from('double_resultats').delete().not('id', 'is', null)).then(function () { return q(sb.from('double_dispos').delete().not('equipe_id', 'is', null)); })
         .then(function () { return q(sb.from('double_equipes').delete().not('id', 'is', null)); })
         .then(function () { return q(sb.from('double_equipes').insert(E)); })
@@ -1727,6 +1778,7 @@ function vueMessages(m) {
 // ---------- Historique : tout ce qui change dans l'appli, regroupé par jour, par personne et par type
 var HIF = { periode: 7, cat: '', txt: '' };
 var JCAT = {
+  double_reservations: ['Double interne', 'réservation de terrain', 'réservations de terrain'],
   retours: ['Idées et bugs', 'retour d\'adhérent', 'retours d\'adhérents'],
   inscriptions: ['Inscriptions', 'inscription', 'inscriptions', 1], participations: ['Inscriptions', 'réponse présent/absent', 'réponses présent/absent', 1],
   evenements: ['Agenda', 'événement / séance', 'événements / séances'], evenement_groupes: ['Agenda', 'groupe d\'événement', 'groupes d\'événements'], evenement_quotas: ['Agenda', 'quota de places', 'quotas de places'],
