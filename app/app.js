@@ -1092,7 +1092,7 @@ function blocResa(a, b) {
 function formResa(a, b, box) {
   if (!a || !b) return;
   if (S.apercu) return toast('Aperçu : rien n\'est envoyé');
-  var terrains = (S.reglages && Array.isArray(S.reglages.terrains_double) && S.reglages.terrains_double.length) ? S.reglages.terrains_double : ['Court couvert 1', 'Court couvert 2'];
+  var terrains = (S.reglages && Array.isArray(S.reglages.terrains_double) && S.reglages.terrains_double.length) ? S.reglages.terrains_double : ['Couvert 1', 'Couvert 2', 'Terre 3', 'Terre 4', 'Quick 5', 'Quick 6', 'Quick 7'];
   var joueurs = [[a.id, 1, a.joueur1], [a.id, 2, a.joueur2], [b.id, 1, b.joueur1], [b.id, 2, b.joueur2]].filter(function (x) { return x[2]; });
   var moiEq = localStorageGet('dbl-eq') || '', moiJ = localStorageGet('dbl-j') || '1';
   var heures = []; for (var H = 8; H <= 20; H++) ['00', '30'].forEach(function (mm) { if (!(H === 20 && mm === '30')) heures.push((H < 10 ? '0' : '') + H + ':' + mm); });
