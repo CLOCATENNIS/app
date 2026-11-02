@@ -176,12 +176,102 @@ nav.tabs a{display:flex;flex-direction:column;align-items:center;justify-content
 nav.tabs a.on{color:var(--ac);font-weight:600}
 .sr{position:absolute;left:-9999px}
 @media (min-width:700px){.hero,.darkhead{border-radius:0 0 24px 24px}}
+
+/* ====== Écrans larges : tablette (768 px et +) et ordinateur (1024 px et +) ======
+   Tout ce qui suit ne s'applique pas sous 768 px : le téléphone garde son affichage d'origine. */
+nav.tabs .side-brand,nav.tabs .side-foot{display:none}
+.ag-jour{display:contents}
+@media (min-width:768px){
+  #app.wrap{max-width:none}
+  .wrap{max-width:880px}
+  .hero>.wrap,.darkhead>.wrap{padding:0 8px}
+  .hero{padding:calc(24px + env(safe-area-inset-top,0px)) 24px 20px}
+  .darkhead{padding:calc(22px + env(safe-area-inset-top,0px)) 24px 22px}
+  .pagehead{padding:calc(24px + env(safe-area-inset-top,0px)) 32px 8px}
+  main{max-width:880px;margin:0 auto;padding:18px 24px 0;gap:14px}
+  nav.tabs .in{max-width:720px}
+  .chips{flex-wrap:wrap;overflow:visible}
+  .cases{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .cases button:last-child:nth-child(odd){grid-column:auto}
+  .seg{max-width:620px}
+  .podium{max-width:620px;margin-left:auto;margin-right:auto;width:100%}
+  /* Accueil en deux colonnes */
+  .dk-home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+  .dk-top{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .dk-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .dk-col #presence:empty{display:none}
+  /* Listes de cartes en grille : les titres, filtres et blocs larges prennent toute la ligne */
+  body:is([data-page="agenda"],[data-page="inscriptions"],[data-page="gestion"],[data-page="arena"],[data-page="coach"],[data-page="cordeur"],[data-page="bureau"],[data-page="groupe"]) main,
+  #club-main,#club-ag,#bur-main,#coach-main,#arena-main{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;align-items:start}
+  body:is([data-page="agenda"],[data-page="inscriptions"],[data-page="gestion"],[data-page="arena"],[data-page="coach"],[data-page="cordeur"],[data-page="bureau"],[data-page="groupe"]) main>:not(.card,.ev,.tile,.ag-jour),
+  :is(#club-main,#club-ag,#bur-main,#coach-main,#arena-main)>:not(.card,.ev,.tile,.ag-jour),
+  body main>.card.empty,:is(#club-main,#club-ag,#bur-main,#coach-main,#arena-main)>.card.empty{grid-column:1/-1}
+  .dayhead{margin:8px 2px 0}
+  .ag-jour{display:flex;flex-direction:column;gap:10px;min-width:0}
+  .ag-jour>.dayhead{margin:4px 2px 0}
+  /* Pages de lecture et formulaires : colonne confortable, pas trop large */
+  body:is([data-page="actu"],[data-page="aide"],[data-page="message"],[data-page="messages"],[data-page="saisie"],[data-page="fiche"]) main{max-width:760px}
+  .modal{max-width:520px}
+}
+@media (min-width:1024px){
+  :root{--side:248px}
+  body{padding-bottom:0;padding-left:var(--side)}
+  /* Navigation : barre latérale fixe */
+  nav.tabs{top:0;bottom:0;right:auto;width:var(--side);border-top:0;background:var(--navy);padding:20px 14px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+  nav.tabs .side-brand{display:block}
+  nav.tabs .side-brand a{display:flex;flex-direction:row;justify-content:flex-start;align-items:center;font-size:inherit;gap:10px;padding:2px 8px 14px;border-bottom:1px solid #2c4e6b;color:#fff;text-decoration:none}
+  nav.tabs .side-brand img{width:42px;height:42px;border-radius:50%;background:#fff;object-fit:cover;flex:none}
+  nav.tabs .side-brand b{display:block;font-family:var(--disp);font-size:24px;line-height:1;white-space:nowrap}
+  nav.tabs .side-brand small{display:block;font-size:11px;letter-spacing:.8px;color:#c9d6e2;margin-top:2px}
+  nav.tabs .in{max-width:none;margin:0;display:flex;flex-direction:column;gap:4px;height:auto}
+  nav.tabs .in a{flex-direction:row;justify-content:flex-start;gap:12px;padding:12px 12px;border-radius:12px;color:#dbe4ec;font-size:15px;font-weight:500;min-height:48px}
+  nav.tabs .in a:hover{background:var(--navy2);color:#fff}
+  nav.tabs .in a.on{background:#fff;color:var(--navy);font-weight:600}
+  nav.tabs .pastille{top:12px;left:30px;border:2px solid var(--navy)}
+  nav.tabs .side-foot{display:flex;flex-direction:column;gap:6px;margin-top:auto;padding:12px 8px 0;border-top:1px solid #2c4e6b;font-size:12px}
+  nav.tabs .side-foot a{display:block;font-size:12px;color:#c9d6e2;text-decoration:none;overflow-wrap:anywhere}
+  nav.tabs .side-foot a:hover{color:#fff;text-decoration:underline}
+  .toast{bottom:28px;left:calc(50% + var(--side) / 2)}
+  /* Conteneur principal */
+  .wrap{max-width:1240px}
+  .hero{padding:28px 32px 26px}
+  .darkhead{padding:28px 32px 28px}
+  .hero,.darkhead{border-radius:0 0 28px 28px}
+  .hello-name{font-size:34px}
+  .logo{width:56px;height:56px}
+  .darkhead h1{font-size:46px}
+  .pagehead{padding:34px 40px 10px}
+  .pagehead h1{font-size:44px}
+  main{max-width:1240px;padding:26px 40px 56px;gap:16px}
+  .dk-home{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}
+  .dk-home .grid2 .tile{min-height:120px}
+  body:is([data-page="agenda"],[data-page="inscriptions"],[data-page="gestion"],[data-page="arena"],[data-page="coach"],[data-page="cordeur"],[data-page="bureau"],[data-page="groupe"]) main,
+  #club-main,#club-ag,#bur-main,#coach-main,#arena-main{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+  .grid2:has(>.stat,>section.card){grid-template-columns:repeat(4,minmax(0,1fr))}
+  /* Profil et fiche événement : cartes réparties sur deux colonnes */
+  body:is([data-page="profil"],[data-page="evenement"],[data-page="cordage"],[data-page="double"]) main{display:block;columns:2;column-gap:18px}
+  body:is([data-page="profil"],[data-page="evenement"],[data-page="cordage"],[data-page="double"]) main>*{break-inside:avoid;margin-bottom:18px}
+  body[data-page="profil"]:not(:has(.card.tight)) main{columns:1;max-width:560px}
+  /* Classement CLOC'ARENA : podium à gauche, tableau à droite */
+  #arena-main:has(>.podium){grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}
+  #arena-main:has(>.podium)>.podium,#arena-main:has(>.podium)>.card{grid-column:auto}
+  #arena-main>.podium{position:sticky;top:20px;max-width:none}
+  .car-l img{height:380px}
+  .modal{max-width:560px}
+}
+@media (min-width:1280px){.dk-home{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}}
+@media (min-width:1024px) and (hover:hover){
+  .tile,a.card,a.ev,.pick,.chip,.btn{transition:border-color .15s,transform .15s,box-shadow .15s,filter .15s}
+  .tile:hover,a.card:hover,a.ev:hover{border-color:var(--ac);transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,47,74,.08)}
+  .btn:hover{filter:brightness(1.07)}
+  .chip:hover{border-color:var(--navy)}
+}
 </style>
 </head>
 <body>
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
-<nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="in" id="tabs-in"></div></nav>
+<nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202610301007"></script>
+<script src="app.js?v=202611021500"></script>
 </body>
 </html>

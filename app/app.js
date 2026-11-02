@@ -281,6 +281,20 @@ function mesItems(du, au) {
 var GRADES_NG = { mini_coach: 'Mini coach', coach_junior: 'Coach junior', coach_next_gen: 'Coach Next Gen' };
 
 // ---------- Mise en page commune ----------
+// Écran large (tablette et ordinateur) : certaines pages changent de disposition. Le téléphone garde l'affichage d'origine.
+var MQ_LARGE = window.matchMedia ? window.matchMedia('(min-width: 768px)') : null;
+function vueLarge() { return !!(MQ_LARGE && MQ_LARGE.matches); }
+// Agendas sur écran large : chaque journée (titre + séances) est regroupée dans un bloc, pour les afficher côte à côte
+function grouperJours() {
+  if (!vueLarge()) return;
+  Array.prototype.forEach.call(document.querySelectorAll('#app .dayhead.jour'), function (dh) {
+    if (dh.parentNode.classList.contains('ag-jour')) return;
+    var g = document.createElement('div'); g.className = 'ag-jour';
+    dh.parentNode.insertBefore(g, dh);
+    var n = dh;
+    while (n) { var suiv = n.nextElementSibling; g.appendChild(n); n = suiv && suiv.classList.contains('ev') ? suiv : null; }
+  });
+}
 function tabs(actif) {
   var showArena = true; // Tweener (jeunes) et Masters (adultes) : utile à tout le monde
   var t = [['accueil', 'home', 'Accueil'], ['agenda', 'cal', 'Agenda']];
@@ -318,10 +332,10 @@ function pageAccueil() {
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
-  h += '<div id="presence"></div>';
+  var top = h, P = { presence: '<div id="presence"></div>', msg: '', urgent: '', rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
   var nl = nonLus();
-  if (nl.length) h += '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
-  if (urgent) h += '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
+  if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
+  if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
 
   // Prochain rendez-vous
   var now = new Date(), fin = new Date(); fin.setDate(fin.getDate() + 45);
@@ -329,7 +343,7 @@ function pageAccueil() {
   if (S.user && S.pers.length) prochain = mesItems(new Date(now.getTime() - 3600e3), fin).filter(function (i) { return (i.f || i.d) > now; })[0];
   else prochain = (S.evts || []).filter(function (e) { return e.public && new Date(e.fin || e.debut) > now && e.statut !== 'annule'; }).map(function (e) { return { d: new Date(e.debut), f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, gs: evGroupes(e).gs, qui: [], id: e.id }; })[0];
   if (prochain) {
-    h += '<section class="card stack" style="gap:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Prochain rendez-vous</span><span>' + prochain.gs.map(groupeBadge).join(' ') + '</span></div>' +
+    P.rdv = '<section class="card stack" style="gap:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Prochain rendez-vous</span><span>' + prochain.gs.map(groupeBadge).join(' ') + '</span></div>' +
       '<div class="rdv"><div class="datebox"><span>' + esc(prochain.d.toLocaleDateString('fr-FR', { weekday: 'short' })) + '</span><b>' + prochain.d.getDate() + '</b></div>' +
       '<div class="stack"><span class="disp" style="font-size:22px;line-height:1.1">' + esc(prochain.titre) + '</span>' +
       '<span class="mut small">' + fmtH(prochain.d) + (prochain.f ? ' – ' + fmtH(prochain.f) : '') + (prochain.lieu ? ' · ' + esc(prochain.lieu) : '') + '</span>' +
@@ -346,24 +360,26 @@ function pageAccueil() {
     }).filter(Boolean);
     if (rangs.length) arenaTxt = rangs.join(' · ');
   }
-  h += '<div class="grid2">' +
+  P.tiles = '<div class="grid2">' +
     '<a class="tile" href="#/double">' + ic('trophy', 24) + '<b>Double interne</b><span class="mut small">Poules, dispos, scores</span></a>' +
     '<a class="tile" href="#/inscriptions">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
     '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
     '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
 
-  if (!S.user) h += '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
+  if (!S.user) P.login = '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
     '<ol class="small" style="margin:0;padding-left:20px;line-height:1.7"><li>Tape l\'adresse mail donnée au club</li><li>Ouvre le mail : tu reçois un code</li><li>Tape le code : c\'est fait !</li></ol>' +
     '<a class="btn" href="#/profil">Me connecter</a><button class="btn line" data-guide="1">Besoin d\'aide ? Le guide pas à pas</button></section>';
-  else if (!S.pers.length && !S.isStaff) h += '<section class="card stack" style="gap:8px"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. ' + (S.compte && S.compte.identite_le ? 'Le club a reçu ton nom (' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + ') et va relier ton compte à ta famille.' : 'Indique ton nom pour que le club relie ton compte à ta famille.') + '</span>' + (S.compte && S.compte.identite_le ? '' : '<button class="btn" data-identite="1">Indiquer mon nom</button>') + '</section>';
+  else if (!S.pers.length && !S.isStaff) P.login = '<section class="card stack" style="gap:8px"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. ' + (S.compte && S.compte.identite_le ? 'Le club a reçu ton nom (' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + ') et va relier ton compte à ta famille.' : 'Indique ton nom pour que le club relie ton compte à ta famille.') + '</span>' + (S.compte && S.compte.identite_le ? '' : '<button class="btn" data-identite="1">Indiquer mon nom</button>') + '</section>';
 
-  if (S.user && estMobile() && !estInstallee() && !localStorageGet('cloca-install-masque')) h += '<section class="card stack" style="gap:8px"><b>📲 Installe l\'appli sur ton téléphone</b><span class="mut small">Une icône sur l\'écran d\'accueil, et les notifications du club.</span><div style="display:flex;gap:8px"><button class="btn" data-guide="1" style="flex:2">Me montrer comment</button><button class="btn line" id="inst-masq" style="flex:1">Plus tard</button></div></section>';
+  if (S.user && estMobile() && !estInstallee() && !localStorageGet('cloca-install-masque')) P.install = '<section class="card stack" style="gap:8px"><b>📲 Installe l\'appli sur ton téléphone</b><span class="mut small">Une icône sur l\'écran d\'accueil, et les notifications du club.</span><div style="display:flex;gap:8px"><button class="btn" data-guide="1" style="flex:2">Me montrer comment</button><button class="btn line" id="inst-masq" style="flex:1">Plus tard</button></div></section>';
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
-  if (actu) h += carteActu(actu, 'Dernière actu');
+  if (actu) P.actu = carteActu(actu, 'Dernière actu');
   // (l'espace coach est dans l'onglet Gestion)
-  h += '<div id="reseaux"></div>';
-  h += '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div></main>';
-  return h;
+  P.partners = '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div>';
+  // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
+  if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent ? '<div class="dk-top">' + P.urgent + P.msg + '</div>' : '') +
+    '<div class="dk-col">' + P.rdv + P.login + P.install + P.actu + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
+  return top + P.presence + P.msg + P.urgent + P.rdv + P.tiles + P.login + P.install + P.actu + P.reseaux + P.partners + '</main>';
 }
 
 function lierAccueilAide() {
@@ -433,7 +449,7 @@ function pageAgenda() {
   var jour = '';
   items.forEach(function (it) {
     var jl = fmtJour(it.d);
-    if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
+    if (jl !== jour) { jour = jl; h += '<div class="dayhead jour">' + esc(jl) + '</div>'; }
     var c = it.coach ? 'var(--navy)' : it.qui.length === 1 ? S.couleur[it.qui[0].id] : couleurGroupes(it.gs);
     var evo = it.id && !it.possible ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
     var evi = it.id ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
@@ -512,7 +528,7 @@ function agendaClub(l, f, coach) {
     var jour = '';
     items.forEach(function (it) {
       var jl = fmtJour(it.d);
-      if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
+      if (jl !== jour) { jour = jl; h += '<div class="dayhead jour">' + esc(jl) + '</div>'; }
       var evc = it.surInsc ? (S.evts || []).filter(function (x) { return x.id === it.id; })[0] : null;
       h += carteAgenda(it, it.c, (it.gs && it.gs.length ? '<span>' + it.gs.map(groupeBadge).join(' ') + '</span>' : '') + (evc && S.pers.length ? etatInsc(evc, eligibles(evc)) : ''));
     });
@@ -636,7 +652,7 @@ function arenaProgramme() {
   var jour = '';
   l.forEach(function (e) {
     var d = new Date(e.debut), jl = fmtJour(d);
-    if (jl !== jour) { jour = jl; h += '<div class="dayhead">' + esc(jl) + '</div>'; }
+    if (jl !== jour) { jour = jl; h += '<div class="dayhead jour">' + esc(jl) + '</div>'; }
     h += '<div class="ev' + (e.statut === 'annule' ? ' off' : '') + '"><div class="stack" style="flex:1">' +
       '<div style="display:flex;justify-content:space-between;gap:8px"><b class="t">' + esc(e.titre) + '</b><b class="small">' + fmtH(d) + '</b></div>' +
       '<span class="mut small">' + [e.fin ? 'jusqu\'à ' + fmtH(new Date(e.fin)) : '', e.lieu].filter(Boolean).map(esc).join(' · ') + '</span>' +
@@ -2630,14 +2646,19 @@ function render() {
   else if (p === 'messages') { html = pageMessages(); actif = 'accueil'; }
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'accueil'; }
-  else { html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
+  else { p = 'accueil'; html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
+  document.body.setAttribute('data-page', p);
+  document.body.setAttribute('data-sub', arg || '');
   $('app').innerHTML = html;
   if ($('apercu-x')) $('apercu-x').onclick = function () { apercu(null); };
   tabs(actif);
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', render);
+if (window.MutationObserver && $('app')) new MutationObserver(function () { if (document.querySelector('#app .dayhead.jour')) grouperJours(); }).observe($('app'), { childList: true, subtree: true });
+// Passage téléphone ↔ écran large (rotation, fenêtre redimensionnée) : l'accueil se réorganise
+if (MQ_LARGE) { var surLarge = function () { if (document.body.getAttribute('data-page') === 'accueil') render(); }; if (MQ_LARGE.addEventListener) MQ_LARGE.addEventListener('change', surLarge); else if (MQ_LARGE.addListener) MQ_LARGE.addListener(surLarge); }
 
 function demarrer() {
   if (!sb) { $('app').innerHTML = '<main><section class="card empty">Connexion au club impossible pour le moment. Vérifie ta connexion internet.</section></main>'; return; }
