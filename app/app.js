@@ -1804,8 +1804,9 @@ function pageCordage(sous) {
   if (sous) S.cordTab = sous;
   var cordeur = false; // l'atelier se gère dans « Mon espace cordeur » ; ici, la vue de tout le monde
   var tabsC = [['deposer', 'Déposer'], ['attente', 'En attente'], ['pretes', 'Prêtes']];
-  if (S.isDir) tabsC.push(['reglages', 'Tarifs']);
-  if (!S.cordTab || (S.cordTab === 'reglages' && !S.isDir)) S.cordTab = 'deposer';
+
+  if (S.cordTab === 'reglages') { location.href = 'gestion/#/cordage'; return ''; }
+  if (!S.cordTab) S.cordTab = 'deposer';
   var h = '<div class="darkhead"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) + '<div class="kicker" style="margin-top:4px">ATELIER CORDAGE' + (cordeur ? ' · CORDEUR' : '') + '</div><h1>Cordage</h1>' +
     '<div class="seg" style="margin-top:14px">' + tabsC.map(function (t) {
       var n = C ? C.file.filter(function (x) { return x.statut === (t[0] === 'attente' ? 'attente' : 'fini'); }).length : 0;

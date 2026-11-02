@@ -49,7 +49,7 @@ var DESC_MOD = {
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Matchs, points et classements CLOC\'ARENA.',
   double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
-  cordage: 'Raquettes à corder, prêtes et à encaisser.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
+  cordage: 'Raquettes à corder, prêtes et à encaisser ; tarifs et cordages proposés.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
 };
 var ICG = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -987,9 +987,15 @@ function vueAnnonces(m) {
 }
 
 // ---------- Cordage ----------
+var CO_TAB = 'raquettes';
 function vueCordage(m) {
-  m.innerHTML = entete('Cordage', 'Raquettes déposées, à corder, à rendre et à encaisser.', '<a class="btn line" href="../#/cordage/reglages">Tarifs et cordeurs</a>') +
-    '<div class="card" id="co-ouv" style="margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span class="small mut">Chargement…</span></div><div id="co-l"><div class="skel"></div></div>';
+  var dir = A.roles.some(function (r) { return r.role === 'direction' && !r.groupe_id; });
+  if (!dir) CO_TAB = 'raquettes';
+  m.innerHTML = entete('Cordage', 'Raquettes déposées, tarifs et cordages proposés aux joueurs.') +
+    '<div class="card" id="co-ouv" style="margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span class="small mut">Chargement…</span></div>' +
+    (dir ? '<div class="chips" style="margin-bottom:14px">' + [['raquettes', 'Raquettes'], ['tarifs', 'Tarifs et cordages']].map(function (t) { return '<button class="chip' + (CO_TAB === t[0] ? ' on' : '') + '" data-cotab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' : '') +
+    '<div id="co-l"><div class="skel"></div></div>';
+  all('[data-cotab]').forEach(function (b) { b.onclick = function () { CO_TAB = b.dataset.cotab; vueCordage(m); }; });
   var majOuv = function () {
     q(sb.from('reglages_publics').select('valeur').eq('cle', 'cordage_ouvert').maybeSingle()).then(function (r) {
       var ouvert = !r || r.valeur !== false;
@@ -1002,6 +1008,7 @@ function vueCordage(m) {
     }).catch(function () { $('co-ouv').innerHTML = ''; });
   };
   majOuv();
+  if (CO_TAB === 'tarifs') return cordTarifs($('co-l'));
   var charger = function () {
     q(sb.from('cordage_demandes').select('*, cordages(nom)').or('statut.eq.attente,statut.eq.fini,and(statut.eq.recupere,paye.eq.false)').order('created_at')).then(function (l) {
       var ligne = function (d) {
@@ -1029,6 +1036,75 @@ function vueCordage(m) {
     }).catch(function () { $('co-l').innerHTML = '<div class="card empty">Impossible de charger le cordage.</div>'; });
   };
   charger();
+}
+
+// Profil d'un cordage en graphique (même dessin que dans l'appli)
+var AXES_CORDAGE = [['puissance', 'Puissance'], ['controle', 'Contrôle'], ['confort', 'Confort'], ['effet', 'Prise d\'effet'], ['tension', 'Tenue de tension'], ['durabilite', 'Durabilité']];
+function radarCordage(c) {
+  var R = 100, pt = function (i, v) { var ang = (-90 + i * 60) * Math.PI / 180; return [Math.cos(ang) * R * v / 100, Math.sin(ang) * R * v / 100]; };
+  var poly = function (v) { return AXES_CORDAGE.map(function (a, i) { var p = pt(i, typeof v === 'number' ? v : (+((v || {})[a[0]]) || 0)); return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '); };
+  var col = '#c4602f', pf = c.profil || {};
+  var h = '<svg viewBox="-185 -150 370 300" style="width:100%;max-width:340px;display:block;margin:0 auto">';
+  [20, 40, 60, 80, 100].forEach(function (r) { h += '<polygon points="' + poly(r) + '" fill="none" stroke="var(--line)"/>'; });
+  AXES_CORDAGE.forEach(function (a, i) { var p = pt(i, 100); h += '<line x1="0" y1="0" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="var(--line)"/>'; });
+  h += '<polygon points="' + poly(pf) + '" fill="' + col + '" fill-opacity="0.13" stroke="' + col + '" stroke-width="2.2" stroke-linejoin="round"/>';
+  AXES_CORDAGE.forEach(function (a, i) {
+    var v = pf[a[0]], p = pt(i, +v || 0);
+    if (v != null) h += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="5" fill="' + col + '" stroke="#fff" stroke-width="1.5"/>';
+    var q = pt(i, 116), anc = Math.abs(q[0]) < 5 ? 'middle' : q[0] > 0 ? 'start' : 'end';
+    var l = a[1] === 'Tenue de tension' ? ['Tenue de', 'tension'] : [a[1]]; l.push(v != null ? String(v) : '–');
+    var y0 = q[1] + (q[1] > 10 ? 12 : q[1] < -10 ? -4 - 13 * (l.length - 1) : 4 - 6.5 * (l.length - 1));
+    h += '<text text-anchor="' + anc + '" font-size="12" font-weight="600" fill="var(--tx)">' + l.map(function (t, k) { return '<tspan x="' + q[0].toFixed(1) + '" y="' + (y0 + k * 13).toFixed(1) + '"' + (k === l.length - 1 ? ' fill="' + col + '" font-weight="700"' : '') + '>' + esc(t) + '</tspan>'; }).join('') + '</text>';
+  });
+  return h + '</svg>';
+}
+// Tarifs, cordages proposés et leur profil (réservé à la direction)
+function cordTarifs(box) {
+  Promise.all([q(sb.from('cordages').select('*').order('ordre').order('nom')), q(sb.from('cordage_tarifs').select('*'))]).then(function (r) {
+    var L = r[0] || [], pose = (r[1] || []).filter(function (x) { return x.code === 'pose'; })[0];
+    var num = function (v) { var n = parseFloat(String(v).replace(',', '.')); return isNaN(n) || n < 0 ? null : n; };
+    var champ = function (c) {
+      return '<div class="card" style="margin-bottom:12px"><div class="two" style="align-items:start">' +
+        '<div class="stack"><div class="row2"><label class="l">Nom<input class="f" data-cnom="' + c.id + '" value="' + esc(c.nom) + '"></label><label class="l">Prix pose comprise (€)<input class="f" data-cprix="' + c.id + '" inputmode="decimal" value="' + esc(String(+c.prix).replace('.', ',')) + '"></label></div>' +
+        '<label class="c"><input type="checkbox" data-cact="' + c.id + '"' + (c.actif ? ' checked' : '') + '> Proposé aux joueurs</label>' +
+        '<label class="l">Ce que c\'est<textarea class="f" data-cdesc="' + c.id + '" rows="2">' + esc(c.description) + '</textarea></label>' +
+        '<label class="l">Pour qui ?<textarea class="f" data-cpq="' + c.id + '" rows="2">' + esc(c.pour_qui) + '</textarea></label>' +
+        '<label class="l">Sensations, conseils<textarea class="f" data-csen="' + c.id + '" rows="2">' + esc(c.sensation) + '</textarea></label></div>' +
+        '<div class="stack"><div class="sect" style="margin:0">Profil du cordage (0 à 100)</div><div data-crad="' + c.id + '">' + radarCordage(c) + '</div>' +
+        AXES_CORDAGE.map(function (a) { var v = c.profil && c.profil[a[0]] != null ? c.profil[a[0]] : null; return '<label class="small" style="display:grid;grid-template-columns:120px 1fr 36px;gap:8px;align-items:center">' + a[1] + '<input type="range" min="0" max="100" step="1" data-cpf="' + c.id + '|' + a[0] + '" value="' + (v == null ? 50 : v) + '"' + (v == null ? ' data-vide="1"' : '') + '><b data-cpfv="' + c.id + '|' + a[0] + '" style="text-align:right">' + (v == null ? '–' : v) + '</b></label>'; }).join('') +
+        '<span class="mut xs">Le graphique n\'apparaît chez les joueurs que quand les 6 notes sont remplies.</span></div></div>' +
+        '<div class="chips" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-csave="' + c.id + '">Enregistrer</button></div></div>';
+    };
+    box.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="sect" style="margin-top:0">Barème</div><div class="toolbar" style="margin:0"><label class="l grow">Pose seule (cordage apporté par le joueur), en €<input class="f" id="cr-pose" inputmode="decimal" value="' + esc(pose ? String(+pose.prix).replace('.', ',') : '') + '"></label><button class="btn" id="cr-pose-ok" style="align-self:flex-end">Enregistrer</button></div></div>' +
+      '<div class="sect">Cordages du club (' + L.length + ')</div>' + L.map(champ).join('') +
+      '<div class="card"><div class="sect" style="margin-top:0">Ajouter un cordage</div><div class="toolbar" style="margin:0"><input class="f grow" id="cr-nom" placeholder="Ex. Tecnifibre X-One Biphase 1.30"><input class="f" id="cr-prix" inputmode="decimal" placeholder="Prix en €" style="width:130px"><button class="btn" id="cr-add">Ajouter</button></div></div>' +
+      '<p class="mut xs">Les cordeurs se gèrent dans Administration → Équipe du club (fonction « Cordeur »). Les joueurs voient ces cordages dans l\'appli : Cordage → « Quel cordage choisir ? ».</p>';
+    var lire = function (id) { var pf = {}, n = 0; AXES_CORDAGE.forEach(function (a) { var x = box.querySelector('[data-cpf="' + id + '|' + a[0] + '"]'); if (x && !x.dataset.vide) { pf[a[0]] = +x.value; n++; } }); return n ? pf : null; };
+    all('[data-cpf]', box).forEach(function (x) {
+      x.oninput = function () {
+        delete x.dataset.vide; var id = x.dataset.cpf.split('|')[0];
+        box.querySelector('[data-cpfv="' + x.dataset.cpf + '"]').textContent = x.value;
+        box.querySelector('[data-crad="' + id + '"]').innerHTML = radarCordage({ profil: lire(id) });
+      };
+    });
+    $('cr-pose-ok').onclick = function () {
+      var n = num($('cr-pose').value); if (n == null) return toast('Prix invalide');
+      q(sb.from('cordage_tarifs').update({ prix: n }).eq('code', 'pose')).then(function () { toast('Tarif enregistré'); }).catch(function () { toast('Action impossible'); });
+    };
+    all('[data-csave]', box).forEach(function (b) {
+      b.onclick = function () {
+        var id = b.dataset.csave, n = num(box.querySelector('[data-cprix="' + id + '"]').value), nom = box.querySelector('[data-cnom="' + id + '"]').value.trim();
+        if (n == null || !nom) return toast('Nom ou prix invalide');
+        var tx = function (k) { var v = box.querySelector('[data-' + k + '="' + id + '"]').value.trim(); return v || null; };
+        q(sb.from('cordages').update({ nom: nom, prix: n, actif: box.querySelector('[data-cact="' + id + '"]').checked, description: tx('cdesc'), pour_qui: tx('cpq'), sensation: tx('csen'), profil: lire(id) }).eq('id', id)).then(function () { toast('Cordage enregistré'); }).catch(function () { toast('Action impossible'); });
+      };
+    });
+    $('cr-add').onclick = function () {
+      var n = num($('cr-prix').value), nom = $('cr-nom').value.trim();
+      if (n == null || !nom) return toast('Indique un nom et un prix');
+      q(sb.from('cordages').insert({ nom: nom, prix: n, ordre: L.length + 1 })).then(function () { toast('Cordage ajouté'); cordTarifs(box); }).catch(function () { toast('Action impossible'); });
+    };
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les cordages.</div>'; });
 }
 
 // ---------- CLOC'ARENA ----------
