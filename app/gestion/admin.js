@@ -1904,6 +1904,30 @@ function router() {
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', router);
+// Sur téléphone, chaque tableau devient une liste de fiches : chaque cellule reçoit le titre de sa colonne
+function etiqueterTableaux() {
+  all('table.t').forEach(function (t) {
+    var th = all('thead th', t).map(function (x) { return x.textContent.trim(); });
+    if (!th.length) return;
+    all('tbody tr', t).forEach(function (tr) {
+      if (tr.dataset.etq === String(tr.children.length)) return;
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (th[i] == null || td.hasAttribute('colspan')) return;
+        td.setAttribute('data-label', th[i]);
+        if (i > 0 && !td.classList.contains('act') && td.childNodes.length > 1 && !(td.firstElementChild && td.firstElementChild.classList.contains('v'))) {
+          var v = document.createElement('div'); v.className = 'v';
+          while (td.firstChild) v.appendChild(td.firstChild);
+          td.appendChild(v);
+        }
+      });
+      tr.dataset.etq = String(tr.children.length);
+    });
+  });
+}
+(function () {
+  var att = null;
+  new MutationObserver(function () { clearTimeout(att); att = setTimeout(etiqueterTableaux, 60); }).observe(document.getElementById('root'), { childList: true, subtree: true });
+})();
 function demarrer(session) {
   A.user = session ? session.user : null;
   if (!A.user) return pageConnexion();

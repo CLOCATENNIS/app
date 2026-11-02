@@ -134,11 +134,36 @@ table.t{width:100%;border-collapse:collapse;background:var(--card);border:1px so
   main{padding:16px 14px 60px}
   .two,.row2,.row3{grid-template-columns:1fr}
 }
+@media (max-width:700px){
+  .head h1{font-size:28px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .kpi{padding:12px}.kpi b{font-size:28px}
+  .tw{overflow:visible}
+  table.t,.t tbody,.t tr,.t td{display:block;width:100%}
+  table.t{border-radius:14px}
+  .t thead{display:none}
+  .t tr{padding:10px 14px;border-bottom:1px solid var(--bd)}
+  .t tr:last-child{border-bottom:0}
+  .t td{border:0;padding:3px 0;display:flex;gap:12px;justify-content:space-between;align-items:center;text-align:right;min-height:26px}
+  .t td::before{content:attr(data-label);font-size:12px;color:var(--mut);font-weight:600;text-align:left;flex:none;max-width:45%}
+  .t td:not([data-label])::before,.t td[data-label=""]::before{content:none}
+  .t td:first-child{display:block;text-align:left;font-size:15px;padding-bottom:6px}
+  .t td:first-child::before{content:none}
+  .t td:empty{display:none}
+  .t td>.v{min-width:0}
+  .t .act{justify-content:flex-end;flex-wrap:wrap;white-space:normal;padding-top:8px}
+  .t .act::before{content:none}
+  .t td input.f,.t td select.f{max-width:60%}
+  .t tr.click:hover td{background:transparent}
+  .drawer{padding:16px 14px 40px}
+  .btn{min-height:42px}.btn.sm{min-height:34px}
+  .chip{height:36px}
+}
 </style>
 </head>
 <body>
 <div id="root"><div class="login"><div class="skel"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="admin.js?v=202610301007"></script>
+<script src="admin.js?v=202611021350"></script>
 </body>
 </html>
