@@ -302,7 +302,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '30/10 10h30';
+var VERSION_APPLI = '02/11 22h30';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1391,13 +1391,58 @@ function remplirReseaux() {
   };
   q(sb.from('mises_en_avant').select('*').eq('actif', true).order('ordre').order('created_at', { ascending: false }).limit(6)).then(dessiner).catch(function () { dessiner([]); });
 }
+// Profil d'un cordage : graphique en toile (0 à 100 sur 6 critères)
+var AXES_CORDAGE = [['puissance', 'Puissance'], ['controle', 'Contrôle'], ['confort', 'Confort'], ['effet', 'Prise d\'effet'], ['tension', 'Tenue de tension'], ['durabilite', 'Durabilité']];
+var COUL_CORDAGE = ['#c4602f', '#1f9e94'];
+function aProfil(c) { return !!(c && c.profil && AXES_CORDAGE.every(function (a) { return c.profil[a[0]] != null; })); }
+function radarCordage(liste) {
+  var R = 100, pt = function (i, v) { var ang = (-90 + i * 60) * Math.PI / 180; return [Math.cos(ang) * R * v / 100, Math.sin(ang) * R * v / 100]; };
+  var poly = function (v) { return AXES_CORDAGE.map(function (a, i) { var p = pt(i, typeof v === 'number' ? v : (+((v || {})[a[0]]) || 0)); return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '); };
+  var h = '<svg viewBox="-185 -150 370 300" role="img" aria-label="Profil du cordage" style="width:100%;max-width:' + (liste.length > 1 ? 420 : 320) + 'px;display:block;margin:0 auto">';
+  [20, 40, 60, 80, 100].forEach(function (r) { h += '<polygon points="' + poly(r) + '" fill="none" stroke="var(--line)" stroke-width="1"/>'; });
+  AXES_CORDAGE.forEach(function (a, i) { var p = pt(i, 100); h += '<line x1="0" y1="0" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="var(--line)" stroke-width="1"/>'; });
+  [40, 80].forEach(function (r) { h += '<text x="3" y="' + (-R * r / 100 + 4) + '" font-size="9" fill="var(--mut)">' + r + '</text>'; });
+  liste.forEach(function (c, k) {
+    var col = COUL_CORDAGE[k % 2];
+    h += '<polygon points="' + poly(c.profil) + '" fill="' + col + '" fill-opacity="0.13" stroke="' + col + '" stroke-width="2.2" stroke-linejoin="round"/>';
+    AXES_CORDAGE.forEach(function (a, i) { var v = +c.profil[a[0]]; if (isNaN(v)) return; var p = pt(i, v); h += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="5" fill="' + col + '" stroke="#fff" stroke-width="1.5"><title>' + esc(c.nom + ' · ' + a[1] + ' : ' + v) + '</title></circle>'; });
+  });
+  AXES_CORDAGE.forEach(function (a, i) {
+    var p = pt(i, 116), anc = Math.abs(p[0]) < 5 ? 'middle' : p[0] > 0 ? 'start' : 'end';
+    var lignes = a[1] === 'Tenue de tension' ? ['Tenue de', 'tension'] : [a[1]];
+    if (liste.length === 1 && liste[0].profil[a[0]] != null) lignes.push(String(liste[0].profil[a[0]]));
+    var y0 = p[1] + (p[1] > 10 ? 12 : p[1] < -10 ? -4 - 13 * (lignes.length - 1) : 4 - 6.5 * (lignes.length - 1));
+    h += '<text text-anchor="' + anc + '" font-size="12" font-weight="600" fill="var(--tx)">' + lignes.map(function (l, k) {
+      var val = liste.length === 1 && k === lignes.length - 1 && /^\d+$/.test(l);
+      return '<tspan x="' + p[0].toFixed(1) + '" y="' + (y0 + k * 13).toFixed(1) + '"' + (val ? ' fill="' + COUL_CORDAGE[0] + '" font-weight="700"' : '') + '>' + esc(l) + '</tspan>';
+    }).join('') + '</text>';
+  });
+  h += '</svg>';
+  if (liste.length > 1) h += '<div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">' + liste.map(function (c, k) { return '<span class="small" style="display:inline-flex;gap:6px;align-items:center"><span class="dot" style="background:' + COUL_CORDAGE[k % 2] + '"></span><b>' + esc(c.nom) + '</b></span>'; }).join('') + '</div>';
+  return h;
+}
 // Guide des cordages
 function pageGuideCordage() {
   setTimeout(function () {
     chargerCordage().then(function () {
       var box = $('guide-c'); if (!box) return;
-      box.innerHTML = C.cordages.filter(function (c) { return c.actif; }).map(function (c) {
+      var actifs = C.cordages.filter(function (c) { return c.actif; }), avec = actifs.filter(aProfil);
+      var cmp = $('guide-cmp');
+      if (cmp && avec.length >= 2) {
+        var A = S.cmpCord || [avec[0].id, avec[1].id];
+        var dessinerCmp = function () {
+          var la = avec.filter(function (c) { return c.id === A[0]; })[0] || avec[0], lb = avec.filter(function (c) { return c.id === A[1]; })[0] || avec[1];
+          var opts = function (sel) { return avec.map(function (c) { return '<option value="' + c.id + '"' + (c.id === sel ? ' selected' : '') + '>' + esc(c.nom) + '</option>'; }).join(''); };
+          cmp.innerHTML = '<section class="card stack" style="gap:10px"><span class="eyebrow">Comparer deux cordages</span>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><select class="f" id="cmp-a" style="border-left:4px solid ' + COUL_CORDAGE[0] + '">' + opts(la.id) + '</select><select class="f" id="cmp-b" style="border-left:4px solid ' + COUL_CORDAGE[1] + '">' + opts(lb.id) + '</select></div>' +
+            radarCordage(la.id === lb.id ? [la] : [la, lb]) + '<span class="mut xs" style="text-align:center">Notes de 0 à 100 données par le club. Touche un point pour voir sa valeur.</span></section>';
+          $('cmp-a').onchange = $('cmp-b').onchange = function () { A = S.cmpCord = [$('cmp-a').value, $('cmp-b').value]; dessinerCmp(); };
+        };
+        dessinerCmp();
+      }
+      box.innerHTML = actifs.map(function (c) {
         return '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(c.nom) + '</b><b>' + euros(c.prix) + '</b></div>' +
+          (aProfil(c) ? radarCordage([c]) : '') +
           (c.description ? '<span class="small">' + esc(c.description) + '</span>' : '') +
           (c.pour_qui ? '<span class="small"><b>Pour qui :</b> ' + esc(c.pour_qui) + '</span>' : '') +
           (c.sensation ? '<span class="small"><b>Sensations :</b> ' + esc(c.sensation) + '</span>' : '') + '</section>';
@@ -1406,7 +1451,7 @@ function pageGuideCordage() {
   });
   return '<div class="pagehead wrap">' + backLink('#/cordage/deposer', 'Cordage') + '<h1>Quel cordage choisir ?</h1></div><main>' +
     '<section class="card stack" style="gap:6px"><b>En bref</b><span class="small">• <b>Tu débutes ou tu joues de temps en temps</b> : un synthétique.<br>• <b>Tu veux du confort, ou tu as mal au coude ou à l\'épaule</b> : un multifilament.<br>• <b>Tu frappes fort, tu mets beaucoup d\'effet ou tu casses souvent</b> : un monofilament (polyester), plutôt pour les joueurs confirmés.</span></section>' +
-    '<div class="dayhead">Les cordages du club</div><div id="guide-c" class="stack" style="gap:12px"><div class="skel"></div></div>' +
+    '<div id="guide-cmp"></div><div class="dayhead">Les cordages du club</div><div id="guide-c" class="stack" style="gap:12px"><div class="skel"></div></div>' +
     '<div class="dayhead">Bon à savoir</div><section class="card stack" style="gap:6px"><span class="small"><b>Quand recorder ?</b> Un repère simple : autant de fois par an que tu joues de fois par semaine. Un cordage qui ne casse pas perd quand même sa tension et ses sensations.</span>' +
     '<span class="small"><b>La tension :</b> plus elle est basse, plus la raquette est puissante et confortable ; plus elle est haute, plus elle contrôle. Pas d\'idée ? Mets « comme d\'habitude » ou demande conseil à Skander ou à ton coach.</span>' +
     '<span class="small"><b>Jeunes joueurs :</b> un synthétique ou un multifilament, à tension modérée. Le polyester est trop rigide pour un bras qui grandit.</span></section>' +
@@ -1944,6 +1989,9 @@ function cordReglages(box) {
         '<textarea class="f" data-cdesc="' + c.id + '" rows="2" placeholder="Ce que c\'est (guide des cordages)">' + esc(c.description) + '</textarea>' +
         '<textarea class="f" data-cpq="' + c.id + '" rows="2" placeholder="Pour qui ?">' + esc(c.pour_qui) + '</textarea>' +
         '<textarea class="f" data-csen="' + c.id + '" rows="2" placeholder="Sensations, conseils">' + esc(c.sensation) + '</textarea>' +
+        '<details' + (aProfil(c) ? '' : '') + '><summary class="small" style="cursor:pointer;font-weight:600">Profil (graphique) : notes de 0 à 100</summary><div class="stack" style="gap:6px;margin-top:8px">' +
+        AXES_CORDAGE.map(function (a) { var v = c.profil && c.profil[a[0]] != null ? c.profil[a[0]] : ''; return '<label class="small" style="display:grid;grid-template-columns:120px 1fr 44px;gap:8px;align-items:center">' + a[1] + '<input type="range" min="0" max="100" step="1" data-cpf="' + c.id + '|' + a[0] + '" value="' + (v === '' ? 50 : v) + '"' + (v === '' ? ' data-vide="1"' : '') + '><b data-cpfv="' + c.id + '|' + a[0] + '">' + (v === '' ? '–' : v) + '</b></label>'; }).join('') +
+        '<span class="mut xs">Laisse « – » si tu n\'as pas de note : le graphique n\'apparaît que quand les 6 sont remplies.</span></div></details>' +
         '<button class="btn line" data-csave="' + c.id + '">Enregistrer</button></div>';
     }).join('') +
     '<b class="small">Ajouter un cordage</b><input class="f" id="cr-nom" placeholder="Ex. Tecnifibre X-One Biphase 1.30"><div style="display:flex;gap:8px"><input class="f" id="cr-prix" inputmode="decimal" placeholder="Prix en €"><button class="btn" id="cr-add" style="width:auto">Ajouter</button></div></section>';
@@ -1955,12 +2003,14 @@ function cordReglages(box) {
     var n = num($('cr-pose').value); if (n == null) return toast('Prix invalide');
     q(sb.from('cordage_tarifs').update({ prix: n }).eq('code', 'pose')).then(function () { apres('Tarif enregistré'); }).catch(function () { toast('Action impossible'); });
   };
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cpf]'), function (r) { r.oninput = function () { delete r.dataset.vide; box.querySelector('[data-cpfv="' + r.dataset.cpf + '"]').textContent = r.value; }; });
   Array.prototype.forEach.call(box.querySelectorAll('[data-csave]'), function (b) {
     b.onclick = function () {
       var id = b.dataset.csave, n = num(box.querySelector('[data-cprix="' + id + '"]').value), nom = box.querySelector('[data-cnom="' + id + '"]').value.trim();
       if (n == null || !nom) return toast('Nom ou prix invalide');
       var tx = function (a) { var v = box.querySelector('[data-' + a + '="' + id + '"]').value.trim(); return v || null; };
-      q(sb.from('cordages').update({ nom: nom, prix: n, actif: box.querySelector('[data-cact="' + id + '"]').checked, description: tx('cdesc'), pour_qui: tx('cpq'), sensation: tx('csen') }).eq('id', id)).then(function () { apres('Cordage enregistré'); }).catch(function () { toast('Action impossible'); });
+      var pf = {}, nbv = 0; AXES_CORDAGE.forEach(function (a) { var r = box.querySelector('[data-cpf="' + id + '|' + a[0] + '"]'); if (r && !r.dataset.vide) { pf[a[0]] = +r.value; nbv++; } });
+      q(sb.from('cordages').update({ nom: nom, prix: n, actif: box.querySelector('[data-cact="' + id + '"]').checked, description: tx('cdesc'), pour_qui: tx('cpq'), sensation: tx('csen'), profil: nbv === AXES_CORDAGE.length ? pf : (nbv ? pf : null) }).eq('id', id)).then(function () { apres('Cordage enregistré'); }).catch(function () { toast('Action impossible'); });
     };
   });
   $('cr-add').onclick = function () {
