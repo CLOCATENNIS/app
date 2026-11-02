@@ -30,6 +30,7 @@ var MODULES = [
   ['equipe', 'Équipe du club', ['direction']],
   ['acces', 'Accès particuliers', ['direction']],
   ['retours', 'Idées et bugs', ['direction']],
+  ['reglages', 'Réglages de l\'appli', ['direction']],
   ['historique', 'Historique', ['direction']]
 ];
 // Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
@@ -41,15 +42,15 @@ var RUBRIQUES = [
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
   ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
-  ['Administration', ['equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
+  ['Administration', ['reglages', 'equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
   accueil: 'Ce qui demande ton attention aujourd\'hui.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
-  reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider les petites annonces des adhérents.', evenements: 'Créer et modifier séances, stages, tournois et événements.',
+  reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Créer et modifier séances, stages, tournois et événements.',
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
-  groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Matchs, points et classements CLOC\'ARENA.',
+  groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Saisie des résultats, historique des matchs par jour et niveaux des joueurs.',
   double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
-  cordage: 'Raquettes à corder, prêtes et à encaisser ; tarifs et cordages proposés.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.'
+  cordage: 'Raquettes à corder, prêtes et à encaisser ; historique ; tarifs et cordages proposés.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.', reglages: 'Infos pratiques, horaires, textes du cordage, durée des annonces, terrains : tout ce que voient les familles.'
 };
 var ICG = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -182,7 +183,6 @@ function compteurs() {
   if (peut('adherents')) p.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { c.adherents = (l || []).length; }).catch(function () { }));
   if (peut('retours')) p.push(nb(sb.from('retours').select('id', { count: 'exact', head: true }).eq('statut', 'nouveau')).then(function (n) { c.retours = n; }).catch(function () { }));
   if (peut('double')) p.push(nb(sb.from('double_reservations').select('id', { count: 'exact', head: true }).eq('statut', 'demande')).then(function (n) { c.double = n; }).catch(function () { }));
-  if (peut('arena')) p.push(nb(sb.from('arena_matchs').select('id', { count: 'exact', head: true }).eq('statut', 'propose')).then(function (n) { c.arena = n; }).catch(function () { }));
   return Promise.all(p).then(function () { return c; });
 }
 function cadre(contenu) {
@@ -959,20 +959,30 @@ function vueGroupes(m) {
 }
 
 // ---------- Petites annonces ----------
+var ANG = { tab: 'valider', form: null };
 function vueAnnonces(m) {
-  m.innerHTML = entete('Petites annonces', 'Rien n\'est publié sans validation. Les numéros ne sont jamais affichés aux adhérents.') + '<div id="an-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Petites annonces', 'Rien n\'est publié sans validation. Les numéros ne sont jamais affichés aux adhérents.') +
+    '<div class="chips" style="margin-bottom:14px">' + [['valider', 'À valider et en ligne'], ['creer', 'Créer une annonce'], ['historique', 'Historique']].map(function (t) { return '<button class="chip' + (ANG.tab === t[0] ? ' on' : '') + '" data-angt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="an-l"><div class="skel"></div></div>';
+  all('[data-angt]').forEach(function (b) { b.onclick = function () { ANG.tab = b.dataset.angt; vueAnnonces(m); }; });
+  if (ANG.tab === 'creer') return annonceForm($('an-l'), m);
+  var hist = ANG.tab === 'historique';
   var charger = function () {
-    q(sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })).then(function (l) {
-      var bloc = function (titre, liste, attente) {
+    var req = sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').order('created_at', { ascending: false });
+    req = hist ? req.or('statut.in.(refusee,close),expire_le.lt.' + isoJour(new Date())).limit(300) : req.in('statut', ['attente', 'publiee']).gte('expire_le', isoJour(new Date()));
+    q(req).then(function (l) {
+      var bloc = function (titre, liste, mode) {
         return '<div class="sect">' + titre + ' (' + liste.length + ')</div>' + (liste.length ? '<div class="tw"><table class="t"><tbody>' + liste.map(function (a) {
+          var etat = a.statut === 'refusee' ? 'Refusée' : a.statut === 'close' ? 'Retirée' : a.statut === 'publiee' ? 'Expirée le ' + fmtJour(new Date(a.expire_le + 'T12:00:00')) : 'Non validée, expirée';
           return '<tr><td style="width:46%"><b>' + esc(a.type === 'vente' ? a.titre : a.prenom + ' · ' + a.niveau) + '</b> ' + (a.prix ? '<span class="badge b-ac">' + esc(a.prix) + '</span>' : '') + '<div class="mut xs">' + esc(a.type === 'vente' ? 'Vente' : 'Partenaire : ' + a.dispo) + ' · n°' + a.num + ' · ' + esc(fmtJour(new Date(a.created_at))) + '</div>' + (a.description ? '<div class="small">' + esc(a.description) + '</div>' : '') +
-            ((a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []).map(function (ph, i, l) { return '<a class="xs" target="_blank" rel="noopener" href="' + SUPA_URL + '/storage/v1/object/public/annonces/' + esc(ph) + '" style="margin-right:8px">' + (l.length > 1 ? 'Photo ' + (i + 1) : 'Voir la photo') + '</a>'; }).join('')) + '</td>' +
+            ((a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []).map(function (ph, i, ll) { return '<a class="xs" target="_blank" rel="noopener" href="' + SUPA_URL + '/storage/v1/object/public/annonces/' + esc(ph) + '" style="margin-right:8px">' + (ll.length > 1 ? 'Photo ' + (i + 1) : 'Voir la photo') + '</a>'; }).join('')) + '</td>' +
             '<td class="small" data-anc="' + a.id + '"><button class="btn sm ghost" data-anv="' + a.id + '">Voir le contact</button></td><td class="act">' +
-            (attente ? '<button class="btn sm ko" data-ans="' + a.id + '|refusee">Refuser</button> <button class="btn sm ok" data-ans="' + a.id + '|publiee">Publier</button>' : '<span class="mut xs">jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) + '</span> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>') + '</td></tr>';
-        }).join('') + '</tbody></table></div>' : '<div class="card empty">' + (attente ? 'Rien à valider.' : 'Aucune annonce en ligne.') + '</div>');
+            (mode === 'attente' ? '<button class="btn sm ko" data-ans="' + a.id + '|refusee">Refuser</button> <button class="btn sm ok" data-ans="' + a.id + '|publiee">Publier</button>'
+              : mode === 'ligne' ? '<span class="mut xs">jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) + '</span> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>'
+              : '<span class="badge">' + esc(etat) + '</span> <button class="btn sm line" data-ans="' + a.id + '|publiee">Remettre en ligne</button>') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '<div class="card empty">' + (mode === 'attente' ? 'Rien à valider.' : mode === 'ligne' ? 'Aucune annonce en ligne.' : 'Aucune annonce terminée.') + '</div>');
       };
-      $('an-l').innerHTML = bloc('À valider', l.filter(function (a) { return a.statut === 'attente'; }), true) + bloc('En ligne', l.filter(function (a) { return a.statut === 'publiee'; }), false);
-      all('[data-ans]').forEach(function (b) { b.onclick = function () { var x = b.dataset.ans.split('|'); q(sb.from('annonces').update({ statut: x[1] }).eq('id', x[0])).then(function () { toast({ publiee: 'Annonce publiée', refusee: 'Annonce refusée', close: 'Annonce retirée' }[x[1]]); charger(); }).catch(function () { toast('Action impossible'); }); }; });
+      $('an-l').innerHTML = hist ? bloc('Annonces terminées', l, 'histo') : bloc('À valider', l.filter(function (a) { return a.statut === 'attente'; }), 'attente') + bloc('En ligne', l.filter(function (a) { return a.statut === 'publiee'; }), 'ligne');
+      all('[data-ans]').forEach(function (b) { b.onclick = function () { var x = b.dataset.ans.split('|'); q(sb.from('annonces').update({ statut: x[1] }).eq('id', x[0])).then(function () { toast({ publiee: 'Annonce en ligne', refusee: 'Annonce refusée', close: 'Annonce retirée' }[x[1]]); charger(); }).catch(function () { toast('Action impossible'); }); }; });
       all('[data-anv]').forEach(function (b) {
         b.onclick = function () {
           q(sb.rpc('annonce_contact', { a: b.dataset.anv })).then(function (r) {
@@ -981,19 +991,50 @@ function vueAnnonces(m) {
           });
         };
       });
+      etiqueterTableaux();
     }).catch(function () { $('an-l').innerHTML = '<div class="card empty">Impossible de charger les annonces.</div>'; });
   };
   charger();
+}
+// Création d'une annonce par le club : publiée tout de suite
+function annonceForm(box, m) {
+  var F = ANG.form || (ANG.form = { type: 'vente' }), v = F.type === 'vente';
+  var champ = function (k, label, attrs, ta) { return '<label class="l">' + label + (ta ? '<textarea class="f" data-agf="' + k + '" rows="3" ' + (attrs || '') + '>' + esc(F[k] || '') + '</textarea>' : '<input class="f" data-agf="' + k + '" ' + (attrs || '') + ' value="' + esc(F[k] || '') + '">') + '</label>'; };
+  box.innerHTML = '<div class="card stack" style="max-width:720px"><div class="chips"><button class="chip' + (v ? ' on' : '') + '" data-agt="vente">Matériel à vendre</button><button class="chip' + (!v ? ' on' : '') + '" data-agt="partenaire">Recherche de partenaire</button></div>' +
+    (v ? '<div class="row2">' + champ('titre', 'Quoi ?', 'maxlength="80" placeholder="Ex. Raquette Babolat Pure Drive 26"') + champ('prix', 'Prix', 'maxlength="30" placeholder="Ex. 40 €"') + '</div>' + champ('description', 'Description (facultatif)', 'maxlength="600"', true) +
+      '<label class="l">Photos (facultatif, 6 max)<input class="f" type="file" accept="image/*" multiple id="ag-ph"></label>'
+      : '<div class="row2">' + champ('prenom', 'Prénom', 'maxlength="40"') + '<label class="l">Niveau<select class="f" data-agf="niveau"><option value="">Choisir…</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune', 'Adulte / autre'].map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label></div>' +
+        champ('dispo', 'Disponibilités', 'maxlength="140"') + champ('description', 'Message (facultatif)', 'maxlength="600"', true)) +
+    champ('contact', 'Téléphone ou WhatsApp du vendeur / joueur (jamais affiché)', 'type="tel" maxlength="40" placeholder="06 12 34 56 78"') +
+    '<span class="mut xs">Créée par le club, l\'annonce est publiée tout de suite et reste en ligne selon la durée fixée dans Réglages de l\'appli.</span>' +
+    '<div class="chips" style="justify-content:flex-end"><button class="btn" id="ag-go">Publier l\'annonce</button></div></div>';
+  all('[data-agt]', box).forEach(function (b) { b.onclick = function () { F.type = b.dataset.agt; annonceForm(box, m); }; });
+  all('[data-agf]', box).forEach(function (i) { i.oninput = i.onchange = function () { F[i.dataset.agf] = i.value; }; });
+  $('ag-go').onclick = function () {
+    var t = function (k) { return String(F[k] || '').trim(); };
+    if (v && !t('titre')) return toast('Indique ce qui est vendu');
+    if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
+    if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
+    var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact'), statut: 'publiee' }
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact'), statut: 'publiee' };
+    var b = this; b.disabled = true;
+    var fichiers = v && $('ag-ph') ? Array.prototype.slice.call($('ag-ph').files || []).slice(0, 6) : [], chemins = [], base = Date.now();
+    fichiers.reduce(function (pr, f, i) {
+      return pr.then(function () { var ch = A.user.id + '/' + base + '-' + i + '.jpg'; return sb.storage.from('annonces').upload(ch, f, { contentType: f.type || 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; chemins.push(ch); }); });
+    }, Promise.resolve()).then(function () { if (chemins.length) { row.images = chemins; row.image_path = chemins[0]; } return q(sb.from('annonces').insert(row)); }).then(function () {
+      toast('Annonce publiée'); ANG.form = null; ANG.tab = 'valider'; vueAnnonces(m);
+    }).catch(function () { toast('Publication impossible'); b.disabled = false; });
+  };
 }
 
 // ---------- Cordage ----------
 var CO_TAB = 'raquettes';
 function vueCordage(m) {
   var dir = A.roles.some(function (r) { return r.role === 'direction' && !r.groupe_id; });
-  if (!dir) CO_TAB = 'raquettes';
+  if (!dir && CO_TAB === 'tarifs') CO_TAB = 'raquettes';
   m.innerHTML = entete('Cordage', 'Raquettes déposées, tarifs et cordages proposés aux joueurs.') +
     '<div class="card" id="co-ouv" style="margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span class="small mut">Chargement…</span></div>' +
-    (dir ? '<div class="chips" style="margin-bottom:14px">' + [['raquettes', 'Raquettes'], ['tarifs', 'Tarifs et cordages']].map(function (t) { return '<button class="chip' + (CO_TAB === t[0] ? ' on' : '') + '" data-cotab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' : '') +
+    ('<div class="chips" style="margin-bottom:14px">' + [['raquettes', 'Raquettes en cours'], ['historique', 'Historique']].concat(dir ? [['tarifs', 'Tarifs et cordages']] : []).map(function (t) { return '<button class="chip' + (CO_TAB === t[0] ? ' on' : '') + '" data-cotab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>') +
     '<div id="co-l"><div class="skel"></div></div>';
   all('[data-cotab]').forEach(function (b) { b.onclick = function () { CO_TAB = b.dataset.cotab; vueCordage(m); }; });
   var majOuv = function () {
@@ -1009,11 +1050,12 @@ function vueCordage(m) {
   };
   majOuv();
   if (CO_TAB === 'tarifs') return cordTarifs($('co-l'));
+  if (CO_TAB === 'historique') return cordHistorique($('co-l'));
   var charger = function () {
     q(sb.from('cordage_demandes').select('*, cordages(nom)').or('statut.eq.attente,statut.eq.fini,and(statut.eq.recupere,paye.eq.false)').order('created_at')).then(function (l) {
       var ligne = function (d) {
         var w = telWa(d.telephone), msg = 'Bonjour ! C\'est le club CLOCA Tennis 🎾 La raquette de ' + d.nom.split(' ')[0] + ' est cordée et t\'attend au club house' + (d.prix != null ? ' (' + euros(d.prix) + ')' : '') + '. À bientôt !';
-        return '<tr><td><b>' + esc(d.nom) + '</b><div class="mut xs">Déposée le ' + esc(fmtJour(new Date(d.created_at))) + (d.besoin_avant ? ' · <b style="color:var(--ac)">avant le ' + esc(fmtJour(new Date(d.besoin_avant + 'T12:00:00'))) + '</b>' : '') + '</div></td>' +
+        return '<tr><td><b>' + esc(d.nom) + '</b>' + (d.depose_par ? '<div class="mut xs">déposée par ' + esc(d.depose_par) + '</div>' : '') + '<div class="mut xs">Déposée le ' + esc(fmtJour(new Date(d.created_at))) + (d.besoin_avant ? ' · <b style="color:var(--ac)">pour le ' + esc(fmtJour(new Date(d.besoin_avant + 'T12:00:00'))) + '</b>' : '') + '</div></td>' +
           '<td class="small">' + esc(d.fourni_par === 'club' ? (d.cordages ? d.cordages.nom : 'Club') : 'Perso : ' + (d.cordage_perso || '')) + (d.tension ? '<br><span class="mut">' + esc(d.tension) + '</span>' : '') + (d.raquette ? '<br><span class="mut">' + esc(d.raquette) + '</span>' : '') + (d.note ? '<br><i>' + esc(d.note) + '</i>' : '') + '</td>' +
           '<td class="small">' + esc(d.telephone || '') + (w ? '<br><a target="_blank" rel="noopener" href="https://wa.me/' + w + '?text=' + encodeURIComponent(msg) + '">WhatsApp</a>' : '') + '</td><td><b>' + euros(d.prix) + '</b></td><td class="act">' +
           (d.statut === 'attente' ? '<button class="btn sm ok" data-cof="' + d.id + '">Prête ✓</button>' : '') +
@@ -1107,20 +1149,214 @@ function cordTarifs(box) {
   }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les cordages.</div>'; });
 }
 
-// ---------- CLOC'ARENA ----------
+// ---------- CLOC'ARENA (saisie réservée à la direction sportive) ----------
+var AR_NIVEAUX = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
+var AR = { tab: 'saisir', joueurs: null, formats: null, form: null, ouverts: {} };
+function arInit(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0) + '.'; }
+function arScorePour(score, eq) { if (eq !== 2 || !score) return score || ''; return String(score).split(/\s+/).map(function (s) { var x = s.split('-'); return x.length === 2 ? x[1] + '-' + x[0] : s; }).join(' '); }
+function arLireScore(txt) {
+  var sets = String(txt || '').trim().split(/[\s,;/]+/).filter(Boolean), a = 0, b = 0, ok = sets.length > 0;
+  sets.forEach(function (s) { var mm = s.match(/^(\d{1,2})-(\d{1,2})$/); if (!mm || mm[1] === mm[2]) { ok = false; return; } if (+mm[1] > +mm[2]) a++; else b++; });
+  if (!ok || a === b) return null;
+  return { score: sets.join(' '), vainqueur: a > b ? 1 : 2 };
+}
 function vueArena(m) {
-  m.innerHTML = entete('CLOC\'ARENA', 'Scores proposés par les coachs.', '<a class="btn" href="../#/gestion">Saisir des scores</a><a class="btn line" href="../#/arena">Voir le classement</a>') + '<div id="ar-l"><div class="skel"></div></div>';
-  var charger = function () {
-    q(sb.from('arena_matchs').select('id, date_match, format, score, vainqueur, arena_match_joueurs(equipe, invite, personnes(prenom, nom))').eq('statut', 'propose').order('date_match', { ascending: false })).then(function (l) {
-      var eq = function (mm, n) { return mm.arena_match_joueurs.filter(function (j) { return j.equipe === n; }).map(function (j) { return j.personnes.prenom + ' ' + j.personnes.nom.charAt(0) + '.' + (j.invite ? ' (inv.)' : ''); }).join(' / '); };
-      $('ar-l').innerHTML = l.length ? '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Match</th><th>Score</th><th></th></tr></thead><tbody>' + l.map(function (mm) {
-        return '<tr><td class="small">' + esc(fmtJour(new Date(mm.date_match + 'T12:00:00'))) + '<br><span class="mut">' + esc(mm.format.toLowerCase()) + '</span></td><td><b>' + esc(mm.vainqueur === 1 ? eq(mm, 1) : eq(mm, 2)) + '</b> <span class="mut">bat</span> ' + esc(mm.vainqueur === 1 ? eq(mm, 2) : eq(mm, 1)) + '</td><td>' + esc(mm.score) + '</td>' +
-          '<td class="act"><button class="btn sm ko" data-arv="' + mm.id + '|refuse">Refuser</button> <button class="btn sm ok" data-arv="' + mm.id + '|valide">Valider</button></td></tr>';
-      }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun score en attente.</div>';
-      all('[data-arv]').forEach(function (b) { b.onclick = function () { var x = b.dataset.arv.split('|'); q(sb.from('arena_matchs').update({ statut: x[1], valide_par: A.user.id }).eq('id', x[0])).then(function () { toast(x[1] === 'valide' ? 'Score validé' : 'Score refusé'); charger(); }); }; });
-    }).catch(function () { $('ar-l').innerHTML = '<div class="card empty">Impossible de charger les scores.</div>'; });
+  m.innerHTML = entete('CLOC\'ARENA', 'Saisie des résultats par la direction sportive, historique des matchs et niveaux des joueurs.') +
+    '<div class="chips" style="margin-bottom:14px">' + [['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']].map(function (t) { return '<button class="chip' + (AR.tab === t[0] ? ' on' : '') + '" data-artab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+    '<div id="ar-l"><div class="skel"></div></div>';
+  all('[data-artab]').forEach(function (b) { b.onclick = function () { AR.tab = b.dataset.artab; vueArena(m); }; });
+  var box = $('ar-l');
+  if (!aRole('direction')) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
+  var prep = Promise.all([
+    AR.joueurs ? AR.joueurs : q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom')),
+    AR.formats ? AR.formats : q(sb.from('arena_formats').select('*').order('ordre'))
+  ]).then(function (r) { AR.joueurs = r[0] || []; AR.formats = r[1] || []; });
+  prep.then(function () {
+    if (AR.tab === 'historique') arHistorique(box); else if (AR.tab === 'niveaux') arNiveaux(box); else arSaisir(box);
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger CLOC\'ARENA.</div>'; });
+}
+function arSaisir(box) {
+  if (!AR.form) AR.form = { date: isoJour(new Date()), format: (AR.formats[0] || {}).code || '', niv: [], e1: ['', ''], e2: ['', ''], inv: {}, sets: [] };
+  var F = AR.form, fmt = AR.formats.filter(function (x) { return x.code === F.format; })[0] || AR.formats[0], dbl = fmt && fmt.double;
+  var liste = AR.joueurs.filter(function (j) { return !F.niv.length || F.niv.indexOf(j.niveau_arena) >= 0; });
+  var opts = function (val) { return '<option value="">Choisir…</option>' + liste.map(function (j) { return '<option value="' + j.id + '"' + (j.id === val ? ' selected' : '') + '>' + esc(j.prenom + ' ' + j.nom) + (F.niv.length === 1 ? '' : ' · ' + esc(j.niveau_arena || '')) + '</option>'; }).join(''); };
+  var ligne = function (eq, k) { return '<div class="toolbar" style="margin:0"><select class="f grow" data-arj="' + eq + '-' + k + '">' + opts(F['e' + eq][k]) + '</select><label class="c"><input type="checkbox" data-arinv="' + eq + '-' + k + '"' + (F.inv[eq + '-' + k] ? ' checked' : '') + '> invité</label></div>'; };
+  var score = function () { return (F.sets || []).filter(function (x) { return x[0] !== '' && x[1] !== ''; }).map(function (x) { return (+x[0]) + '-' + (+x[1]); }).join(' '); };
+  var nomEq = function (eq) { return (dbl ? [0, 1] : [0]).map(function (k) { var j = AR.joueurs.filter(function (x) { return x.id === F['e' + eq][k]; })[0]; return j ? j.prenom : '?'; }).join(' / '); };
+  var apercu = function () { var l = arLireScore(score()); return l ? '🏆 ' + esc(nomEq(l.vainqueur)) + ' gagne ' + esc(arScorePour(l.score, l.vainqueur)) : 'Indique le score pour voir le vainqueur.'; };
+  box.innerHTML = '<div class="two" style="align-items:start"><div class="card stack">' +
+    '<label class="l">Date du match<input class="f" type="date" id="ar-date" value="' + esc(F.date) + '"></label>' +
+    '<div class="sect" style="margin:0">Format</div><div class="chips">' + AR.formats.map(function (x) { return '<button class="chip' + (x.code === F.format ? ' on' : '') + '" data-arfmt="' + esc(x.code) + '">' + esc(x.libelle) + ' · ' + (+x.points_victoire) + '/' + (+x.points_defaite) + '</button>'; }).join('') + '</div>' +
+    '<div class="sect" style="margin:0">Filtrer les joueurs par niveau</div><div class="chips"><button class="chip' + (!F.niv.length ? ' on' : '') + '" data-arniv="">Tous</button>' + AR_NIVEAUX.map(function (n) { return '<button class="chip' + (F.niv.indexOf(n) >= 0 ? ' on' : '') + '" data-arniv="' + n + '">' + n + '</button>'; }).join('') + '</div>' +
+    '<span class="mut xs">Plusieurs niveaux possibles pour un regroupement (ex. Violet + Rouge).</span></div>' +
+    '<div class="card stack"><b class="small">' + (dbl ? 'Équipe 1' : 'Joueur 1') + '</b>' + ligne(1, 0) + (dbl ? ligne(1, 1) : '') +
+    '<b class="small">' + (dbl ? 'Équipe 2' : 'Joueur 2') + '</b>' + ligne(2, 0) + (dbl ? ligne(2, 1) : '') +
+    '<div class="sect" style="margin:0">Score (côté ' + (dbl ? 'équipe 1' : 'joueur 1') + ' à gauche)</div>' + [0, 1, 2].map(function (k) {
+      var v = (F.sets || [])[k] || ['', ''];
+      return '<div class="toolbar" style="margin:0;align-items:center"><span class="small mut" style="width:110px">' + ['Set 1 / match', 'Set 2', 'Set 3 / super TB'][k] + '</span><input class="f" data-arset="' + k + '-0" type="number" inputmode="numeric" min="0" max="20" value="' + esc(v[0]) + '" style="width:72px;text-align:center"><b>–</b><input class="f" data-arset="' + k + '-1" type="number" inputmode="numeric" min="0" max="20" value="' + esc(v[1]) + '" style="width:72px;text-align:center"></div>';
+    }).join('') +
+    '<p class="small" id="ar-prev" style="margin:0">' + apercu() + '</p><button class="btn" id="ar-save">Enregistrer le résultat</button>' +
+    '<span class="mut xs">Le résultat compte tout de suite dans le classement. En cas d\'erreur : Historique des saisies → Annuler.</span></div></div>';
+  $('ar-date').onchange = function () { F.date = this.value; };
+  all('[data-arfmt]', box).forEach(function (b) { b.onclick = function () { F.format = b.dataset.arfmt; arSaisir(box); }; });
+  all('[data-arniv]', box).forEach(function (b) { b.onclick = function () { var n = b.dataset.arniv, i = F.niv.indexOf(n); if (!n) F.niv = []; else if (i >= 0) F.niv.splice(i, 1); else F.niv.push(n); arSaisir(box); }; });
+  all('[data-arj]', box).forEach(function (s) { s.onchange = function () { var x = s.dataset.arj.split('-'); F['e' + x[0]][+x[1]] = s.value; $('ar-prev').innerHTML = apercu(); }; });
+  all('[data-arinv]', box).forEach(function (c) { c.onchange = function () { F.inv[c.dataset.arinv] = c.checked; }; });
+  all('[data-arset]', box).forEach(function (i) { i.oninput = function () { F.sets = [0, 1, 2].map(function (k) { return [box.querySelector('[data-arset="' + k + '-0"]').value, box.querySelector('[data-arset="' + k + '-1"]').value]; }); $('ar-prev').innerHTML = apercu(); }; });
+  $('ar-save').onclick = function () {
+    var ks = dbl ? [0, 1] : [0], tous = ks.map(function (k) { return F.e1[k]; }).concat(ks.map(function (k) { return F.e2[k]; }));
+    if (tous.some(function (x) { return !x; })) return toast('Choisis tous les joueurs');
+    if (tous.filter(function (x, i) { return tous.indexOf(x) !== i; }).length) return toast('Un joueur apparaît deux fois');
+    var lu = arLireScore(score()); if (!lu) return toast('Score invalide');
+    var b = this; b.disabled = true; var match;
+    q(sb.from('arena_matchs').insert({ date_match: F.date, format: F.format, score: lu.score, vainqueur: lu.vainqueur, statut: 'propose', propose_par: A.user.id }).select().single()).then(function (mm) {
+      match = mm; var rows = [];
+      ks.forEach(function (k) { rows.push({ match_id: mm.id, personne_id: F.e1[k], equipe: 1, invite: !!F.inv['1-' + k] }); rows.push({ match_id: mm.id, personne_id: F.e2[k], equipe: 2, invite: !!F.inv['2-' + k] }); });
+      return q(sb.from('arena_match_joueurs').insert(rows));
+    }).then(function () { return q(sb.from('arena_matchs').update({ statut: 'valide', valide_par: A.user.id }).eq('id', match.id)); }).then(function () {
+      toast('Résultat enregistré, classement à jour'); F.e1 = ['', '']; F.e2 = ['', '']; F.inv = {}; F.sets = []; arSaisir(box);
+    }).catch(function () { if (match) sb.from('arena_matchs').delete().eq('id', match.id); toast('Enregistrement impossible'); b.disabled = false; });
   };
-  charger();
+}
+function arHistorique(box) {
+  q(sb.from('arena_matchs').select('id, date_match, format, score, vainqueur, statut, legacy_id, created_at, arena_match_joueurs(equipe, invite, personnes(prenom, nom, niveau_arena))').in('statut', ['valide', 'refuse']).order('date_match', { ascending: false }).order('created_at', { ascending: false }).limit(1000)).then(function (l) {
+    if (!l.length) { box.innerHTML = '<div class="card empty">Aucun match enregistré.</div>'; return; }
+    var jours = {}, ordre = [];
+    l.forEach(function (mm) { if (!jours[mm.date_match]) { jours[mm.date_match] = []; ordre.push(mm.date_match); } jours[mm.date_match].push(mm); });
+    if (!Object.keys(AR.ouverts).length) AR.ouverts[ordre[0]] = true;
+    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">' + (function (n) { return n + ' match' + (n > 1 ? 's' : '') + ' compté' + (n > 1 ? 's' : ''); })(l.filter(function (x) { return x.statut === 'valide'; }).length) + ' au classement, classés par jour. Clique sur un jour pour voir ses matchs.</p>' + ordre.map(function (j) {
+      var ms = jours[j], val = ms.filter(function (x) { return x.statut === 'valide'; }).length;
+      return '<details class="acc" data-arj-jour="' + j + '"' + (AR.ouverts[j] ? ' open' : '') + '><summary><b>' + esc(new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })) + '</b><span class="badge">' + val + ' match' + (val > 1 ? 's' : '') + '</span></summary>' +
+        '<div class="tw"><table class="t"><thead><tr><th>Format</th><th>Match</th><th>Score</th><th></th></tr></thead><tbody>' + ms.map(function (mm) {
+          var eq = function (n) { return mm.arena_match_joueurs.filter(function (x) { return x.equipe === n; }).map(function (x) { return arInit(x.personnes) + (x.invite ? ' (inv.)' : ''); }).join(' / '); };
+          var niv = mm.arena_match_joueurs.map(function (x) { return x.personnes.niveau_arena; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(', ');
+          var g = mm.vainqueur === 1 ? eq(1) : eq(2), p = mm.vainqueur === 1 ? eq(2) : eq(1);
+          return '<tr' + (mm.statut === 'refuse' ? ' style="opacity:.55"' : '') + '><td class="small">' + esc(String(mm.format || '').toLowerCase()) + (niv ? '<div class="mut xs">' + esc(niv) + '</div>' : '') + '</td><td><b>' + esc(g) + '</b> <span class="mut">bat</span> ' + esc(p) + '</td><td>' + esc(arScorePour(mm.score, mm.vainqueur)) + '</td><td class="act">' +
+            (mm.statut === 'refuse' ? '<span class="badge b-ko">Annulé</span>' : mm.legacy_id ? '<span class="mut xs">importé</span>' : '<button class="btn sm line" data-arann="' + mm.id + '">Annuler</button>') + '</td></tr>';
+        }).join('') + '</tbody></table></div></details>';
+    }).join('');
+    all('details.acc', box).forEach(function (d) { d.ontoggle = function () { if (d.open) AR.ouverts[d.dataset.arjJour] = true; else delete AR.ouverts[d.dataset.arjJour]; }; });
+    all('[data-arann]', box).forEach(function (b) {
+      b.onclick = function () {
+        if (!confirm('Annuler ce match ? Les points sont retirés du classement.')) return;
+        q(sb.from('arena_matchs').update({ statut: 'refuse', valide_par: A.user.id }).eq('id', b.dataset.arann)).then(function () { toast('Match annulé'); arHistorique(box); }).catch(function () { toast('Action impossible'); });
+      };
+    });
+    etiqueterTableaux();
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger l\'historique.</div>'; });
+}
+function arNiveaux(box) {
+  var h = '<p class="mut small" style="margin:0 0 10px">Le niveau fixé ici est le niveau de référence du joueur dans CLOC\'ARENA (classement, séances dans son agenda, notifications).</p>';
+  AR_NIVEAUX.forEach(function (n) {
+    var l = AR.joueurs.filter(function (j) { return j.niveau_arena === n; }); if (!l.length) return;
+    h += '<details class="acc"><summary><b>' + n + '</b><span class="badge">' + l.length + ' joueur' + (l.length > 1 ? 's' : '') + '</span></summary><div class="tw"><table class="t"><tbody>' + l.map(function (j) {
+      return '<tr><td><b>' + esc(j.prenom + ' ' + j.nom) + '</b></td><td class="act"><select class="f" data-arnv="' + j.id + '" style="width:auto">' + AR_NIVEAUX.map(function (x) { return '<option' + (x === n ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></td></tr>';
+    }).join('') + '</tbody></table></div></details>';
+  });
+  box.innerHTML = h;
+  all('[data-arnv]', box).forEach(function (sel) {
+    sel.onchange = function () {
+      var j = AR.joueurs.filter(function (x) { return x.id === sel.dataset.arnv; })[0], n = sel.value;
+      if (!confirm('Passer ' + j.prenom + ' en ' + n + ' ?')) { sel.value = j.niveau_arena; return; }
+      q(sb.rpc('changer_niveau', { p: j.id, niveau: n })).then(function () { j.niveau_arena = n; toast(j.prenom + ' passe en ' + n); arNiveaux(box); }).catch(function () { sel.value = j.niveau_arena; toast('Changement impossible'); });
+    };
+  });
+}
+
+// ---------- Réglages de l'appli : tout ce que voient les familles, modifiable sans toucher au code ----------
+var HOR_DEF = {
+  clubhouse: { 3: [['09:30', '12:00'], ['14:00', '16:30']], 6: [['09:30', '12:00'], ['14:00', '16:30']] },
+  coach: { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] }
+};
+var REGLAGES = [
+  ['Le club', [
+    ['club_adresse', 'Adresse du club', 'text', '81 rue de Saint-Germain, 78260 Achères'],
+    ['club_tel', 'Téléphone du club house', 'tel', '01 39 11 69 47'],
+    ['coord_nom', 'Coordinateur sportif (nom affiché)', 'text', 'Dorian'],
+    ['wa_club', 'WhatsApp / téléphone du coordinateur (mises en relation, contact)', 'tel', '06 62 48 80 87'],
+    ['contact_mail', 'Mail de contact', 'text', 'contact@clocatennis.fr']
+  ]],
+  ['Horaires (pastille de présence et page Club)', [
+    ['horaires_clubhouse', 'Club house ouvert', 'horaires', HOR_DEF.clubhouse],
+    ['horaires_coach', 'Un coach est au club (cours)', 'horaires', HOR_DEF.coach]
+  ]],
+  ['Cordage', [
+    ['cordage_cordeur', 'Cordeur affiché aux familles', 'text', 'Skander'],
+    ['cordage_paiement', 'Paiement', 'text', 'En espèces, au retrait'],
+    ['cordage_consigne', 'Consigne de dépôt', 'textarea', 'Remplis le formulaire, laisse ta raquette au club house avec une étiquette à ton nom : tu es prévenu dès qu\'elle est cordée.'],
+    ['cordage_dispo_msg', 'Message sous « J\'en ai besoin pour »', 'textarea', 'Cette date est indicative : le cordage se fait selon la disponibilité du cordeur. Nous ne pouvons pas garantir qu\'elle sera prête à temps.']
+  ]],
+  ['Petites annonces', [
+    ['annonces_duree', 'Durée de publication (jours)', 'number', 60]
+  ]],
+  ['Double interne', [
+    ['terrains_double', 'Terrains proposés (séparés par des virgules)', 'list', ['Couvert 1', 'Couvert 2', 'Terre 3', 'Terre 4', 'Quick 5', 'Quick 6', 'Quick 7']]
+  ]]
+];
+var JOURS_R = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+function horTexte(c) { return (c || []).map(function (x) { return x[0] + '-' + x[1]; }).join(', '); }
+function horLire(t) {
+  var l = String(t || '').split(/[,;]+/).map(function (s) { return s.trim(); }).filter(Boolean), ok = true;
+  var r = l.map(function (s) { var mm = s.replace(/h/gi, ':').replace(/\s/g, '').match(/^(\d{1,2}):?(\d{2})?-(\d{1,2}):?(\d{2})?$/); if (!mm) { ok = false; return null; } return [pad(+mm[1]) + ':' + (mm[2] || '00'), pad(+mm[3]) + ':' + (mm[4] || '00')]; });
+  return ok ? r : null;
+}
+function vueReglages(m) {
+  m.innerHTML = entete('Réglages de l\'appli', 'Infos pratiques, horaires, textes du cordage et durées : ce que tu changes ici apparaît tout de suite dans l\'appli des familles.') + '<div id="rg-l"><div class="skel"></div></div>';
+  q(sb.from('reglages_publics').select('cle, valeur')).then(function (l) {
+    var V = {}; (l || []).forEach(function (x) { V[x.cle] = x.valeur; });
+    var val = function (r) { return V[r[0]] != null ? V[r[0]] : r[3]; };
+    var champ = function (r) {
+      var v = val(r), id = 'rg-' + r[0];
+      if (r[2] === 'horaires') return '<div class="l"><b class="small">' + esc(r[1]) + '</b><div class="list">' + [1, 2, 3, 4, 5, 6, 7].map(function (j) { return '<label class="toolbar" style="margin:0;align-items:center"><span class="small" style="width:90px">' + JOURS_R[j] + '</span><input class="f grow" data-rgh="' + r[0] + '|' + j + '" value="' + esc(horTexte(v[j])) + '" placeholder="Fermé (ex. 09:30-12:00, 14:00-16:30)"></label>'; }).join('') + '</div></div>';
+      if (r[2] === 'textarea') return '<label class="l">' + esc(r[1]) + '<textarea class="f" id="' + id + '" rows="3">' + esc(v) + '</textarea></label>';
+      if (r[2] === 'list') return '<label class="l">' + esc(r[1]) + '<input class="f" id="' + id + '" value="' + esc((v || []).join(', ')) + '"></label>';
+      return '<label class="l">' + esc(r[1]) + '<input class="f" id="' + id + '" ' + (r[2] === 'number' ? 'type="number" min="1" max="365"' : r[2] === 'tel' ? 'type="tel"' : '') + ' value="' + esc(v) + '"></label>';
+    };
+    $('rg-l').innerHTML = REGLAGES.map(function (g, gi) {
+      return '<div class="card stack" style="margin-bottom:14px"><div class="sect" style="margin-top:0">' + esc(g[0]) + '</div>' + g[1].map(champ).join('') +
+        '<div class="chips" style="justify-content:flex-end"><button class="btn" data-rgsave="' + gi + '">Enregistrer</button></div></div>';
+    }).join('') + '<p class="mut xs">Les tarifs et cordages se règlent dans Services → Cordage ; l\'ouverture du cordage aux familles aussi. Les rôles et accès se règlent dans Équipe du club et Accès particuliers.</p>';
+    all('[data-rgsave]').forEach(function (b) {
+      b.onclick = function () {
+        var g = REGLAGES[+b.dataset.rgsave], rows = [], err = null;
+        g[1].forEach(function (r) {
+          var v;
+          if (r[2] === 'horaires') { v = {}; [1, 2, 3, 4, 5, 6, 7].forEach(function (j) { var x = horLire(document.querySelector('[data-rgh="' + r[0] + '|' + j + '"]').value); if (x === null) err = 'Horaire illisible le ' + JOURS_R[j].toLowerCase() + ' (ex. 09:30-12:00)'; else if (x.length) v[j] = x; }); }
+          else if (r[2] === 'number') { v = parseInt($('rg-' + r[0]).value, 10); if (!(v > 0)) err = 'Nombre invalide : ' + r[1]; }
+          else if (r[2] === 'list') { v = $('rg-' + r[0]).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean); if (!v.length) err = 'Liste vide : ' + r[1]; }
+          else { v = $('rg-' + r[0]).value.trim(); if (!v) err = 'Champ vide : ' + r[1]; if (r[2] === 'tel' && v && !telWa(v)) err = 'Numéro invalide : ' + r[1]; }
+          rows.push({ cle: r[0], valeur: v, maj_le: new Date().toISOString() });
+        });
+        if (err) return toast(err);
+        q(sb.from('reglages_publics').upsert(rows)).then(function () { toast('Réglages enregistrés'); }).catch(function () { toast('Enregistrement impossible'); });
+      };
+    });
+  }).catch(function () { $('rg-l').innerHTML = '<div class="card empty">Impossible de charger les réglages.</div>'; });
+}
+// Historique de l'atelier cordage, classé par mois
+function cordHistorique(box) {
+  q(sb.from('cordage_demandes').select('*, cordages(nom)').order('created_at', { ascending: false }).limit(2000)).then(function (l) {
+    if (!l.length) { box.innerHTML = '<div class="card empty">Aucune raquette enregistrée pour le moment.</div>'; return; }
+    var mois = {}, ordre = [];
+    l.forEach(function (d) { var k = d.created_at.slice(0, 7); if (!mois[k]) { mois[k] = []; ordre.push(k); } mois[k].push(d); });
+    var ETAT = { attente: ['À corder', ''], fini: ['Prête', 'b-ok'], recupere: ['Récupérée', ''] };
+    box.innerHTML = '<div class="toolbar"><input class="f grow" id="ch-q" placeholder="Rechercher un joueur, une raquette, un cordage…"></div>' + ordre.map(function (k, i) {
+      var ds = mois[k], tot = ds.filter(function (d) { return d.paye; }).reduce(function (s, d) { return s + (+d.prix || 0); }, 0);
+      return '<details class="acc"' + (i === 0 ? ' open' : '') + '><summary><b>' + esc(new Date(k + '-15T12:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })) + '</b><span class="badge">' + ds.length + ' raquette' + (ds.length > 1 ? 's' : '') + ' · ' + euros(tot) + ' encaissés</span></summary>' +
+        '<div class="tw"><table class="t"><thead><tr><th>Déposée</th><th>Joueur</th><th>Cordage</th><th>Prix</th><th>État</th></tr></thead><tbody>' + ds.map(function (d) {
+          var e = ETAT[d.statut] || [d.statut, ''];
+          return '<tr data-chs="' + esc(norm([d.nom, d.depose_par, d.raquette, d.cordage_perso, d.cordages && d.cordages.nom].join(' '))) + '"><td class="small">' + esc(fmtJour(new Date(d.created_at))) + '</td><td><b>' + esc(d.nom) + '</b>' + (d.depose_par ? '<div class="mut xs">déposée par ' + esc(d.depose_par) + '</div>' : '') + '</td>' +
+            '<td class="small">' + esc(d.fourni_par === 'club' ? (d.cordages ? d.cordages.nom : 'Club') : 'Perso : ' + (d.cordage_perso || '')) + (d.tension ? ' · ' + esc(d.tension) : '') + (d.raquette ? '<div class="mut xs">' + esc(d.raquette) + '</div>' : '') + '</td>' +
+            '<td>' + euros(d.prix) + '</td><td><span class="badge ' + e[1] + '">' + e[0] + '</span> ' + (d.paye ? '<span class="badge">Réglée' + (d.paye_le ? ' le ' + esc(fmtJour(new Date(d.paye_le))) : '') + '</span>' : d.statut !== 'attente' ? '<span class="badge b-ac">À régler</span>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div></details>';
+    }).join('');
+    $('ch-q').oninput = function () {
+      var s = norm(this.value);
+      all('[data-chs]', box).forEach(function (tr) { tr.style.display = !s || tr.dataset.chs.indexOf(s) >= 0 ? '' : 'none'; });
+      if (s) all('details.acc', box).forEach(function (d) { d.open = true; });
+    };
+    etiqueterTableaux();
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger l\'historique.</div>'; });
 }
 
 // ---------- Présence au club ----------
@@ -1128,6 +1364,7 @@ var HORAIRES = {
   clubhouse: { 3: [['09:30', '12:00'], ['14:00', '16:30']], 6: [['09:30', '12:00'], ['14:00', '16:30']] },
   coach: { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] }
 };
+function appliquerReglages(V) { if (V.horaires_clubhouse) HORAIRES.clubhouse = V.horaires_clubhouse; if (V.horaires_coach) HORAIRES.coach = V.horaires_coach; if (V.wa_club && telWa(V.wa_club)) WA_CLUB = telWa(V.wa_club); }
 var ETATS = { ouvert: ['#1f8a4c', 'Club house ouvert'], coach: ['#d9822b', 'Un coach est au club'], ferme: ['#c62f2f', 'Club house fermé'] };
 function aHeure(j, hm) { var x = new Date(j), t = hm.split(':'); x.setHours(+t[0], +t[1], 0, 0); return x; }
 var PAUSES_P = null;
@@ -1962,7 +2199,7 @@ function vueRetours(m) {
   filtres(); charger();
 }
 
-var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours };
+var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages };
 function router() {
   if (!A.user) return;
   fermer();
@@ -2012,11 +2249,11 @@ function demarrer(session) {
     A.mods = MODULES.filter(function (m) { return A.roles.some(function (x) { return !x.groupe_id && m[2].indexOf(x.role) >= 0; }); }).map(function (m) { return m[0]; });
     if (!A.mods.length) {
       $('root').innerHTML = '<div class="login"><div class="card stack"><b>Accès réservé à l\'équipe du club</b><span class="mut">Tu es connecté avec ' + esc(A.user.email) + ', mais cette adresse n\'a pas de rôle de gestion. Demande à la direction sportive de t\'en donner un.</span>' +
-        (A.roles.some(function (x) { return x.role === 'coach' || x.role === 'responsable'; }) ? '<a class="btn" href="../#/gestion">Saisir des scores dans l\'appli</a>' : '') + '<a class="btn line" href="../">Ouvrir l\'appli</a><button class="btn ghost" id="lo">Changer de compte</button></div></div>';
+        (A.roles.some(function (x) { return x.role === 'coach' || x.role === 'responsable'; }) ? '' : '') + '<a class="btn line" href="../">Ouvrir l\'appli</a><button class="btn ghost" id="lo">Changer de compte</button></div></div>';
       $('lo').onclick = function () { sb.auth.signOut().then(function () { location.reload(); }); };
       return;
     }
-    router();
+    q(sb.from('reglages_publics').select('cle, valeur')).then(function (l) { var V = {}; (l || []).forEach(function (x) { V[x.cle] = x.valeur; }); appliquerReglages(V); }).catch(function () { }).then(router);
   }).catch(function () { pageConnexion('Connexion au club impossible pour le moment.'); });
 }
 if (!sb) { $('root').innerHTML = '<div class="login card">Connexion impossible : vérifie ta connexion internet.</div>'; return; }

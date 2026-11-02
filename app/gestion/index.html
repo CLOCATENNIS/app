@@ -160,11 +160,19 @@ table.t{width:100%;border-collapse:collapse;background:var(--card);border:1px so
   .btn{min-height:42px}.btn.sm{min-height:34px}
   .chip{height:36px}
 }
+details.acc{background:var(--card);border:1px solid var(--bd);border-radius:14px;margin-bottom:10px;overflow:hidden}
+details.acc>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;text-transform:capitalize}
+details.acc>summary::-webkit-details-marker{display:none}
+details.acc>summary::after{content:'▾';color:var(--mut);transition:transform .15s;margin-left:4px}
+details.acc>summary .badge{margin-left:auto;text-transform:none}
+details.acc[open]>summary::after{transform:rotate(180deg)}
+details.acc[open]>summary{border-bottom:1px solid var(--bd)}
+details.acc .tw{margin:0;border:0;border-radius:0}
 </style>
 </head>
 <body>
 <div id="root"><div class="login"><div class="skel"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="admin.js?v=202611022215"></script>
+<script src="admin.js?v=202611030045"></script>
 </body>
 </html>
