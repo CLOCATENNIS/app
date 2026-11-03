@@ -100,8 +100,9 @@ function chargerPublic() {
   var depuis = new Date(); depuis.setDate(depuis.getDate() - 60);
   return Promise.all([
     q(sb.from('publications').select('*').order('epingle', { ascending: false }).order('publie_le', { ascending: false }).limit(20)).catch(function () { return []; }),
-    q(sb.from('evenements').select('*, groupes!evenements_groupe_id_fkey(nom,couleur), evenement_groupes(groupe_id, groupes(nom,couleur))').gte('debut', depuis.toISOString()).order('debut')).catch(function () { return []; })
-  ]).then(function (r) { S.pubs = r[0]; S.evts = r[1]; return q(sb.from('reglages_publics').select('cle, valeur')).catch(function () { return []; }); })
+    q(sb.from('evenements').select('*, groupes!evenements_groupe_id_fkey(nom,couleur), evenement_groupes(groupe_id, groupes(nom,couleur))').gte('debut', depuis.toISOString()).order('debut')).catch(function () { return []; }),
+    q(sb.from('fetes').select('*').eq('actif', true).order('debut')).catch(function () { return []; })
+  ]).then(function (r) { S.pubs = r[0]; S.evts = r[1]; S.fetes = r[2]; return q(sb.from('reglages_publics').select('cle, valeur')).catch(function () { return []; }); })
     .then(function (l) { S.reglages = {}; (l || []).forEach(function (x) { S.reglages[x.cle] = x.valeur; }); appliquerReglages(); });
 }
 // Réglages modifiables depuis l'espace gestion (Administration → Réglages de l'appli)
@@ -323,7 +324,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '02/11 22h30';
+var VERSION_APPLI = '03/11 17h00';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -339,7 +340,7 @@ function pageAccueil() {
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
-  var top = h, P = { presence: '<div id="presence"></div>', msg: '', urgent: '', rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
+  var top = h, P = { presence: '<div id="presence"></div>', msg: '', urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -385,8 +386,8 @@ function pageAccueil() {
   P.partners = '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div>';
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
   if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent ? '<div class="dk-top">' + P.urgent + P.msg + '</div>' : '') +
-    '<div class="dk-col">' + P.rdv + P.login + P.install + P.actu + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
-  return top + P.presence + P.msg + P.urgent + P.rdv + P.tiles + P.login + P.install + P.actu + P.reseaux + P.partners + '</main>';
+    '<div class="dk-col">' + P.fete + P.rdv + P.login + P.install + P.actu + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
+  return top + P.presence + P.msg + P.urgent + P.fete + P.rdv + P.tiles + P.login + P.install + P.actu + P.reseaux + P.partners + '</main>';
 }
 
 function lierAccueilAide() {
@@ -1494,6 +1495,7 @@ function pageInscriptions() {
   var perso = S.user && S.pers.length;
   var pourMoi = perso ? l.filter(function (e) { return eligibles(e).length; }) : l.filter(function (e) { return !evGroupes(e).ids.length; });
   var h = '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1>Inscriptions</h1><p class="mut small" style="margin:4px 0 0">Places limitées : l\'inscription garantit ta place. Au-delà, liste d\'attente, avec une place attribuée automatiquement si quelqu\'un se désiste.</p></div><main>';
+  h += carteFeteAccueil();
   if (!S.user) h += '<section class="card stack" style="gap:10px"><b>Connecte-toi pour t\'inscrire</b><span class="mut small">Tu verras les séances et stages ouverts pour ta famille.</span><a class="btn" href="#/profil">Me connecter</a></section>';
   else if (!S.pers.length) h += '<section class="card"><span class="mut small">Ton adresse n\'est rattachée à aucun adhérent : contacte le club pour t\'inscrire.</span></section>';
   if (perso) {
@@ -2687,6 +2689,226 @@ function remplirBureau() {
   });
 }
 
+// ---------- Fêtes du club (Noël…) : page publique, présence, invitation, tombola ----------
+// Visible par tout le monde, avec ou sans compte. Le téléphone garde un « jeton » pour retrouver sa réponse.
+function feteActive() {
+  var now = Date.now();
+  return (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut).getTime() > now - 2 * 864e5; })[0] || null;
+}
+function feteImg(u) { return !u ? '' : /^https?:\/\//i.test(u) ? u : u.replace(/^\/?/, ''); }
+function feteLien(f) { return location.origin + location.pathname.replace(/[^\/]*$/, '') + '#/fete/' + encodeURIComponent(f.edition); }
+function feteJeton(ed) {
+  var k = 'cloca-fete-' + ed, j = localStorageGet(k);
+  if (!j || !/^[0-9a-f-]{36}$/i.test(j)) {
+    j = window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+    localStorageSet(k, j);
+  }
+  return j;
+}
+function prixTickets(f, n) { return Math.floor(n / f.carnet_nb) * f.prix_carnet + (n % f.carnet_nb) * f.prix_ticket; }
+function nomFamilleDefaut() {
+  if (S.pers && S.pers.length) { var n = S.pers[0].nom || ''; return 'Famille ' + n.charAt(0) + n.slice(1).toLowerCase(); }
+  if (S.compte && S.compte.nom_declare) return 'Famille ' + S.compte.nom_declare;
+  return '';
+}
+
+// Carte d'accueil : visible par tous tant que la fête n'est pas passée
+function carteFeteAccueil() {
+  var f = feteActive(); if (!f) return '';
+  var d = new Date(f.debut), fin = f.fin ? new Date(f.fin) : null;
+  var rep = localStorageGet('cloca-fete-ok-' + f.edition);
+  return '<a class="card fete-carte" href="#/fete/' + esc(f.edition) + '">' +
+    (f.affiche_url ? '<img src="' + esc(feteImg(f.affiche_url)) + '" alt="" loading="lazy">' : '') +
+    '<div class="stack" style="gap:4px;flex:1;min-width:0"><span class="eyebrow" style="color:var(--ac)">🎄 ' + esc(f.titre) + '</span>' +
+    '<b style="font-size:17px;line-height:1.2">' + esc(fmtJour(d)) + '</b><span class="mut small">' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + (f.lieu ? ' · ' + esc(f.lieu) : '') + '</span>' +
+    '<span class="badge" style="align-self:flex-start;margin-top:4px;background:' + (rep ? 'var(--ok)' : 'var(--ac)') + ';color:#fff">' + (rep ? 'Ta venue est confirmée ✅' : 'Je confirme ma venue') + '</span></div></a>';
+}
+
+function pageFete(ed) {
+  var f = (S.fetes || []).filter(function (x) { return x.edition === ed; })[0] || (ed === 'noel' || !ed ? feteActive() : null);
+  if (!f) return '<div class="pagehead">' + backLink('#/accueil', 'Accueil') + '</div><main><section class="card empty">Cette fête n\'est plus en ligne.</section></main>';
+  var d = new Date(f.debut), fin = f.fin ? new Date(f.fin) : null, passe = new Date(f.fin || f.debut) < new Date();
+  var h = '<div class="darkhead fete-head"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) +
+    '<div class="kicker" style="margin-top:6px">🎄 Pour toute la famille</div><h1>' + esc(f.titre) + '</h1>' + (f.sous_titre ? '<div style="color:#c9d6e2;margin-top:4px">' + esc(f.sous_titre) + '</div>' : '') + '</div></div><main class="wrap">';
+  if (f.affiche_url) h += '<button class="fete-affiche" id="fete-zoom" aria-label="Agrandir l\'affiche"><img src="' + esc(feteImg(f.affiche_url)) + '" alt="Affiche : ' + esc(f.titre) + ', ' + esc(fmtJour(d)) + '"></button>';
+  h += '<section class="card stack" style="gap:10px"><div class="rdv"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div>' +
+    '<div class="stack"><span class="disp" style="font-size:22px;line-height:1.1">' + esc(fmtJour(d)) + '</span><span class="mut small">' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + '</span>' +
+    (f.lieu ? '<span class="mut small">' + ic('pin', 14) + ' ' + esc(f.lieu) + '</span>' : '') + '</div></div>' +
+    (f.public_vise ? '<span class="small">' + ic('people', 16) + ' ' + esc(f.public_vise) + '</span>' : '') +
+    '<span class="small">🎁 <b>Gratuit</b> (hors espace goûter)</span><span class="mut small" id="fete-nb"></span></section>' +
+    '<div id="fete-main"><section class="card"><div class="skel"></div></section></div></main>';
+  setTimeout(function () { chargerFete(f, passe); });
+  return h;
+}
+
+function chargerFete(f, passe) {
+  var jeton = feteJeton(f.edition);
+  Promise.all([
+    q(sb.rpc('fete_ma_reponse', { p_edition: f.edition, p_jeton: jeton })).catch(function () { return {}; }),
+    q(sb.from('tombola_lots').select('*').eq('edition', f.edition).order('rang')).catch(function () { return []; })
+  ]).then(function (r) {
+    if (!$('fete-main')) return;
+    var R = r[0] || {}, lots = r[1] || [], P = R.participation, T = R.tickets || [];
+    if (P && P.jeton && P.jeton !== jeton) localStorageSet('cloca-fete-' + f.edition, P.jeton); // compte connecté sur un autre appareil
+    if (P && !P.annule) localStorageSet('cloca-fete-ok-' + f.edition, '1'); else localStorageSet('cloca-fete-ok-' + f.edition, '');
+    if (R.familles && $('fete-nb')) $('fete-nb').textContent = '🎄 ' + R.familles + ' famille' + (R.familles > 1 ? 's ont' : ' a') + ' déjà confirmé sa venue';
+    var h = '';
+    if (!passe) h += blocPresence(f, P);
+    h += blocInviter(f);
+    if (f.tombola_ouverte || lots.length || T.length) h += blocTombola(f, lots, T, P, passe);
+    $('fete-main').innerHTML = h;
+    lierFete(f, P);
+  });
+  if ($('fete-zoom')) $('fete-zoom').onclick = function () { modale('<img src="' + esc(feteImg(f.affiche_url)) + '" alt="Affiche" style="width:100%;border-radius:12px;display:block">'); };
+}
+
+function blocPresence(f, P) {
+  if (P && !P.annule && !S.feteEdit) {
+    return '<section class="card stack fete-ok" style="gap:10px"><b style="font-size:18px">C\'est noté, à bientôt ! 🎉</b>' +
+      '<span class="small"><b>' + esc(P.nom) + '</b> · ' + (P.groupe === 'plus5' ? '5 personnes ou plus' : 'moins de 5 personnes') + (P.avec_invites ? ' · avec des invités' : '') + '</span>' +
+      (P.photos ? '<span class="small">📸 Le lien des photos sera envoyé à ' + esc(P.email_photos) + '</span>' : '') +
+      '<div class="grid2"><button class="btn line" id="fete-modif">Modifier</button><button class="btn line" id="fete-annul">On ne vient plus</button></div></section>';
+  }
+  if (!f.inscription_ouverte) return '<section class="card empty">Les confirmations sont fermées. Tu peux quand même venir : tout le monde est le bienvenu !</section>';
+  var F = S.feteForm = S.feteForm || (P ? { nom: P.nom, contact: P.contact || '', groupe: P.groupe, invites: P.avec_invites, photos: P.photos, email: P.email_photos || '' } :
+    { nom: nomFamilleDefaut(), contact: '', groupe: '', invites: false, photos: false, email: S.user ? S.user.email : '' });
+  return '<section class="card stack" style="gap:14px" id="fete-form"><div class="stack" style="gap:4px"><b style="font-size:18px">Tu viens ?</b>' +
+    '<span class="mut small">Ça nous aide à prévoir le goûter et les cadeaux. Pas besoin du nombre exact, une idée suffit.</span></div>' +
+    '<label class="f">Nom de la famille<input class="f" id="ff-nom" maxlength="80" placeholder="Ex. Famille Martin" value="' + esc(F.nom) + '" autocomplete="family-name"></label>' +
+    '<div class="stack" style="gap:8px"><span style="font-size:13px;font-weight:600">Vous serez combien, à peu près ?</span>' +
+    '<button class="pick' + (F.groupe === 'moins5' ? ' on' : '') + '" data-fg="moins5">👨‍👩‍👧 Moins de 5 personnes</button>' +
+    '<button class="pick' + (F.groupe === 'plus5' ? ' on' : '') + '" data-fg="plus5">👨‍👩‍👧‍👦👫 5 personnes ou plus</button></div>' +
+    '<label class="check"><input type="checkbox" id="ff-inv"' + (F.invites ? ' checked' : '') + '><span><b>On vient avec des invités</b><br><span class="mut">Un copain, un cousin, des amis : tout le monde est le bienvenu, même s\'il n\'est pas au club !</span></span></label>' +
+    (S.user ? '' : '<label class="f">Téléphone ou mail <span class="mut" style="font-weight:400">(facultatif, pour te prévenir en cas de changement)</span><input class="f" id="ff-contact" maxlength="120" value="' + esc(F.contact) + '"></label>') +
+    '<label class="check"><input type="checkbox" id="ff-photos"' + (F.photos ? ' checked' : '') + '><span><b>Je veux recevoir le lien des photos</b><br><span class="mut">Le club t\'envoie le lien de l\'album après la fête.</span></span></label>' +
+    '<label class="f" id="ff-mail-l"' + (F.photos ? '' : ' hidden') + '>Mail pour les photos<input class="f" id="ff-mail" type="email" maxlength="120" value="' + esc(F.email) + '" autocomplete="email"></label>' +
+    '<button class="btn" id="ff-ok">Oui, on vient ! 🎄</button>' + (P ? '<button class="btn ghost" id="ff-stop">Annuler la modification</button>' : '') + '</section>';
+}
+
+function blocInviter(f) {
+  var img = feteImg(f.flyer_url || f.affiche_url);
+  return '<section class="card stack" style="gap:10px"><b style="font-size:18px">Invite tes amis 💌</b>' +
+    '<span class="mut small">Envoie l\'invitation à tes copains, ta famille, tes voisins : ils n\'ont pas besoin d\'être au club ni d\'avoir l\'appli.</span>' +
+    '<button class="btn navy" id="fete-share">' + ic('people', 20, '#fff') + 'Envoyer l\'invitation</button>' +
+    '<div class="grid2">' + (img ? '<a class="btn ghost" href="' + esc(img) + '" download="Invitation-' + esc(f.edition) + '.jpg">' + ic('dl', 18) + 'Le flyer</a>' : '') +
+    '<button class="btn ghost" id="fete-copy">Copier le lien</button></div></section>';
+}
+
+function blocTombola(f, lots, T, P, passe) {
+  var gagnants = {};
+  if (f.tirage_publie) lots.forEach(function (l) { if (l.gagnant_numero) gagnants[l.gagnant_numero] = l; });
+  var mesNum = []; T.forEach(function (t) { (t.numeros || []).forEach(function (n) { mesNum.push(n); }); });
+  var h = '<section class="card stack" style="gap:12px" id="fete-tombola"><div class="stack" style="gap:4px"><b style="font-size:18px">🎟️ Tombola</b>' +
+    '<span class="small"><b>' + euros(f.prix_ticket) + ' le ticket</b> · <b>' + f.carnet_nb + ' tickets pour ' + euros(f.prix_carnet) + '</b></span>' +
+    '<span class="mut small">Tirage pendant la fête. 100 % tennis !</span></div>';
+  h += '<div class="stack" style="gap:6px"><span class="eyebrow">Les lots</span>' + (lots.length ? lots.map(function (l, i) {
+    var gagne = f.tirage_publie && l.gagnant_numero;
+    return '<div class="lot">' + (l.photo_url ? '<img src="' + esc(l.photo_url) + '" alt="">' : '<span class="lot-n">' + (i + 1) + '</span>') + '<div class="stack" style="flex:1;min-width:0"><b>' + esc(l.nom) + '</b>' + (l.detail ? '<span class="mut small">' + esc(l.detail) + '</span>' : '') +
+      (gagne ? '<span class="small" style="color:' + (mesNum.indexOf(l.gagnant_numero) >= 0 ? 'var(--ok);font-weight:700' : 'var(--mut)') + '">Ticket gagnant : n° ' + l.gagnant_numero + (mesNum.indexOf(l.gagnant_numero) >= 0 ? ' 🎉 C\'est toi !' : '') + '</span>' : '') + '</div></div>';
+  }).join('') : '<span class="mut small">Les lots seront dévoilés très bientôt 🎁</span>') + '</div>';
+  if (T.length) {
+    h += '<div class="stack" style="gap:6px"><span class="eyebrow">Mes tickets</span>' + T.map(function (t) {
+      var paye = t.statut === 'paye';
+      return '<div class="lot" style="align-items:flex-start"><span class="lot-n" style="background:' + (paye ? 'var(--ok)' : 'var(--ac)') + '">' + t.nb + '</span><div class="stack" style="flex:1;min-width:0"><b>' + t.nb + ' ticket' + (t.nb > 1 ? 's' : '') + ' · ' + euros(t.montant) + '</b>' +
+        (paye ? '<span class="small" style="color:var(--ok)">Payé ✅ · n° ' + esc((t.numeros || []).join(', ')) + '</span>' : '<span class="small" style="color:var(--ac)">Réservé · à régler au club house ou le jour de la fête</span>') + '</div>' +
+        (!paye ? '<button class="chip" data-tkx="' + t.id + '">Annuler</button>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  if (f.tombola_ouverte && !passe) {
+    var n = S.feteNb || 1;
+    h += '<div class="stack" style="gap:10px;border-top:1px solid var(--line);padding-top:12px"><b>Réserver des tickets</b>' +
+      '<div class="stepper"><button class="btn ghost" id="tk-moins" aria-label="Un ticket de moins">−</button><div class="stack" style="align-items:center;flex:1"><b class="disp" style="font-size:30px;line-height:1" id="tk-n">' + n + '</b><span class="mut small" id="tk-p">' + euros(prixTickets(f, n)) + '</span></div><button class="btn ghost" id="tk-plus" aria-label="Un ticket de plus">+</button></div>' +
+      '<div class="chips" style="flex-wrap:wrap">' + [1, f.carnet_nb, f.carnet_nb * 2].map(function (x) { return '<button class="chip" data-tkn="' + x + '">' + x + ' ticket' + (x > 1 ? 's' : '') + ' · ' + euros(prixTickets(f, x)) + '</button>'; }).join('') + '</div>' +
+      '<label class="f">Au nom de<input class="f" id="tk-nom" maxlength="80" value="' + esc((P && P.nom) || nomFamilleDefaut()) + '"></label>' +
+      (S.user ? '' : '<label class="f">Téléphone <span class="mut" style="font-weight:400">(facultatif)</span><input class="f" id="tk-contact" maxlength="120" value="' + esc((P && P.contact) || '') + '"></label>') +
+      '<button class="btn" id="tk-ok">Réserver mes tickets</button>' +
+      '<span class="mut xs">Paiement au club house ou le jour de la fête. Tes numéros s\'affichent ici dès que c\'est payé. Seuls les tickets payés participent au tirage.</span></div>';
+  }
+  return h + '</section>';
+}
+
+function erreurFete(e) {
+  var m = String((e && e.message) || '');
+  if (/nom manquant/.test(m)) return 'Indique le nom de la famille';
+  if (/mail manquant/.test(m)) return 'Indique un mail pour recevoir les photos';
+  if (/fermée|fermées/.test(m)) return 'Les réservations sont fermées';
+  if (/trop de réservations/.test(m)) return 'Règle d\'abord tes tickets déjà réservés';
+  return 'Envoi impossible, réessaie dans un instant';
+}
+
+function lierFete(f, P) {
+  var jeton = feteJeton(f.edition), re = function () { chargerFete(f, false); };
+  var F = S.feteForm;
+  if ($('fete-modif')) $('fete-modif').onclick = function () { S.feteEdit = true; S.feteForm = null; re(); };
+  if ($('fete-annul')) $('fete-annul').onclick = function () {
+    if (!confirm('Tu ne viens plus à la fête ?')) return;
+    q(sb.rpc('fete_annuler', { p_edition: f.edition, p_jeton: jeton })).then(function () { localStorageSet('cloca-fete-ok-' + f.edition, ''); toast('C\'est noté, dommage !'); re(); }).catch(function () { toast('Action impossible'); });
+  };
+  if ($('ff-stop')) $('ff-stop').onclick = function () { S.feteEdit = false; S.feteForm = null; re(); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-fg]'), function (b) {
+    b.onclick = function () { F.groupe = b.dataset.fg; Array.prototype.forEach.call(document.querySelectorAll('[data-fg]'), function (x) { x.classList.toggle('on', x === b); }); };
+  });
+  if ($('ff-photos')) $('ff-photos').onchange = function () { $('ff-mail-l').hidden = !this.checked; };
+  if ($('ff-ok')) $('ff-ok').onclick = function () {
+    F.nom = $('ff-nom').value.trim(); F.invites = $('ff-inv').checked; F.photos = $('ff-photos').checked; F.email = $('ff-mail').value.trim();
+    if ($('ff-contact')) F.contact = $('ff-contact').value.trim();
+    if (!F.nom) { toast('Indique le nom de la famille'); $('ff-nom').focus(); return; }
+    if (!F.groupe) { toast('Choisis : moins de 5 ou 5 personnes et plus'); return; }
+    if (F.photos && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(F.email)) { toast('Indique un mail valide pour les photos'); $('ff-mail').focus(); return; }
+    var b = this; b.disabled = true;
+    q(sb.rpc('fete_repondre', { p_edition: f.edition, p_nom: F.nom, p_contact: F.contact || null, p_groupe: F.groupe, p_invites: F.invites, p_photos: F.photos, p_email: F.photos ? F.email : null, p_jeton: jeton })).then(function (r) {
+      if (r && r.jeton && r.jeton !== jeton) localStorageSet('cloca-fete-' + f.edition, r.jeton);
+      if (r && r.nouveau) sb.functions.invoke('fete-notifier', { body: { type: 'presence', id: r.id } }).catch(function () { });
+      localStorageSet('cloca-fete-ok-' + f.edition, '1');
+      S.feteEdit = false; S.feteForm = null;
+      toast(r && r.nouveau ? 'Merci, ta venue est confirmée 🎄' : 'Réponse mise à jour');
+      re();
+    }).catch(function (e) { b.disabled = false; toast(erreurFete(e)); });
+  };
+  // Invitation : partage natif (avec l'image si possible), sinon WhatsApp
+  var lien = feteLien(f), d = new Date(f.debut);
+  var texte = '🎄 ' + f.titre + ' du club CLOCA Tennis ! ' + fmtJour(d) + ', ' + fmtH(d) + (f.fin ? '-' + fmtH(new Date(f.fin)) : '') + ' à Achères. Gratuit, pour les enfants et leurs familles. Viens avec nous ! Toutes les infos : ' + lien;
+  if ($('fete-share')) $('fete-share').onclick = function () {
+    var img = feteImg(f.flyer_url || f.affiche_url);
+    var simple = function () {
+      if (navigator.share) return navigator.share({ title: f.titre, text: texte }).catch(function () { });
+      window.open('https://wa.me/?text=' + encodeURIComponent(texte), '_blank', 'noopener');
+    };
+    if (!img || !navigator.canShare || !window.fetch || !window.File) return simple();
+    fetch(img).then(function (r) { return r.blob(); }).then(function (bl) {
+      var fi = new File([bl], 'Invitation-' + f.edition + '.jpg', { type: bl.type || 'image/jpeg' });
+      if (navigator.canShare({ files: [fi] })) return navigator.share({ files: [fi], title: f.titre, text: texte });
+      return simple();
+    }).catch(function (e) { if (!e || e.name !== 'AbortError') simple(); });
+  };
+  if ($('fete-copy')) $('fete-copy').onclick = function () {
+    var ok = function () { toast('Lien copié : colle-le dans un message'); };
+    if (navigator.clipboard) navigator.clipboard.writeText(texte).then(ok).catch(function () { prompt('Copie ce message :', texte); });
+    else prompt('Copie ce message :', texte);
+  };
+  // Tombola
+  var n = S.feteNb || 1, maj = function () { if ($('tk-n')) { $('tk-n').textContent = n; $('tk-p').textContent = euros(prixTickets(f, n)); } S.feteNb = n; };
+  if ($('tk-moins')) $('tk-moins').onclick = function () { n = Math.max(1, n - 1); maj(); };
+  if ($('tk-plus')) $('tk-plus').onclick = function () { n = Math.min(30, n + 1); maj(); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tkn]'), function (b) { b.onclick = function () { n = +b.dataset.tkn; maj(); }; });
+  if ($('tk-ok')) $('tk-ok').onclick = function () {
+    var nom = $('tk-nom').value.trim(), b = this;
+    if (!nom) { toast('Indique un nom'); $('tk-nom').focus(); return; }
+    if (!confirm('Réserver ' + n + ' ticket' + (n > 1 ? 's' : '') + ' pour ' + euros(prixTickets(f, n)) + ' ?\nÀ régler au club house ou le jour de la fête.')) return;
+    b.disabled = true;
+    q(sb.rpc('tombola_reserver', { p_edition: f.edition, p_nom: nom, p_contact: $('tk-contact') ? $('tk-contact').value.trim() || null : null, p_nb: n, p_jeton: jeton })).then(function (r) {
+      sb.functions.invoke('fete-notifier', { body: { type: 'tombola', id: r.id } }).catch(function () { });
+      S.feteNb = 1; toast('Tickets réservés 🎟️'); re();
+    }).catch(function (e) { b.disabled = false; toast(erreurFete(e)); });
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tkx]'), function (b) {
+    b.onclick = function () {
+      if (!confirm('Annuler cette réservation ?')) return;
+      q(sb.rpc('tombola_annuler', { p_id: b.dataset.tkx, p_jeton: jeton })).then(function () { toast('Réservation annulée'); re(); }).catch(function () { toast('Action impossible'); });
+    };
+  });
+}
+
 // ---------- Routeur ----------
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
@@ -2697,6 +2919,7 @@ function render() {
   else if (p === 'fiche') { html = pageFiche(arg); actif = 'arena'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
+  else if (p === 'fete' || p === 'noel') { html = pageFete(p === 'noel' ? 'noel' : arg); actif = 'accueil'; }
   else if (p === 'inscriptions') { html = pageInscriptions(); actif = 'accueil'; }
   else if (p === 'actu') { html = pageActu(arg); actif = 'club'; }
   else if (p === 'profil') html = pageProfil();
