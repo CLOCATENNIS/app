@@ -13,9 +13,9 @@ var MODULES = [
   ['accueil', 'Tableau de bord', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['messages', 'Messagerie', ['direction', 'bureau', 'accueil']],
   ['actus', 'Actus', ['direction', 'bureau', 'accueil']],
-  ['evenements', 'Événements et séances', ['direction', 'bureau']],
+  ['evenements', 'CLOC\'ARENA organisation', ['direction', 'bureau']],
   ['inscriptions', 'Inscriptions', ['direction', 'bureau', 'accueil']],
-  ['fetes', 'Fêtes et tombola', ['direction', 'bureau', 'accueil']],
+  ['fetes', 'Événements', ['direction', 'bureau', 'accueil']],
   ['adherents', 'Adhérents', ['direction', 'bureau', 'accueil']],
   ['adoc', 'Mise à jour ADOC', ['direction', 'bureau']],
   ['groupes', 'Groupes', ['direction', 'bureau']],
@@ -38,7 +38,7 @@ var MODULES = [
 var RUBRIQUES = [
   ['', ['accueil']],
   ['Communication', ['messages', 'actus', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, actus, réseaux sociaux et petites annonces.'],
-  ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'Séances, stages et événements, inscriptions, fêtes et tombola, présence au club.'],
+  ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'CLOC\'ARENA, inscriptions, événements (fête de Noël, tombola, stages…), présence au club.'],
   ['Adhérents', ['adherents', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
@@ -47,8 +47,8 @@ var RUBRIQUES = [
 ];
 var DESC_MOD = {
   accueil: 'Ce qui demande ton attention aujourd\'hui.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
-  reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Créer et modifier séances, stages, tournois et événements.',
-  inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël et autres fêtes : qui vient, tickets de tombola, lots et tirage.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
+  reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Organiser les séances CLOC\'ARENA : dates, groupes, places.',
+  inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël, tombola, stages, animations et tournois : chaque catégorie a sa page.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Saisie des résultats, historique des matchs par jour et niveaux des joueurs.',
   double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
   cordage: 'Raquettes à corder, prêtes et à encaisser ; historique ; tarifs et cordages proposés.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.', reglages: 'Infos pratiques, horaires, textes du cordage, durée des annonces, terrains : tout ce que voient les familles.'
@@ -257,7 +257,8 @@ function vueAccueil(m) {
   }).catch(function () { $('dash-evts').innerHTML = '<div class="empty">Impossible de charger les événements.</div>'; });
   var liens = [];
   if (peut('actus')) liens.push('<a class="btn" href="#/actus/nouvelle">Publier une actu</a>');
-  if (peut('evenements')) liens.push('<a class="btn navy" href="#/evenements/nouveau">Créer un événement</a>');
+  if (peut('evenements')) liens.push('<a class="btn navy" href="#/evenements/nouveau">Créer une séance CLOC\'ARENA</a>');
+  if (peut('fetes')) liens.push('<a class="btn line" href="#/fetes">Événements</a>');
   if (peut('adherents')) liens.push('<a class="btn line" href="#/adherents">Chercher un adhérent</a>');
   $('dash-liens').innerHTML = '<div class="sect" style="margin-top:0">Raccourcis</div><div class="chips">' + liens.join('') + '</div>';
   presenceWidget($('presence'));
@@ -326,19 +327,22 @@ function vueActus(m, arg) {
 
 // ---------- Événements et séances ----------
 var EVF = { quand: 'avenir', type: '' };
-function vueEvenements(m, arg) {
-  m.innerHTML = entete('Événements et séances', 'Stages, séances CLOC\'ARENA, animations… ce qui apparaît dans l\'agenda des familles.', '<button class="btn" id="e-new">Nouvel événement</button>') +
+function vueEvenements(m, arg, O) {
+  O = O || { titre: 'CLOC\'ARENA organisation', sous: 'Les séances CLOC\'ARENA : dates, groupes, places et inscriptions. Elles apparaissent dans l\'agenda des familles.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance' };
+  var avant = O.retour ? '<a class="fil" href="' + O.retour + '">← Événements</a>' : '';
+  m.innerHTML = avant + entete(O.titre, O.sous, '<button class="btn" id="e-new">' + esc(O.btn || 'Nouvel événement') + '</button>') +
     '<div class="toolbar"><div class="chips">' + [['avenir', 'À venir'], ['passes', 'Passés']].map(function (x) { return '<button class="chip' + (EVF.quand === x[0] ? ' on' : '') + '" data-eq="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
-    '<select class="f" id="e-ty" style="width:auto"><option value="">Tous les types</option>' + Object.keys(TYPES_EVT).map(function (k) { return '<option value="' + k + '"' + (EVF.type === k ? ' selected' : '') + '>' + TYPES_EVT[k] + '</option>'; }).join('') + '</select></div><div id="e-l"><div class="skel"></div></div>';
-  all('[data-eq]').forEach(function (b) { b.onclick = function () { EVF.quand = b.dataset.eq; vueEvenements(m); }; });
-  $('e-ty').onchange = function () { EVF.type = this.value; charger(); };
+    (O.types.length < 2 ? '</div><div id="e-l"><div class="skel"></div></div>' : '<select class="f" id="e-ty" style="width:auto"><option value="">Tous les types</option>' + O.types.map(function (k) { return '<option value="' + k + '"' + (EVF.type === k ? ' selected' : '') + '>' + TYPES_EVT[k] + '</option>'; }).join('') + '</select></div><div id="e-l"><div class="skel"></div></div>');
+  all('[data-eq]').forEach(function (b) { b.onclick = function () { EVF.quand = b.dataset.eq; vueEvenements(m, arg, O); }; });
+  if ($('e-ty')) $('e-ty').onchange = function () { EVF.type = this.value; charger(); };
   $('e-new').onclick = function () { formEvt(null); };
   var EV = [];
   var charger = function () {
     var r = sb.from('evenements').select('*, evenement_groupes(groupe_id), inscriptions(count), participations(reponse), evenement_quotas(groupe_id, places)');
     var now = new Date().toISOString();
     r = EVF.quand === 'avenir' ? r.gte('debut', new Date(Date.now() - 864e5).toISOString()).order('debut') : r.lt('debut', now).order('debut', { ascending: false }).limit(100);
-    if (EVF.type) r = r.eq('type', EVF.type);
+    r = r.in('type', O.types);
+    if (EVF.type && O.types.indexOf(EVF.type) >= 0 && O.types.length > 1) r = r.eq('type', EVF.type);
     q(r).then(function (l) {
       EV = l;
       $('e-l').innerHTML = l.length ? '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Événement</th><th>Groupes</th><th>Inscrits</th><th>État</th><th></th></tr></thead><tbody>' + l.map(function (e) {
@@ -374,7 +378,7 @@ function vueEvenements(m, arg) {
     }).then(function () { toast('Copié au ' + fmtJ(new Date(row.debut))); charger(); }).catch(function () { toast('Copie impossible'); });
   };
   var formEvt = function (e) {
-    var nouveau = !e; e = e || { type: 'seance', statut: 'prevu', public: true };
+    var nouveau = !e; e = e || { type: O.def || 'seance', statut: 'prevu', public: true };
     var d = e.debut ? new Date(e.debut) : null, f = e.fin ? new Date(e.fin) : null, gsel = e.id ? groupesEvt(e) : [];
     var quotas = {};
     panneau(nouveau ? 'Nouvel événement' : 'Modifier l\'événement', '<div class="stack">' +
@@ -2201,17 +2205,26 @@ function vueRetours(m) {
 }
 
 // ---------- Fêtes du club (Noël…) : présences, tombola, lots et tirage ----------
-function vueFetes(m) {
-  var F = { onglet: A.feteOnglet || 'presences', ed: A.feteEd || null };
+function vueFetes(m, arg) {
+  // Catégories d'événements tirées de l'agenda (stages, tournois…) : leur propre page
+  if (arg && TYPES_EVT[arg] && arg !== 'seance') {
+    var NOMS = { stage: ['Stages', 'Stages de vacances et stages adultes : dates, groupes, places et inscriptions.', 'Nouveau stage'], tournoi: ['Tournois', 'Tournois et compétitions du club.', 'Nouveau tournoi'], animation: ['Animations', 'Animations ponctuelles du club.', 'Nouvelle animation'], reunion: ['Réunions', 'Réunions du club.', 'Nouvelle réunion'], autre: ['Réunions et autres', 'Réunions et tout ce qui ne rentre pas ailleurs.', 'Nouvel événement'] }[arg];
+    return vueEvenements(m, null, { titre: NOMS[0], sous: NOMS[1], btn: NOMS[2], types: arg === 'autre' ? ['reunion', 'autre'] : [arg], def: arg === 'autre' ? 'reunion' : arg, retour: '#/fetes' });
+  }
+  if (!arg) return hubEvenements(m);
+  var tombo = arg === 'tombola';
+  var F = { onglet: tombo ? (A.tomboOnglet || 'tombola') : (A.feteOnglet || 'presences'), ed: tombo ? A.feteEd : arg };
   var FT = [], fete = null;
   var GRP = { moins5: 'Moins de 5', plus5: '5 et plus' }, MODES_T = { especes: 'Espèces', cb: 'Carte', cheque: 'Chèque', virement: 'Virement' };
-  m.innerHTML = entete('Fêtes et tombola', 'Qui vient, les tickets de tombola, les lots et le tirage. Les familles répondent depuis l\'appli, avec ou sans compte.', '<a class="btn sm line" id="ft-voir" target="_blank" rel="noopener">Voir la page</a>') +
+  m.innerHTML = '<a class="fil" href="#/fetes">← Événements</a>' + entete(tombo ? 'Tombola' : 'Fête', tombo ? 'Tickets réservés et payés, lots et tirage au sort.' : 'Qui vient et réglages de la page vue par les familles (avec ou sans compte).', '<a class="btn sm line" id="ft-voir">Voir la page des familles</a>') +
     '<div class="chips" id="ft-ed" style="margin-bottom:8px"></div><div class="chips" id="ft-tabs" style="margin-bottom:14px"></div><div id="ft-c"><div class="skel"></div></div>';
   var onglets = function () {
-    $('ft-ed').innerHTML = FT.length > 1 ? FT.map(function (f) { return '<button class="chip' + (f.edition === fete.edition ? ' on' : '') + '" data-fte="' + esc(f.edition) + '">' + esc(f.titre) + ' ' + new Date(f.debut).getFullYear() + '</button>'; }).join('') : '';
-    $('ft-tabs').innerHTML = [['presences', 'Qui vient'], ['tombola', 'Tickets de tombola'], ['lots', 'Lots et tirage'], ['reglages', 'Réglages']].map(function (x) { return '<button class="chip' + (F.onglet === x[0] ? ' on' : '') + '" data-ftt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+    if (!tombo) { var h1 = m.querySelector('.head h1'); if (h1) h1.textContent = fete.titre + ' ' + new Date(fete.debut).getFullYear(); }
+    $('ft-ed').innerHTML = tombo && FT.length > 1 ? FT.map(function (f) { return '<button class="chip' + (f.edition === fete.edition ? ' on' : '') + '" data-fte="' + esc(f.edition) + '">' + esc(f.titre) + ' ' + new Date(f.debut).getFullYear() + '</button>'; }).join('') : '';
+    var T = tombo ? [['tombola', 'Tickets'], ['lots', 'Lots et tirage']] : [['presences', 'Qui vient'], ['reglages', 'Réglages de la page']];
+    $('ft-tabs').innerHTML = T.map(function (x) { return '<button class="chip' + (F.onglet === x[0] ? ' on' : '') + '" data-ftt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     all('[data-fte]').forEach(function (b) { b.onclick = function () { A.feteEd = F.ed = b.dataset.fte; fete = FT.filter(function (f) { return f.edition === F.ed; })[0]; onglets(); charger(); }; });
-    all('[data-ftt]').forEach(function (b) { b.onclick = function () { A.feteOnglet = F.onglet = b.dataset.ftt; onglets(); charger(); }; });
+    all('[data-ftt]').forEach(function (b) { b.onclick = function () { F.onglet = b.dataset.ftt; if (tombo) A.tomboOnglet = F.onglet; else A.feteOnglet = F.onglet; onglets(); charger(); }; });
     $('ft-voir').href = '../#/fete/' + encodeURIComponent(fete.edition);
   };
   var kpis = function (l) { return '<div class="kpis">' + l.map(function (k) { return '<div class="kpi"><b style="font-size:26px">' + k[0] + '</b><span class="mut small">' + k[1] + '</span></div>'; }).join('') + '</div>'; };
@@ -2340,12 +2353,43 @@ function vueFetes(m) {
   var charger = function () { C().innerHTML = '<div class="skel"></div>'; ({ presences: presences, tombola: tombola, lots: lots, reglages: reglages })[F.onglet](); };
   q(sb.from('fetes').select('*').order('debut', { ascending: false })).then(function (l) {
     FT = l || [];
-    if (!FT.length) { C().innerHTML = '<div class="card empty">Aucune fête créée.</div>'; return; }
-    fete = FT.filter(function (f) { return f.edition === F.ed; })[0] || FT[0];
+    fete = FT.filter(function (f) { return f.edition === F.ed; })[0] || (tombo ? FT[0] : null);
+    if (!fete) { C().innerHTML = '<div class="card empty">' + (tombo ? 'Aucune fête avec tombola.' : 'Cette fête est introuvable.') + '</div>'; return; }
     onglets(); charger();
-  }).catch(function () { C().innerHTML = '<div class="card empty">Impossible de charger les fêtes.</div>'; });
+  }).catch(function () { C().innerHTML = '<div class="card empty">Impossible de charger les données. Recharge la page.</div>'; });
 }
 
+// Page d'accueil des événements : une carte par catégorie, cliquable
+function hubEvenements(m) {
+  m.innerHTML = entete('Événements', 'Clique sur une catégorie pour la gérer. Les séances CLOC\'ARENA sont dans « CLOC\'ARENA organisation ».') + '<div id="hub" class="hub"><div class="skel"></div></div>';
+  var depuis = new Date(Date.now() - 864e5).toISOString();
+  Promise.all([
+    q(sb.from('fetes').select('*').order('debut', { ascending: false })).catch(function () { return []; }),
+    q(sb.from('fete_participations').select('edition, annule')).catch(function () { return []; }),
+    q(sb.from('tombola_commandes').select('edition, nb, statut')).catch(function () { return []; }),
+    q(sb.from('evenements').select('type').neq('type', 'seance').gte('debut', depuis)).catch(function () { return []; })
+  ]).then(function (r) {
+    var FT = r[0], P = r[1], T = r[2], E = r[3];
+    var carte = function (href, emoji, titre, desc, info, accent) {
+      return '<a class="card hubc" href="' + href + '"' + (accent ? ' style="border-color:' + accent + '"' : '') + '><span class="hube">' + emoji + '</span><div style="min-width:0;flex:1"><b style="font-size:17px">' + esc(titre) + '</b><div class="mut small">' + desc + '</div>' + (info ? '<div class="small" style="margin-top:6px;font-weight:600;color:var(--ac)">' + info + '</div>' : '') + '</div><span class="mut" style="font-size:22px">›</span></a>';
+    };
+    var h = '';
+    FT.forEach(function (f) {
+      var n = P.filter(function (x) { return x.edition === f.edition && !x.annule; }).length, d = new Date(f.debut);
+      h += carte('#/fetes/' + encodeURIComponent(f.edition), '🎄', f.titre + ' ' + d.getFullYear(), esc(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + ' · qui vient, page des familles, flyer', n + ' famille' + (n > 1 ? 's' : '') + ' confirmée' + (n > 1 ? 's' : ''), '#b8862b');
+    });
+    if (FT.length) {
+      var payes = T.filter(function (x) { return x.statut === 'paye'; }).reduce(function (s, x) { return s + x.nb; }, 0), res = T.filter(function (x) { return x.statut === 'reserve'; }).length;
+      h += carte('#/fetes/tombola', '🎟️', 'Tombola', 'Tickets réservés et payés, vente sur place, lots et tirage', payes + ' ticket' + (payes > 1 ? 's' : '') + ' payé' + (payes > 1 ? 's' : '') + (res ? ' · ' + res + ' réservation' + (res > 1 ? 's' : '') + ' à encaisser' : ''));
+    }
+    var nb = function (t) { var n = E.filter(function (x) { return x.type === t; }).length; return n ? n + ' à venir' : 'Rien de prévu'; };
+    h += carte('#/fetes/stage', '🏕️', 'Stages', 'Stages de vacances (dont stage d\'hiver multisport) et stages adultes', nb('stage'));
+    h += carte('#/fetes/animation', '🎉', 'Animations', 'Miss Cup, fête du club, animations ponctuelles', nb('animation'));
+    h += carte('#/fetes/tournoi', '🏆', 'Tournois', 'Tournois et compétitions organisés au club', nb('tournoi'));
+    h += carte('#/fetes/autre', '📌', 'Réunions et autres', 'Réunions et tout le reste', E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length ? E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length + ' à venir' : 'Rien de prévu');
+    $('hub').innerHTML = h;
+  });
+}
 var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
