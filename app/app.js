@@ -2751,7 +2751,7 @@ function chargerFete(f, passe) {
     var R = r[0] || {}, lots = r[1] || [], P = R.participation, T = R.tickets || [];
     if (P && P.jeton && P.jeton !== jeton) localStorageSet('cloca-fete-' + f.edition, P.jeton); // compte connecté sur un autre appareil
     if (P && !P.annule) localStorageSet('cloca-fete-ok-' + f.edition, '1'); else localStorageSet('cloca-fete-ok-' + f.edition, '');
-    if (R.familles && $('fete-nb')) $('fete-nb').textContent = '🎄 ' + R.familles + ' famille' + (R.familles > 1 ? 's ont' : ' a') + ' déjà confirmé sa venue';
+    if (R.familles && $('fete-nb')) $('fete-nb').textContent = '🎄 ' + R.familles + ' famille' + (R.familles > 1 ? 's ont déjà confirmé leur venue' : ' a déjà confirmé sa venue');
     var h = '';
     if (!passe) h += blocPresence(f, P);
     h += blocInviter(f);
@@ -2773,7 +2773,7 @@ function blocPresence(f, P) {
   var F = S.feteForm = S.feteForm || (P ? { nom: P.nom, contact: P.contact || '', groupe: P.groupe, invites: P.avec_invites, photos: P.photos, email: P.email_photos || '' } :
     { nom: nomFamilleDefaut(), contact: '', groupe: '', invites: false, photos: false, email: S.user ? S.user.email : '' });
   return '<section class="card stack" style="gap:14px" id="fete-form"><div class="stack" style="gap:4px"><b style="font-size:18px">Tu viens ?</b>' +
-    '<span class="mut small">Ça nous aide à prévoir le goûter et les cadeaux. Pas besoin du nombre exact, une idée suffit.</span></div>' +
+    '<span class="mut small">Ça nous aide à prévoir les jeux, l\'animation et le goûter. Pas besoin du nombre exact, une idée suffit.</span></div>' +
     '<label class="f">Nom de la famille<input class="f" id="ff-nom" maxlength="80" placeholder="Ex. Famille Martin" value="' + esc(F.nom) + '" autocomplete="family-name"></label>' +
     '<div class="stack" style="gap:8px"><span style="font-size:13px;font-weight:600">Vous serez combien, à peu près ?</span>' +
     '<button class="pick' + (F.groupe === 'moins5' ? ' on' : '') + '" data-fg="moins5">👨‍👩‍👧 Moins de 5 personnes</button>' +
