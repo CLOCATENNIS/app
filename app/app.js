@@ -324,7 +324,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '03/11 17h15';
+var VERSION_APPLI = '03/11 17h15b';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -2788,10 +2788,10 @@ function blocPresence(f, P) {
 function blocInviter(f) {
   var img = feteImg(f.flyer_url || f.affiche_url);
   return '<section class="card stack" style="gap:10px"><b style="font-size:18px">Invite tes amis 💌</b>' +
-    '<span class="mut small">Envoie l\'invitation à tes copains, ta famille, tes voisins : ils n\'ont pas besoin d\'être au club ni d\'avoir l\'appli.</span>' +
+    '<span class="mut small">Envoie l\'invitation à tes copains, ta famille, tes voisins : ils reçoivent l\'image avec toutes les infos, sans passer par l\'appli.</span>' +
     '<button class="btn navy" id="fete-share">' + ic('people', 20, '#fff') + 'Envoyer l\'invitation</button>' +
     '<div class="grid2">' + (img ? '<a class="btn ghost" href="' + esc(img) + '" download="Invitation-' + esc(f.edition) + '.jpg">' + ic('dl', 18) + 'Le flyer</a>' : '') +
-    '<button class="btn ghost" id="fete-copy">Copier le lien</button></div></section>';
+    '<button class="btn ghost" id="fete-copy">Copier le message</button></div><span class="mut xs">Tes invités n\'ont rien à faire : coche simplement « On vient avec des invités » dans ta réponse.</span></section>';
 }
 
 function blocTombola(f, lots, T, P, passe) {
@@ -2867,7 +2867,7 @@ function lierFete(f, P) {
   };
   // Invitation : partage natif (avec l'image si possible), sinon WhatsApp
   var lien = feteLien(f), d = new Date(f.debut);
-  var texte = '🎄 ' + f.titre + ' du club CLOCA Tennis ! ' + fmtJour(d) + ', ' + fmtH(d) + (f.fin ? '-' + fmtH(new Date(f.fin)) : '') + ' à Achères. Gratuit, pour les enfants et leurs familles. Viens avec nous ! Toutes les infos : ' + lien;
+  var texte = '🎄 ' + f.titre + ' du club CLOCA Tennis ! ' + fmtJour(d) + ', ' + fmtH(d) + (f.fin ? '-' + fmtH(new Date(f.fin)) : '') + ' au club CLOCA Tennis à Achères. Gratuit (hors goûter), pour les enfants et leurs familles. Viens avec nous ! 🎾';
   if ($('fete-share')) $('fete-share').onclick = function () {
     var img = feteImg(f.flyer_url || f.affiche_url);
     var simple = function () {
@@ -2882,7 +2882,7 @@ function lierFete(f, P) {
     }).catch(function (e) { if (!e || e.name !== 'AbortError') simple(); });
   };
   if ($('fete-copy')) $('fete-copy').onclick = function () {
-    var ok = function () { toast('Lien copié : colle-le dans un message'); };
+    var ok = function () { toast('Message copié : colle-le dans WhatsApp ou un SMS'); };
     if (navigator.clipboard) navigator.clipboard.writeText(texte).then(ok).catch(function () { prompt('Copie ce message :', texte); });
     else prompt('Copie ce message :', texte);
   };
