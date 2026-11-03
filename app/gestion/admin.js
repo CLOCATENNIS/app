@@ -340,7 +340,9 @@ function vueEvenements(m, arg, O) {
   var charger = function () {
     var r = sb.from('evenements').select('*, evenement_groupes(groupe_id), inscriptions(count), participations(reponse), evenement_quotas(groupe_id, places)');
     var now = new Date().toISOString();
-    r = EVF.quand === 'avenir' ? r.gte('debut', new Date(Date.now() - 864e5).toISOString()).order('debut') : r.lt('debut', now).order('debut', { ascending: false }).limit(100);
+    // Un événement passe dans « Passés » le lendemain de sa date : jamais dans les deux listes
+    var minuit = new Date(); minuit.setHours(0, 0, 0, 0);
+    r = EVF.quand === 'avenir' ? r.gte('debut', minuit.toISOString()).order('debut') : r.lt('debut', minuit.toISOString()).order('debut', { ascending: false }).limit(100);
     r = r.in('type', O.types);
     if (EVF.type && O.types.indexOf(EVF.type) >= 0 && O.types.length > 1) r = r.eq('type', EVF.type);
     q(r).then(function (l) {

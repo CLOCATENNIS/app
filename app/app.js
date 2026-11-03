@@ -324,7 +324,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '03/11 17h00';
+var VERSION_APPLI = '03/11 17h15';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -386,8 +386,8 @@ function pageAccueil() {
   P.partners = '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div>';
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
   if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent ? '<div class="dk-top">' + P.urgent + P.msg + '</div>' : '') +
-    '<div class="dk-col">' + P.fete + P.rdv + P.login + P.install + P.actu + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
-  return top + P.presence + P.msg + P.urgent + P.fete + P.rdv + P.tiles + P.login + P.install + P.actu + P.reseaux + P.partners + '</main>';
+    '<div class="dk-col">' + P.rdv + P.fete + P.actu + P.login + P.install + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
+  return top + P.presence + P.msg + P.urgent + P.rdv + P.fete + P.actu + P.tiles + P.login + P.install + P.reseaux + P.partners + '</main>';
 }
 
 function lierAccueilAide() {
