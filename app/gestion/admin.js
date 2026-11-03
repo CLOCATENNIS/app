@@ -1015,15 +1015,15 @@ function annonceForm(box, m) {
     if (v && !t('titre')) return toast('Indique ce qui est vendu');
     if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
     if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
-    var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact'), statut: 'publiee' }
-      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact'), statut: 'publiee' };
+    var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
     var b = this; b.disabled = true;
     var fichiers = v && $('ag-ph') ? Array.prototype.slice.call($('ag-ph').files || []).slice(0, 6) : [], chemins = [], base = Date.now();
     fichiers.reduce(function (pr, f, i) {
       return pr.then(function () { var ch = A.user.id + '/' + base + '-' + i + '.jpg'; return sb.storage.from('annonces').upload(ch, f, { contentType: f.type || 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; chemins.push(ch); }); });
     }, Promise.resolve()).then(function () { if (chemins.length) { row.images = chemins; row.image_path = chemins[0]; } return q(sb.from('annonces').insert(row)); }).then(function () {
       toast('Annonce publiée'); ANG.form = null; ANG.tab = 'valider'; vueAnnonces(m);
-    }).catch(function () { toast('Publication impossible'); b.disabled = false; });
+    }).catch(function (e) { console.error(e); toast('Publication impossible' + (e && e.message ? ' : ' + e.message : '')); b.disabled = false; });
   };
 }
 

@@ -937,7 +937,7 @@ function formAnnonce(box) {
     }, Promise.resolve()).then(function () { if (chemins.length) { row.images = chemins; row.image_path = chemins[0]; } });
     photo.then(function () { return q(sb.from('annonces').insert(row)); }).then(function () {
       AN.form = null; AN.photos = []; AN.type = row.type;
-      toast(S.isStaff ? 'Annonce enregistrée : valide-la dans l\'espace gestion' : 'Merci ! Ton annonce sera visible après validation par le club.');
+      toast(S.isStaff ? 'Annonce publiée' : 'Merci ! Ton annonce sera visible après validation par le club.');
       clubAnnonces(box);
     }).catch(function () { toast('Envoi impossible, réessaie'); $('an-go').disabled = false; });
   };
