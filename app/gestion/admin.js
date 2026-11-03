@@ -68,7 +68,7 @@ function nomMod(id) { var m = MODULES.filter(function (x) { return x[0] === id; 
 var NOM_ROLE = { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', cordeur: 'Cordeur', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable d\'un groupe' };
 var TYPES_EVT = { seance: 'Séance', stage: 'Stage', tournoi: 'Tournoi', animation: 'Animation', reunion: 'Réunion', autre: 'Autre' };
 var TYPES_GRP = { niveau: 'Niveaux CLOC\'ARENA', creneau: 'Créneaux de cours', activite: 'Activités', cours: 'Formules ADOC', profil: 'Profils', evenement: 'Événements', autre: 'Autres' };
-var A = { user: null, roles: [], mods: [], groupes: [], pers: null, view: 'accueil' };
+var A = { durees: [7, 14, 30, 60], user: null, roles: [], mods: [], groupes: [], pers: null, view: 'accueil' };
 
 // ---------- Outils ----------
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -967,17 +967,17 @@ function vueAnnonces(m) {
   if (ANG.tab === 'creer') return annonceForm($('an-l'), m);
   var hist = ANG.tab === 'historique';
   var charger = function () {
-    var req = sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').order('created_at', { ascending: false });
-    req = hist ? req.or('statut.in.(refusee,close),expire_le.lt.' + isoJour(new Date())).limit(300) : req.in('statut', ['attente', 'publiee']).gte('expire_le', isoJour(new Date()));
+    var req = sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le, duree_jours').order('created_at', { ascending: false });
+    req = hist ? req.or('statut.in.(refusee,close),expire_le.lt.' + isoJour(new Date())).limit(300) : req.in('statut', ['attente', 'publiee']).or('expire_le.is.null,expire_le.gte.' + isoJour(new Date()));
     q(req).then(function (l) {
       var bloc = function (titre, liste, mode) {
         return '<div class="sect">' + titre + ' (' + liste.length + ')</div>' + (liste.length ? '<div class="tw"><table class="t"><tbody>' + liste.map(function (a) {
           var etat = a.statut === 'refusee' ? 'Refusée' : a.statut === 'close' ? 'Retirée' : a.statut === 'publiee' ? 'Expirée le ' + fmtJour(new Date(a.expire_le + 'T12:00:00')) : 'Non validée, expirée';
-          return '<tr><td style="width:46%"><b>' + esc(a.type === 'vente' ? a.titre : a.prenom + ' · ' + a.niveau) + '</b> ' + (a.prix ? '<span class="badge b-ac">' + esc(a.prix) + '</span>' : '') + '<div class="mut xs">' + esc(a.type === 'vente' ? 'Vente' : 'Partenaire : ' + a.dispo) + ' · n°' + a.num + ' · ' + esc(fmtJour(new Date(a.created_at))) + '</div>' + (a.description ? '<div class="small">' + esc(a.description) + '</div>' : '') +
+          return '<tr><td style="width:46%"><b>' + esc(a.type === 'vente' ? a.titre : a.prenom + ' · ' + a.niveau) + '</b> ' + (a.prix ? '<span class="badge b-ac">' + esc(a.prix) + '</span>' : '') + '<div class="mut xs">' + esc(a.type === 'vente' ? 'Vente' : 'Partenaire : ' + a.dispo + (a.duree_jours ? ' · ' + libDuree(a.duree_jours) : '')) + ' · n°' + a.num + ' · ' + esc(fmtJour(new Date(a.created_at))) + '</div>' + (a.description ? '<div class="small">' + esc(a.description) + '</div>' : '') +
             ((a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []).map(function (ph, i, ll) { return '<a class="xs" target="_blank" rel="noopener" href="' + SUPA_URL + '/storage/v1/object/public/annonces/' + esc(ph) + '" style="margin-right:8px">' + (ll.length > 1 ? 'Photo ' + (i + 1) : 'Voir la photo') + '</a>'; }).join('')) + '</td>' +
             '<td class="small" data-anc="' + a.id + '"><button class="btn sm ghost" data-anv="' + a.id + '">Voir le contact</button></td><td class="act">' +
             (mode === 'attente' ? '<button class="btn sm ko" data-ans="' + a.id + '|refusee">Refuser</button> <button class="btn sm ok" data-ans="' + a.id + '|publiee">Publier</button>'
-              : mode === 'ligne' ? '<span class="mut xs">jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) + '</span> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>'
+              : mode === 'ligne' ? '<span class="mut xs">' + (a.expire_le ? 'jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) : 'sans date de fin') + '</span> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>'
               : '<span class="badge">' + esc(etat) + '</span> <button class="btn sm line" data-ans="' + a.id + '|publiee">Remettre en ligne</button>') + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="card empty">' + (mode === 'attente' ? 'Rien à valider.' : mode === 'ligne' ? 'Aucune annonce en ligne.' : 'Aucune annonce terminée.') + '</div>');
       };
@@ -1004,9 +1004,9 @@ function annonceForm(box, m) {
     (v ? '<div class="row2">' + champ('titre', 'Quoi ?', 'maxlength="80" placeholder="Ex. Raquette Babolat Pure Drive 26"') + champ('prix', 'Prix', 'maxlength="30" placeholder="Ex. 40 €"') + '</div>' + champ('description', 'Description (facultatif)', 'maxlength="600"', true) +
       '<label class="l">Photos (facultatif, 6 max)<input class="f" type="file" accept="image/*" multiple id="ag-ph"></label>'
       : '<div class="row2">' + champ('prenom', 'Prénom', 'maxlength="40"') + '<label class="l">Niveau<select class="f" data-agf="niveau"><option value="">Choisir…</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune', 'Adulte / autre'].map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label></div>' +
-        champ('dispo', 'Disponibilités', 'maxlength="140"') + champ('description', 'Message (facultatif)', 'maxlength="600"', true)) +
+        champ('dispo', 'Disponibilités', 'maxlength="140"') + '<label class="l">Durée en ligne<select class="f" data-agf="duree">' + A.durees.map(function (n) { if (!F.duree) F.duree = A.durees[Math.min(2, A.durees.length - 1)]; return '<option value="' + n + '"' + (+F.duree === n ? ' selected' : '') + '>' + libDuree(n) + '</option>'; }).join('') + '</select></label>' + champ('description', 'Message (facultatif)', 'maxlength="600"', true)) +
     champ('contact', 'Téléphone ou WhatsApp du vendeur / joueur (jamais affiché)', 'type="tel" maxlength="40" placeholder="06 12 34 56 78"') +
-    '<span class="mut xs">Créée par le club, l\'annonce est publiée tout de suite et reste en ligne selon la durée fixée dans Réglages de l\'appli.</span>' +
+    '<span class="mut xs">Créée par le club, l\'annonce est publiée tout de suite et Une vente reste en ligne sans limite (jusqu\'à ce qu\'on la retire) ; une recherche de partenaire, selon la durée choisie.</span>' +
     '<div class="chips" style="justify-content:flex-end"><button class="btn" id="ag-go">Publier l\'annonce</button></div></div>';
   all('[data-agt]', box).forEach(function (b) { b.onclick = function () { F.type = b.dataset.agt; annonceForm(box, m); }; });
   all('[data-agf]', box).forEach(function (i) { i.oninput = i.onchange = function () { F[i.dataset.agf] = i.value; }; });
@@ -1016,7 +1016,7 @@ function annonceForm(box, m) {
     if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
     if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
     var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
-      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact'), duree_jours: +F.duree || A.durees.slice(-1)[0] };
     var b = this; b.disabled = true;
     var fichiers = v && $('ag-ph') ? Array.prototype.slice.call($('ag-ph').files || []).slice(0, 6) : [], chemins = [], base = Date.now();
     fichiers.reduce(function (pr, f, i) {
@@ -1287,7 +1287,7 @@ var REGLAGES = [
     ['cordage_dispo_msg', 'Message sous « J\'en ai besoin pour »', 'textarea', 'Cette date est indicative : le cordage se fait selon la disponibilité du cordeur. Nous ne pouvons pas garantir qu\'elle sera prête à temps.']
   ]],
   ['Petites annonces', [
-    ['annonces_duree', 'Durée de publication (jours)', 'number', 60]
+    ['annonces_durees_partenaire', 'Recherche de partenaire : durées proposées, en jours, séparées par des virgules (les ventes n\'ont pas de date de fin)', 'list', [7, 14, 30, 60]]
   ]],
   ['Double interne', [
     ['terrains_double', 'Terrains proposés (séparés par des virgules)', 'list', ['Couvert 1', 'Couvert 2', 'Terre 3', 'Terre 4', 'Quick 5', 'Quick 6', 'Quick 7']]
@@ -1323,7 +1323,7 @@ function vueReglages(m) {
           var v;
           if (r[2] === 'horaires') { v = {}; [1, 2, 3, 4, 5, 6, 7].forEach(function (j) { var x = horLire(document.querySelector('[data-rgh="' + r[0] + '|' + j + '"]').value); if (x === null) err = 'Horaire illisible le ' + JOURS_R[j].toLowerCase() + ' (ex. 09:30-12:00)'; else if (x.length) v[j] = x; }); }
           else if (r[2] === 'number') { v = parseInt($('rg-' + r[0]).value, 10); if (!(v > 0)) err = 'Nombre invalide : ' + r[1]; }
-          else if (r[2] === 'list') { v = $('rg-' + r[0]).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean); if (!v.length) err = 'Liste vide : ' + r[1]; }
+          else if (r[2] === 'list') { v = $('rg-' + r[0]).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean); if (!v.length) err = 'Liste vide : ' + r[1]; if (typeof r[3][0] === 'number') { v = v.map(Number); if (v.some(function (n) { return !(n > 0 && n <= 365 && n % 1 === 0); })) err = 'Durées : nombres de jours entre 1 et 365'; v.sort(function (a, b) { return a - b; }); } }
           else { v = $('rg-' + r[0]).value.trim(); if (!v) err = 'Champ vide : ' + r[1]; if (r[2] === 'tel' && v && !telWa(v)) err = 'Numéro invalide : ' + r[1]; }
           rows.push({ cle: r[0], valeur: v, maj_le: new Date().toISOString() });
         });
@@ -1364,7 +1364,8 @@ var HORAIRES = {
   clubhouse: { 3: [['09:30', '12:00'], ['14:00', '16:30']], 6: [['09:30', '12:00'], ['14:00', '16:30']] },
   coach: { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] }
 };
-function appliquerReglages(V) { if (V.horaires_clubhouse) HORAIRES.clubhouse = V.horaires_clubhouse; if (V.horaires_coach) HORAIRES.coach = V.horaires_coach; if (V.wa_club && telWa(V.wa_club)) WA_CLUB = telWa(V.wa_club); }
+function libDuree(n) { return n % 30 === 0 ? (n / 30) + ' mois' : n % 7 === 0 ? (n / 7) + ' semaine' + (n > 7 ? 's' : '') : n + ' jour' + (n > 1 ? 's' : ''); }
+function appliquerReglages(V) { A.durees = Array.isArray(V.annonces_durees_partenaire) && V.annonces_durees_partenaire.length ? V.annonces_durees_partenaire.map(Number) : [7, 14, 30, 60]; if (V.horaires_clubhouse) HORAIRES.clubhouse = V.horaires_clubhouse; if (V.horaires_coach) HORAIRES.coach = V.horaires_coach; if (V.wa_club && telWa(V.wa_club)) WA_CLUB = telWa(V.wa_club); }
 var ETATS = { ouvert: ['#1f8a4c', 'Club house ouvert'], coach: ['#d9822b', 'Un coach est au club'], ferme: ['#c62f2f', 'Club house fermé'] };
 function aHeure(j, hm) { var x = new Date(j), t = hm.split(':'); x.setHours(+t[0], +t[1], 0, 0); return x; }
 var PAUSES_P = null;

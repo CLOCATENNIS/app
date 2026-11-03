@@ -818,7 +818,7 @@ function carteAnnonce(a, opts) {
       '<span class="mut small">' + esc(a.dispo) + '</span>' + (a.description ? '<span class="small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
   }
   h += '<span class="mut xs">Annonce n°' + a.num + ' · ' + esc(fmtCourt(new Date(a.created_at))) + '</span>';
-  if (opts.statut) h += '<span><span class="badge" style="background:' + (a.statut === 'attente' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (a.statut === 'attente' ? 'var(--tx)' : '#fff') + '">' + (a.statut === 'attente' ? 'En attente de validation' : 'Publiée jusqu\'au ' + esc(fmtCourt(new Date(a.expire_le + 'T12:00:00')))) + '</span></span>';
+  if (opts.statut) h += '<span><span class="badge" style="background:' + (a.statut === 'attente' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (a.statut === 'attente' ? 'var(--tx)' : '#fff') + '">' + (a.statut === 'attente' ? 'En attente de validation' : (a.expire_le ? 'Publiée jusqu\'au ' + esc(fmtCourt(new Date(a.expire_le + 'T12:00:00'))) : 'Publiée')) + '</span></span>';
   if (opts.contact && !opts.staff) h += '<a class="btn" target="_blank" rel="noopener" href="' + esc(wa(a.type === 'vente' ? 'Bonjour, je suis intéressé(e) par l\'annonce n°' + a.num + ' : ' + a.titre + '. Pouvez-vous me mettre en relation ?' : 'Bonjour, je suis intéressé(e) par la demande de partenaire n°' + a.num + ' (' + a.prenom + ', ' + a.niveau + '). Pouvez-vous nous mettre en relation ?')) + '">Me mettre en relation</a>';
   if (opts.staff) h += '<div class="stack" style="gap:8px" data-ancontact="' + a.id + '"><button class="btn ghost" data-anvoir="' + a.id + '">Voir le numéro de l\'auteur</button></div>' +
     (a.statut === 'attente' ? '<div class="grid2"><button class="btn line" data-anstat="' + a.id + '|refusee">Refuser</button><button class="btn" data-anstat="' + a.id + '|publiee">Publier</button></div>' : '<button class="btn line" data-anstat="' + a.id + '|close">Retirer l\'annonce</button>');
@@ -840,7 +840,7 @@ function clubAnnonces(box) {
     h += pub.length ? pub.map(function (a) { return carteAnnonce(a, { contact: a.cree_par !== moi, staff: staff && a.cree_par !== moi }); }).join('')
       : '<section class="card empty">' + (AN.type === 'vente' ? 'Aucun article à vendre pour le moment.' : 'Aucune demande pour le moment. Sois le premier à en déposer une !') + '</section>';
     h += '<button class="btn" id="an-new">' + (AN.type === 'vente' ? 'Vendre du matériel' : 'Déposer une demande de partenaire') + '</button>' +
-      '<p class="mut xs" style="text-align:center">Les numéros ne sont jamais affichés : le club fait la mise en relation. Les annonces restent en ligne ' + (reg('annonces_duree') || 60) + ' jours.</p>';
+      '<p class="mut xs" style="text-align:center">Les numéros ne sont jamais affichés : le club fait la mise en relation. Les ventes restent en ligne jusqu\'à ce que tu les retires ; pour une recherche de partenaire, tu choisis la durée.</p>';
     box.innerHTML = h;
     Array.prototype.forEach.call(box.querySelectorAll('[data-antype]'), function (b) { b.onclick = function () { AN.type = b.dataset.antype; clubAnnonces(box); }; });
     $('an-new').onclick = function () { if (!S.user) return go('#/profil'); AN.form = AN.type; AN.f = {}; clubAnnonces(box); };
@@ -891,6 +891,13 @@ function reduirePhoto(fichier) {
     img.src = url;
   });
 }
+// Durées proposées pour une recherche de partenaire (réglables dans la gestion)
+function dureesPartenaire() { var l = reg('annonces_durees_partenaire'); l = Array.isArray(l) ? l.map(Number).filter(function (n) { return n > 0; }) : []; return l.length ? l : [7, 14, 30, 60]; }
+function libDuree(n) { return n % 30 === 0 ? (n / 30) + ' mois' : n % 7 === 0 ? (n / 7) + ' semaine' + (n > 7 ? 's' : '') : n + ' jour' + (n > 1 ? 's' : ''); }
+function choixDuree(F) {
+  var l = dureesPartenaire(); if (!F.duree || l.indexOf(+F.duree) < 0) F.duree = l[Math.min(2, l.length - 1)];
+  return '<label class="f">Durée en ligne<select class="f" data-anf="duree">' + l.map(function (n) { return '<option value="' + n + '"' + (+F.duree === n ? ' selected' : '') + '>' + libDuree(n) + '</option>'; }).join('') + '</select></label>';
+}
 function formAnnonce(box) {
   var v = AN.form === 'vente', F = AN.f;
   var champ = function (k, label, attrs, ta) { return '<label class="f">' + label + (ta ? '<textarea class="f" data-anf="' + k + '" ' + attrs + '>' + esc(F[k] || '') + '</textarea>' : '<input class="f" data-anf="' + k + '" ' + attrs + ' value="' + esc(F[k] || '') + '">') + '</label>'; };
@@ -901,6 +908,7 @@ function formAnnonce(box) {
       : champ('prenom', 'Prénom', 'maxlength="40" autocomplete="given-name"') +
       '<label class="f">Niveau<select class="f" data-anf="niveau"><option value="">Choisir…</option>' + NIVEAUX.concat(['Adulte / autre']).map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
       champ('dispo', 'Mes disponibilités', 'maxlength="140" placeholder="Ex. mercredi après-midi, samedi matin"') +
+      choixDuree(F) +
       champ('description', 'Message (facultatif)', 'maxlength="600" placeholder="Ex. je cherche quelqu\'un pour m\'entraîner"', true)) +
     champ('contact', 'Téléphone ou WhatsApp <span class="mut">(jamais affiché)</span>', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="06 12 34 56 78"') +
     '<label class="check"><input type="checkbox" id="an-ok"><span>J\'accepte que mon annonce soit publiée dans l\'appli après validation par le club. Mon numéro n\'est jamais publié : le club fait la mise en relation. Pour un mineur, le numéro est celui d\'un parent.</span></label>' +
@@ -926,7 +934,7 @@ function formAnnonce(box) {
     if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
     if (!$('an-ok').checked) return toast('Coche la case d\'accord');
     var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
-      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact'), duree_jours: +F.duree || dureesPartenaire().slice(-1)[0] };
     $('an-go').disabled = true;
     var chemins = [], base = Date.now();
     var photo = (v ? AN.photos : []).reduce(function (pr, f, i) {
