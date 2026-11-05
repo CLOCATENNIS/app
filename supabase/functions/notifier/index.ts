@@ -15,10 +15,21 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ erreur: "méthode" }, 405);
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-    const jeton = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    const { data: u } = await admin.auth.getUser(jeton);
-    if (!u?.user) return json({ erreur: "non connecté" }, 401);
     const b = await req.json();
+    // Message programmé : appelé par la base (tâche automatique) avec le secret partagé, à la place d'un utilisateur connecté
+    const secretCron = req.headers.get("x-cron-secret");
+    let auteurId: string | null = null;
+    if (secretCron) {
+      const attendu = (await admin.rpc("reglage_prive", { c: "cron_secret" })).data as string;
+      if (!attendu || secretCron !== attendu || b.mode !== "programme") return json({ erreur: "non autorisé" }, 401);
+      const { data: m0 } = await admin.from("messages").select("auteur").eq("id", b.message_id).maybeSingle();
+      if (!m0) return json({ erreur: "message introuvable" }, 404);
+      auteurId = m0.auteur as string;
+      b.mode = "message";
+    }
+    const jeton = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const u = auteurId ? { user: { id: auteurId } } : (await admin.auth.getUser(jeton)).data;
+    if (!u?.user) return json({ erreur: "non connecté" }, 401);
     const direction = async () => ((await admin.from("responsabilites").select("user_id").eq("role", "direction").is("groupe_id", null)).data || []).map((r) => r.user_id as string);
     let titre = String(b.titre || "CLOCA Tennis").slice(0, 80);
     let texte = String(b.texte || "").slice(0, 200);
