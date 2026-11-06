@@ -343,7 +343,8 @@ function pageAccueil() {
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
-  var top = h, P = { presence: '<div id="presence"></div>', msg: '', disc: carteDiscussionsAccueil(), qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
+  var tDisc = tuileDiscussions();
+  var top = h, P = { presence: '<div class="grid2 top2"><div id="presence"' + (tDisc ? '' : ' style="grid-column:1/-1"') + '></div>' + tDisc + '</div><div id="presence-det"></div>', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -2203,11 +2204,20 @@ function remplirPresence() {
         : '<button class="btn" id="pres-ouvrir" style="margin-top:4px;background:#1f8a4c">J\'ouvre le club house' + (ch ? ' jusqu\'à ' + fmtH(ch.fin) : '') + '</button>';
       h += '<button class="btn ghost" id="pres-edit">Autre mise à jour</button>';
     }
-    box.innerHTML = h + '</section>';
+    // Accueil : une tuile carrée (état + heure) ; un appui affiche le détail et, pour l'équipe, les boutons
+    var det = $('presence-det');
+    if (det) {
+      var court = { ouvert: 'Ouvert', coach: 'Coach au club', ferme: 'Fermé' }[A.etat];
+      var sous = A.pause ? esc(A.pause.libelle) : A.fin ? 'jusqu\'à ' + fmtH(A.fin) : A.etat === 'ferme' && A.prochain ? 'Ouvre ' + esc(quandTexte(A.prochain)) : '';
+      box.innerHTML = '<button class="tile tile-top" id="pres-tile" aria-expanded="' + (S.presDet ? 'true' : 'false') + '"><span style="display:flex;align-items:center;gap:8px"><span class="dot" style="width:12px;height:12px;flex:none;background:' + E.c + ';box-shadow:0 0 0 4px ' + E.c + '33"></span><span class="xs mut" style="text-transform:uppercase;letter-spacing:.6px;font-weight:600">Club house</span></span>' +
+        '<b style="font-size:19px;color:' + E.c + '">' + court + '</b><span class="mut small">' + (sous || (estEquipe() ? 'Appuie pour mettre à jour' : 'Appuie pour le détail')) + '</span></button>';
+      det.innerHTML = S.presDet ? h + '</section>' : '';
+      $('pres-tile').onclick = function () { S.presDet = !S.presDet; remplirPresence(); };
+    } else box.innerHTML = h + '</section>';
     var maj = function (row, msg) { q(sb.from('club_presence').update(row).eq('id', 1)).then(function () { toast(msg); return chargerPresence(true); }).then(remplirPresence).catch(function () { toast('Mise à jour impossible'); }); };
     if ($('pres-ouvrir')) $('pres-ouvrir').onclick = function () { if (!ch) finCh.setMinutes(Math.ceil(finCh.getMinutes() / 15) * 15, 0, 0); maj({ etat: 'ouvert', jusqua: finCh.toISOString(), message: null }, 'Club house ouvert'); };
     if ($('pres-fermer')) $('pres-fermer').onclick = function () { maj({ etat: 'ferme', jusqua: null, message: null }, 'Club house fermé'); };
-    if ($('pres-edit')) $('pres-edit').onclick = function () { editerPresence(box, p, A.etat); };
+    if ($('pres-edit')) $('pres-edit').onclick = function () { editerPresence($('presence-det') || box, p, A.etat); };
   }).catch(function () { box.innerHTML = ''; });
 }
 function editerPresence(box, p, e) {
@@ -3019,6 +3029,14 @@ function discQuand(d) {
 }
 function discTexte(t) {
   return esc(t).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">$1</a>');
+}
+function tuileDiscussions() {
+  var l = S.discs || [];
+  if (!l.length) return '';
+  var n = discNonLus(), test = l.every(function (d) { return !d.ouvert; });
+  return '<a class="tile tile-top" href="#/discussions" aria-label="Discussions' + (n ? ', ' + n + ' message' + (n > 1 ? 's' : '') + ' non lu' + (n > 1 ? 's' : '') : '') + '"><span style="display:flex;align-items:center;gap:8px">' + ic('chat', 18) + '<span class="xs mut" style="text-transform:uppercase;letter-spacing:.6px;font-weight:600">Discussions' + (test ? ' · test' : '') + '</span></span>' +
+    '<b style="font-size:19px">' + (n ? n + ' non lu' + (n > 1 ? 's' : '') : 'Mes groupes') + '</b><span class="mut small">' + l.length + ' fil' + (l.length > 1 ? 's' : '') + '</span>' +
+    (n ? '<span class="bulle" aria-hidden="true">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</a>';
 }
 function carteDiscussionsAccueil() {
   var l = S.discs || [];

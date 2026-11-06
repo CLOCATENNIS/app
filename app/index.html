@@ -281,6 +281,10 @@ nav.tabs .side-brand,nav.tabs .side-foot{display:none}
 .stepper{display:flex;gap:10px;align-items:center}
 .stepper .btn{width:56px;flex:none;font-size:24px;padding:0}
 main.wrap{max-width:640px;margin:0 auto}
+.top2 #presence{display:flex}.top2 #presence>.tile{flex:1}
+.tile-top{position:relative;min-height:112px;justify-content:space-between;width:100%;font:inherit}
+.bulle{position:absolute;top:10px;right:10px;min-width:24px;height:24px;padding:0 7px;border-radius:12px;background:var(--ac);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px var(--card)}
+#presence-det:empty{display:none}
 /* Discussions */
 .dfil{display:flex;flex-direction:column;gap:4px;padding:6px 0 calc(150px + env(safe-area-inset-bottom,0px))}
 .dmsg{max-width:84%;padding:7px 11px 6px;border-radius:16px;background:var(--card);border:1px solid var(--bd);align-self:flex-start;white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.38;margin-top:6px}
@@ -305,6 +309,6 @@ main.wrap{max-width:640px;margin:0 auto}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611070100"></script>
+<script src="app.js?v=202611070030b"></script>
 </body>
 </html>
