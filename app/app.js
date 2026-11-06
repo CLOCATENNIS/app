@@ -340,7 +340,7 @@ function pageAccueil() {
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
-  var top = h, P = { presence: '<div id="presence"></div>', msg: '', urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
+  var top = h, P = { presence: '<div id="presence"></div>', msg: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -385,9 +385,9 @@ function pageAccueil() {
   // (l'espace coach est dans l'onglet Gestion)
   P.partners = '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div>';
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
-  if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent ? '<div class="dk-top">' + P.urgent + P.msg + '</div>' : '') +
+  if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent || P.qst ? '<div class="dk-top">' + P.urgent + P.msg + P.qst + '</div>' : '') +
     '<div class="dk-col">' + P.rdv + P.fete + P.actu + P.login + P.install + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
-  return top + P.presence + P.msg + P.urgent + P.rdv + P.fete + P.actu + P.tiles + P.login + P.install + P.reseaux + P.partners + '</main>';
+  return top + P.presence + P.msg + P.qst + P.urgent + P.rdv + P.fete + P.actu + P.tiles + P.login + P.install + P.reseaux + P.partners + '</main>';
 }
 
 function lierAccueilAide() {
@@ -2909,6 +2909,89 @@ function lierFete(f, P) {
   });
 }
 
+// ---------- Questionnaires (créés par la direction, remplis par la famille pour l'enfant concerné) ----------
+function chargerQuestionnaires() {
+  if (!S.user || !S.pers.length) return Promise.resolve(S.qst = []);
+  return q(sb.rpc('mes_questionnaires')).then(function (r) { S.qst = r || []; }).catch(function () { S.qst = []; });
+}
+function carteQuestionnairesAccueil() {
+  var aFaire = (S.qst || []).filter(function (x) { return !x.repondu; });
+  if (!aFaire.length) return '';
+  var ids = aFaire.map(function (x) { return x.questionnaire_id; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+  var qui = aFaire.map(function (x) { var p = S.pers.filter(function (y) { return y.id === x.personne_id; })[0]; return p ? p.prenom : null; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+  return '<a class="card stack" href="#/questionnaire/' + ids[0] + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (ids.length > 1 ? ids.length + ' questionnaires à remplir' : 'Questionnaire à remplir') + '</span><b id="qst-acc-t">Réponds en 1 minute</b>' + (qui.length ? '<span class="mut small">Pour ' + esc(qui.join(', ')) + '</span>' : '') + '</a>';
+}
+function pageQuestionnaire(id) {
+  var h = '<div class="pagehead">' + backLink('#/accueil', 'Accueil') + '<h1 id="qa-t">Questionnaire</h1></div><main><div id="qa"><section class="card"><div class="skel"></div></section></div></main>';
+  setTimeout(function () { chargerQuestionnaire(id); });
+  return h;
+}
+function chargerQuestionnaire(id, choix) {
+  if (!S.user) { $('qa').innerHTML = '<section class="card stack"><b>Connecte-toi pour répondre</b><a class="btn" href="#/profil">Me connecter</a></section>'; return; }
+  var miens = (S.qst || []).filter(function (x) { return x.questionnaire_id === id; });
+  Promise.all([q(sb.from('questionnaires').select('*').eq('id', id).maybeSingle()), q(sb.from('questionnaire_questions').select('*').eq('questionnaire_id', id).order('ordre')),
+    miens.length ? q(sb.from('questionnaire_reponses').select('*').eq('questionnaire_id', id).in('personne_id', miens.map(function (x) { return x.personne_id; }))) : Promise.resolve([])]).then(function (r) {
+    var Q = r[0], QQ = r[1] || [], REP = r[2] || [];
+    if (!Q || !miens.length) { $('qa').innerHTML = '<section class="card empty">Ce questionnaire n\'est plus ouvert, ou il ne concerne personne de ta famille.</section>'; return; }
+    $('qa-t').textContent = Q.titre;
+    var pid = choix && miens.some(function (x) { return x.personne_id === choix; }) ? choix : (miens.filter(function (x) { return !REP.some(function (y) { return y.personne_id === x.personne_id; }); })[0] || miens[0]).personne_id;
+    var rep = REP.filter(function (y) { return y.personne_id === pid; })[0], V = rep ? rep.reponses || {} : {};
+    var lecture = rep && !Q.modifiable;
+    var nomP = function (x) { var p = S.pers.filter(function (y) { return y.id === x; })[0]; return p ? p.prenom : ''; };
+    var champ = function (qu) {
+      var v = V[qu.id], n = 'qa-' + qu.id, dis = lecture ? ' disabled' : '';
+      var titre = esc(qu.libelle) + (qu.obligatoire ? ' <span style="color:var(--ac)">*</span>' : '');
+      if (qu.type === 'oui_non' || qu.type === 'choix' || qu.type === 'taille' || qu.type === 'multi') {
+        var opts = qu.type === 'oui_non' ? ['Oui', 'Non'] : (qu.options || []);
+        var sel = qu.type === 'oui_non' ? (v === true ? ['Oui'] : v === false ? ['Non'] : []) : Array.isArray(v) ? v : v ? [v] : [];
+        var multi = qu.type === 'multi';
+        return '<div class="stack" style="gap:8px" data-q="' + qu.id + '"><b class="small">' + titre + '</b>' + (multi ? '<span class="mut xs">Plusieurs réponses possibles</span>' : '') + '<div style="display:flex;flex-wrap:wrap;gap:8px">' + opts.map(function (o) {
+          var on = sel.indexOf(o) >= 0;
+          return '<label class="chip' + (on ? ' on' : '') + '" style="display:inline-flex;align-items:center;cursor:pointer"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + n + '" value="' + esc(o) + '"' + (on ? ' checked' : '') + dis + ' style="display:none">' + esc(o) + '</label>';
+        }).join('') + '</div></div>';
+      }
+      if (qu.type === 'texte_long') return '<label class="f" data-q="' + qu.id + '"><span>' + titre + '</span><textarea class="f" name="' + n + '" rows="3" maxlength="2000"' + dis + '>' + esc(v || '') + '</textarea></label>';
+      var t = qu.type === 'nombre' ? 'number' : qu.type === 'date' ? 'date' : 'text';
+      return '<label class="f" data-q="' + qu.id + '"><span>' + titre + '</span><input class="f" type="' + t + '" name="' + n + '" maxlength="300" value="' + esc(v == null ? '' : v) + '"' + dis + '></label>';
+    };
+    $('qa').innerHTML = (miens.length > 1 ? '<div class="chips" style="margin-bottom:12px">' + miens.map(function (x) { var fait = REP.some(function (y) { return y.personne_id === x.personne_id; }); return '<button class="chip' + (x.personne_id === pid ? ' on' : '') + '" data-qap="' + x.personne_id + '">' + esc(nomP(x.personne_id)) + (fait ? ' ✓' : '') + '</button>'; }).join('') + '</div>' : '') +
+      '<section class="card stack" style="gap:16px">' + (Q.intro ? '<p class="small" style="margin:0;white-space:pre-line">' + esc(Q.intro) + '</p>' : '') +
+      '<span class="eyebrow">Pour ' + esc(nomP(pid)) + (Q.date_limite ? ' · avant le ' + esc(new Date(Q.date_limite + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })) : '') + '</span>' +
+      (rep ? '<div class="small" style="color:var(--ok, #2e7d32)">✓ Réponse envoyée le ' + esc(new Date(rep.maj_le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })) + (Q.modifiable ? '. Tu peux la modifier.' : '.') + '</div>' : '') +
+      QQ.map(champ).join('') +
+      (lecture ? '' : '<button class="btn" id="qa-ok">' + (rep ? 'Mettre à jour ma réponse' : 'Envoyer ma réponse') + '</button>') + '</section>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-qap]'), function (b) { b.onclick = function () { chargerQuestionnaire(id, b.dataset.qap); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('#qa label.chip input'), function (i) {
+      i.onchange = function () { Array.prototype.forEach.call(document.querySelectorAll('#qa input[name="' + i.name + '"]'), function (x) { x.parentNode.classList.toggle('on', x.checked); }); };
+    });
+    if (!$('qa-ok')) return;
+    $('qa-ok').onclick = function () {
+      var out = {}, manque = null;
+      QQ.forEach(function (qu) {
+        var n = 'qa-' + qu.id, v;
+        if (['oui_non', 'choix', 'taille', 'multi'].indexOf(qu.type) >= 0) {
+          var c = Array.prototype.map.call(document.querySelectorAll('#qa input[name="' + n + '"]:checked'), function (x) { return x.value; });
+          v = qu.type === 'multi' ? c : qu.type === 'oui_non' ? (c[0] === 'Oui' ? true : c[0] === 'Non' ? false : null) : (c[0] || null);
+        } else {
+          var el = document.querySelector('#qa [name="' + n + '"]'); v = el ? el.value.trim() : '';
+          if (qu.type === 'nombre' && v !== '') v = +v;
+        }
+        var vide = v == null || v === '' || (Array.isArray(v) && !v.length);
+        if (vide && qu.obligatoire && !manque) manque = qu;
+        if (!vide) out[qu.id] = v;
+      });
+      if (manque) { toast('Réponds à : ' + manque.libelle); var z = document.querySelector('[data-q="' + manque.id + '"]'); if (z) z.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+      $('qa-ok').disabled = true;
+      q(sb.from('questionnaire_reponses').upsert({ questionnaire_id: id, personne_id: pid, reponses: out }, { onConflict: 'questionnaire_id,personne_id' })).then(function () {
+        toast('Merci, réponse enregistrée');
+        (S.qst || []).forEach(function (x) { if (x.questionnaire_id === id && x.personne_id === pid) x.repondu = true; });
+        var suivant = miens.filter(function (x) { return x.personne_id !== pid && !x.repondu; })[0];
+        chargerQuestionnaire(id, suivant ? suivant.personne_id : pid);
+      }).catch(function (e) { $('qa-ok').disabled = false; toast(e && /row-level|policy/i.test(e.message || '') ? 'Ce questionnaire est fermé' : 'Envoi impossible pour le moment'); });
+    };
+  }).catch(function () { $('qa').innerHTML = '<section class="card empty">Impossible de charger le questionnaire.</section>'; });
+}
+
 // ---------- Routeur ----------
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
@@ -2932,6 +3015,7 @@ function render() {
   else if (p === 'messages') { html = pageMessages(); actif = 'accueil'; }
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'accueil'; }
+  else if (p === 'questionnaire') { html = pageQuestionnaire(arg); actif = 'accueil'; }
   else { p = 'accueil'; html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   document.body.setAttribute('data-page', p);
@@ -2951,12 +3035,12 @@ function demarrer() {
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages()]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires()]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
       S.user = session.user;
-      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
+      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
     }
   });
 }

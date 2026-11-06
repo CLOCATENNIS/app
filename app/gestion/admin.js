@@ -12,6 +12,7 @@ var sb = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY, { au
 var MODULES = [
   ['accueil', 'Tableau de bord', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['messages', 'Messagerie', ['direction', 'bureau', 'accueil']],
+  ['questionnaires', 'Questionnaires', ['direction']],
   ['actus', 'Actus', ['direction', 'bureau', 'accueil']],
   ['evenements', 'CLOC\'ARENA organisation', ['direction', 'bureau']],
   ['inscriptions', 'Inscriptions', ['direction', 'bureau', 'accueil']],
@@ -37,7 +38,7 @@ var MODULES = [
 // Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
 var RUBRIQUES = [
   ['', ['accueil']],
-  ['Communication', ['messages', 'actus', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, actus, réseaux sociaux et petites annonces.'],
+  ['Communication', ['messages', 'questionnaires', 'actus', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, questionnaires, actus, réseaux sociaux et petites annonces.'],
   ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'CLOC\'ARENA, inscriptions, événements (fête de Noël, tombola, stages…), présence au club.'],
   ['Adhérents', ['adherents', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
@@ -46,7 +47,7 @@ var RUBRIQUES = [
   ['Administration', ['reglages', 'equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
-  accueil: 'Ce qui demande ton attention aujourd\'hui.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
+  accueil: 'Ce qui demande ton attention aujourd\'hui.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
   reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Organiser les séances CLOC\'ARENA : dates, groupes, places.',
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël, tombola, stages, animations et tournois : chaque catégorie a sa page.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Saisie des résultats, historique des matchs par jour et niveaux des joueurs.',
@@ -1829,6 +1830,183 @@ function vueNextGen(m) {
   chargerGroupes().then(charger);
 }
 
+// ---------- Questionnaires (formulaires maison : la direction choisit les questions, les familles répondent dans l'appli) ----------
+var TYPES_Q = [['oui_non', 'Oui / non'], ['choix', 'Un seul choix'], ['multi', 'Plusieurs choix'], ['taille', 'Taille de vêtement'], ['texte', 'Réponse courte'], ['texte_long', 'Réponse longue'], ['nombre', 'Nombre'], ['date', 'Date']];
+var TAILLES_Q = ['6 ans', '8 ans', '10 ans', '12 ans', '14 ans', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
+var MODELE_NG = {
+  titre: 'Engagement Next Gen jusqu\'à la fin de saison',
+  intro: 'Merci de confirmer ton engagement comme jeune coach CLOCA Next Gen jusqu\'à fin juin. Une réponse par jeune, à remplir avec tes parents.',
+  questions: [
+    { libelle: 'Je confirme mon engagement Next Gen jusqu\'à la fin de la saison (fin juin)', type: 'oui_non', obligatoire: true },
+    { libelle: 'Taille de vêtement (t-shirt / sweat coach)', type: 'taille', obligatoire: true },
+    { libelle: 'Un commentaire, une contrainte d\'emploi du temps ?', type: 'texte_long', obligatoire: false }
+  ]
+};
+function txtReponse(qu, v) {
+  if (v == null || v === '' || (Array.isArray(v) && !v.length)) return '';
+  if (qu.type === 'oui_non') return v === true || v === 'oui' ? 'Oui' : 'Non';
+  if (qu.type === 'date') return fmtJour(new Date(v + 'T12:00:00'));
+  return Array.isArray(v) ? v.join(', ') : String(v);
+}
+function vueQuestionnaires(m) {
+  m.innerHTML = entete('Questionnaires', 'Comme un Google Form, mais dans l\'appli : tu choisis les questions et le type de réponse, les familles répondent pour leur enfant, et tu vois qui n\'a pas répondu.', '<button class="btn line" id="qs-ng">Modèle engagement Next Gen</button><button class="btn" id="qs-new">Nouveau questionnaire</button>') + '<div id="qs-l"><div class="skel"></div></div>';
+  var QS = [], NBR = {};
+  var nomCibleQ = function (x) {
+    if (x.cible === 'nextgen') return 'Next Gen' + (x.grades && x.grades.length ? ' (' + x.grades.map(function (g) { return (GRADES_NG.filter(function (y) { return y[0] === g; })[0] || [g, g])[1]; }).join(', ') + ')' : '');
+    if (x.cible === 'groupes') return (x.groupes || []).map(nomGroupe).join(', ');
+    return 'Tout le club';
+  };
+  var ouvertQ = function (x) { return x.ouvert && (!x.date_limite || x.date_limite >= isoJour(new Date())); };
+  var charger = function () {
+    Promise.all([q(sb.from('questionnaires').select('*').order('created_at', { ascending: false })), q(sb.from('questionnaire_reponses').select('questionnaire_id'))]).then(function (r) {
+      QS = r[0] || []; NBR = {}; (r[1] || []).forEach(function (x) { NBR[x.questionnaire_id] = (NBR[x.questionnaire_id] || 0) + 1; });
+      $('qs-l').innerHTML = QS.length ? '<div class="tw card" style="padding:0"><table class="t"><thead><tr><th>Questionnaire</th><th>Pour qui</th><th>Date limite</th><th>Réponses</th><th></th></tr></thead><tbody>' + QS.map(function (x) {
+        return '<tr class="click" data-qs="' + x.id + '"><td><b>' + esc(x.titre) + '</b></td><td class="small">' + esc(nomCibleQ(x)) + '</td><td class="small">' + (x.date_limite ? esc(fmtJ(new Date(x.date_limite + 'T12:00:00'))) : '—') + '</td><td class="small">' + (NBR[x.id] || 0) + '</td><td class="act">' + (ouvertQ(x) ? '<span class="badge b-ok">Ouvert</span>' : '<span class="badge">Fermé</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun questionnaire. Commence avec le modèle « Engagement Next Gen » ou crée le tien.</div>';
+      all('[data-qs]').forEach(function (tr) { tr.onclick = function () { suivi(QS.filter(function (x) { return x.id === tr.dataset.qs; })[0]); }; });
+    }).catch(function () { $('qs-l').innerHTML = '<div class="card empty">Impossible de charger les questionnaires.</div>'; });
+  };
+
+  // Création / modification
+  var form = function (x, questions) {
+    var nouveau = !x || !x.id; x = x || { cible: 'nextgen', ouvert: true, modifiable: true };
+    var QQ = (questions || []).map(function (qu) { return { id: qu.id, libelle: qu.libelle, type: qu.type, options: (qu.options || []).slice(), obligatoire: qu.obligatoire !== false }; });
+    if (!QQ.length) QQ.push({ libelle: '', type: 'oui_non', options: [], obligatoire: true });
+    panneau(nouveau ? 'Nouveau questionnaire' : 'Modifier le questionnaire', '<div class="stack">' +
+      '<label class="l">Titre<input class="f" id="qf-t" maxlength="120" value="' + esc(x.titre) + '" placeholder="Ex. Engagement Next Gen jusqu\'à la fin de saison"></label>' +
+      '<label class="l">Texte d\'introduction<textarea class="f" id="qf-i" rows="3" maxlength="1500">' + esc(x.intro) + '</textarea></label>' +
+      '<label class="l">Pour qui ?<select class="f" id="qf-c"><option value="nextgen"' + (x.cible === 'nextgen' ? ' selected' : '') + '>Les jeunes Next Gen</option><option value="groupes"' + (x.cible === 'groupes' ? ' selected' : '') + '>Des groupes</option><option value="tous"' + (x.cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label>' +
+      '<div id="qf-ng"><div class="mut xs" style="margin-bottom:4px">Grades concernés (aucun coché = tous)</div><div class="chips">' + GRADES_NG.map(function (g) { var on = (x.grades || []).indexOf(g[0]) >= 0; return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" name="qf-gr" value="' + g[0] + '"' + (on ? ' checked' : '') + ' style="display:none">' + g[1] + '</label>'; }).join('') + '</div></div>' +
+      '<div id="qf-gs">' + choixGroupes(x.groupes || [], 'qf-g') + '</div>' +
+      '<div class="row2"><label class="l">Date limite (facultatif)<input class="f" type="date" id="qf-d" value="' + (x.date_limite || '') + '"></label>' +
+      '<div class="stack" style="gap:6px;justify-content:flex-end"><label class="small"><input type="checkbox" id="qf-o"' + (x.ouvert ? ' checked' : '') + '> Ouvert aux réponses</label><label class="small"><input type="checkbox" id="qf-m"' + (x.modifiable ? ' checked' : '') + '> Réponse modifiable après envoi</label></div></div>' +
+      '<div class="sect">Questions</div><div id="qf-q" class="stack"></div><button class="btn line sm" id="qf-add">+ Ajouter une question</button>' +
+      '<div class="chips" style="margin-top:8px"><button class="btn" id="qf-ok">Enregistrer</button><button class="btn line" id="qf-an">Annuler</button></div></div>', function (r) {
+      lierChips(r);
+      var majCible = function () { var c = $('qf-c').value; $('qf-ng').hidden = c !== 'nextgen'; $('qf-gs').hidden = c !== 'groupes'; };
+      $('qf-c').onchange = majCible; majCible();
+      var lire = function () {
+        all('[data-qi]', r).forEach(function (bloc) {
+          var i = +bloc.dataset.qi, qu = QQ[i]; if (!qu) return;
+          qu.libelle = bloc.querySelector('[data-k="l"]').value;
+          qu.type = bloc.querySelector('[data-k="t"]').value;
+          qu.obligatoire = bloc.querySelector('[data-k="o"]').checked;
+          var op = bloc.querySelector('[data-k="op"]');
+          if (op) qu.options = op.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+        });
+      };
+      var dessiner = function () {
+        $('qf-q').innerHTML = QQ.map(function (qu, i) {
+          var avecOpt = qu.type === 'choix' || qu.type === 'multi' || qu.type === 'taille';
+          var opts = qu.options && qu.options.length ? qu.options : qu.type === 'taille' ? TAILLES_Q : [];
+          return '<div class="card stack" data-qi="' + i + '" style="gap:8px;padding:12px"><div style="display:flex;gap:6px;align-items:center"><b class="small" style="flex:1">Question ' + (i + 1) + '</b>' +
+            '<button class="btn line sm" data-qm="' + i + '" data-dir="-1"' + (i ? '' : ' disabled') + ' aria-label="Monter">↑</button><button class="btn line sm" data-qm="' + i + '" data-dir="1"' + (i < QQ.length - 1 ? '' : ' disabled') + ' aria-label="Descendre">↓</button><button class="btn sm ko" data-qx="' + i + '" aria-label="Supprimer">×</button></div>' +
+            '<input class="f" data-k="l" maxlength="300" value="' + esc(qu.libelle) + '" placeholder="Intitulé de la question">' +
+            '<div class="row2"><select class="f" data-k="t">' + TYPES_Q.map(function (t) { return '<option value="' + t[0] + '"' + (qu.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>' +
+            '<label class="small" style="align-self:center"><input type="checkbox" data-k="o"' + (qu.obligatoire ? ' checked' : '') + '> Réponse obligatoire</label></div>' +
+            (avecOpt ? '<label class="l">Choix proposés (un par ligne)<textarea class="f" data-k="op" rows="' + Math.min(8, Math.max(3, opts.length)) + '">' + esc(opts.join('\n')) + '</textarea></label>' : '') + '</div>';
+        }).join('');
+        all('[data-k="t"]', r).forEach(function (s) { s.onchange = function () { lire(); var qu = QQ[+s.closest('[data-qi]').dataset.qi]; if (qu.type === 'taille' && !qu.options.length) qu.options = TAILLES_Q.slice(); if (qu.type !== 'taille' && qu.options.join() === TAILLES_Q.join()) qu.options = []; dessiner(); }; });
+        all('[data-qx]', r).forEach(function (b) { b.onclick = function () { lire(); QQ.splice(+b.dataset.qx, 1); dessiner(); }; });
+        all('[data-qm]', r).forEach(function (b) { b.onclick = function () { lire(); var i = +b.dataset.qm, j = i + (+b.dataset.dir), t = QQ[i]; QQ[i] = QQ[j]; QQ[j] = t; dessiner(); }; });
+      };
+      dessiner();
+      $('qf-add').onclick = function () { lire(); QQ.push({ libelle: '', type: 'texte', options: [], obligatoire: false }); dessiner(); };
+      $('qf-an').onclick = fermer;
+      $('qf-ok').onclick = function () {
+        lire();
+        var t = $('qf-t').value.trim(), c = $('qf-c').value;
+        if (!t) return toast('Donne un titre au questionnaire');
+        var qs = QQ.filter(function (qu) { return qu.libelle.trim(); });
+        if (!qs.length) return toast('Ajoute au moins une question');
+        var vide = qs.filter(function (qu) { return (qu.type === 'choix' || qu.type === 'multi' || qu.type === 'taille') && !qu.options.length; })[0];
+        if (vide) return toast('Ajoute les choix de « ' + vide.libelle.trim() + ' »');
+        var gs = lus(r, 'qf-g');
+        if (c === 'groupes' && !gs.length) return toast('Choisis au moins un groupe');
+        var row = { titre: t, intro: $('qf-i').value.trim() || null, cible: c, grades: c === 'nextgen' && lus(r, 'qf-gr').length ? lus(r, 'qf-gr') : null, groupes: c === 'groupes' ? gs : null, date_limite: $('qf-d').value || null, ouvert: $('qf-o').checked, modifiable: $('qf-m').checked };
+        $('qf-ok').disabled = true;
+        (nouveau ? q(sb.from('questionnaires').insert(row).select('id').single()) : q(sb.from('questionnaires').update(row).eq('id', x.id).select('id').single())).then(function (s) {
+          var qid = s.id, gardes = qs.filter(function (qu) { return qu.id; }).map(function (qu) { return qu.id; });
+          var supprimer = nouveau ? Promise.resolve() : (function () { var b = sb.from('questionnaire_questions').delete().eq('questionnaire_id', qid); if (gardes.length) b = b.not('id', 'in', '(' + gardes.join(',') + ')'); return q(b); })();
+          return supprimer.then(function () {
+            return Promise.all(qs.map(function (qu, i) {
+              var l = { questionnaire_id: qid, ordre: i, libelle: qu.libelle.trim(), type: qu.type, options: qu.type === 'choix' || qu.type === 'multi' || qu.type === 'taille' ? qu.options : null, obligatoire: qu.obligatoire };
+              return qu.id ? q(sb.from('questionnaire_questions').update(l).eq('id', qu.id)) : q(sb.from('questionnaire_questions').insert(l));
+            }));
+          }).then(function () { return qid; });
+        }).then(function (qid) { toast('Questionnaire enregistré'); fermer(); charger(); q(sb.from('questionnaires').select('*').eq('id', qid).single()).then(suivi).catch(function () { }); })
+          .catch(function (e) { $('qf-ok').disabled = false; toast(e && e.message ? 'Enregistrement impossible : ' + e.message : 'Enregistrement impossible'); });
+      };
+    });
+  };
+
+  // Suivi des réponses
+  var suivi = function (x) {
+    panneau(x.titre, '<div id="qv"><div class="skel"></div></div>', function () {
+      Promise.all([q(sb.from('questionnaire_questions').select('*').eq('questionnaire_id', x.id).order('ordre')), q(sb.from('questionnaire_reponses').select('*').eq('questionnaire_id', x.id)), q(sb.rpc('questionnaire_suivi', { qid: x.id }))]).then(function (r) {
+        var QQ = r[0] || [], REP = r[1] || [], CON = r[2] || [];
+        var repDe = function (pid) { return REP.filter(function (y) { return y.personne_id === pid; })[0]; };
+        var faits = CON.filter(function (p) { return repDe(p.personne_id); }), manquants = CON.filter(function (p) { return !repDe(p.personne_id); });
+        var sansCompte = manquants.filter(function (p) { return !p.a_compte; });
+        var lien = location.origin + '/app/#/questionnaire/' + x.id;
+        var ligne = function (p) {
+          var rep = repDe(p.personne_id);
+          return '<div class="card stack" style="gap:4px;padding:10px 12px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="small">' + esc(p.prenom + ' ' + p.nom) + '</b>' +
+            (rep ? '<span class="mut xs">' + esc(fmtJ(new Date(rep.maj_le))) + '</span>' : p.a_compte ? '<span class="badge b-warn">Pas encore répondu</span>' : '<span class="badge b-ko">Sans compte appli</span>') + '</div>' +
+            (rep ? QQ.map(function (qu) { var v = txtReponse(qu, rep.reponses[qu.id]); return v ? '<div class="small"><span class="mut">' + esc(qu.libelle) + ' :</span> <b>' + esc(v) + '</b></div>' : ''; }).join('') : '') + '</div>';
+        };
+        // Synthèse par question à choix (utile pour les tailles)
+        var synth = QQ.filter(function (qu) { return ['oui_non', 'choix', 'multi', 'taille'].indexOf(qu.type) >= 0; }).map(function (qu) {
+          var cpt = {}; REP.forEach(function (y) { var v = y.reponses[qu.id]; (Array.isArray(v) ? v : v == null || v === '' ? [] : [txtReponse(qu, v)]).forEach(function (k) { cpt[k] = (cpt[k] || 0) + 1; }); });
+          var ks = Object.keys(cpt); if (!ks.length) return '';
+          var ordre = qu.type === 'oui_non' ? ['Oui', 'Non'] : (qu.options || []);
+          ks.sort(function (a, b) { return (ordre.indexOf(a) < 0 ? 99 : ordre.indexOf(a)) - (ordre.indexOf(b) < 0 ? 99 : ordre.indexOf(b)); });
+          return '<div class="small"><b>' + esc(qu.libelle) + '</b><div class="chips" style="margin-top:4px">' + ks.map(function (k) { return '<span class="badge">' + esc(k) + ' · ' + cpt[k] + '</span>'; }).join(' ') + '</div></div>';
+        }).join('');
+        $('qv').innerHTML = '<div class="stack">' +
+          '<div class="small"><b>' + faits.length + '</b> réponse' + (faits.length > 1 ? 's' : '') + ' sur ' + CON.length + ' · ' + (ouvertQ(x) ? 'ouvert' : 'fermé') + (x.date_limite ? ' · jusqu\'au ' + esc(fmtJ(new Date(x.date_limite + 'T12:00:00'))) : '') + '</div>' +
+          '<div class="chips"><button class="btn sm" id="qv-rel"' + (manquants.length && ouvertQ(x) ? '' : ' disabled') + '>' + (faits.length ? 'Relancer les ' + manquants.length + ' sans réponse' : 'Envoyer aux ' + manquants.length + ' concernés') + '</button>' +
+          '<button class="btn line sm" id="qv-lien">Copier le lien</button><button class="btn line sm" id="qv-csv">Exporter (Excel)</button><button class="btn line sm" id="qv-mod">Modifier</button><button class="btn line sm" id="qv-oc">' + (x.ouvert ? 'Fermer' : 'Rouvrir') + '</button><button class="btn sm ko" id="qv-x">Supprimer</button></div>' +
+          (sansCompte.length ? '<div class="card small" style="padding:10px 12px;border-left:4px solid var(--ko)"><b>' + sansCompte.length + ' sans compte dans l\'appli</b> : ' + esc(sansCompte.map(function (p) { return p.prenom; }).join(', ')) + '. Ils ne recevront pas le message : envoie-leur le lien par WhatsApp, ou rattache leur famille à un compte.</div>' : '') +
+          (synth ? '<div class="sect">Synthèse</div><div class="stack" style="gap:8px">' + synth + '</div>' : '') +
+          (manquants.length ? '<div class="sect">Sans réponse (' + manquants.length + ')</div>' + manquants.map(ligne).join('') : '') +
+          (faits.length ? '<div class="sect">Réponses (' + faits.length + ')</div>' + faits.map(ligne).join('') : '') +
+          (!CON.length ? '<div class="card empty">Personne n\'est concerné pour le moment.</div>' : '') + '</div>';
+        $('qv-mod').onclick = function () { form(x, QQ); };
+        $('qv-lien').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié'); }, function () { prompt('Lien du questionnaire', lien); }); };
+        $('qv-csv').onclick = function () {
+          csv('questionnaire-' + norm(x.titre).replace(/[^a-z0-9]+/g, '-').slice(0, 40) + '.csv', [['Nom', 'Prénom', 'Grade', 'Répondu le'].concat(QQ.map(function (qu) { return qu.libelle; }))].concat(CON.map(function (p) {
+            var rep = repDe(p.personne_id);
+            return [p.nom, p.prenom, (p.grade || '').split(',').map(function (g) { return (GRADES_NG.filter(function (y) { return y[0] === g; })[0] || ['', g])[1]; }).join(', '), rep ? fmtJour(new Date(rep.maj_le)) : 'pas de réponse'].concat(QQ.map(function (qu) { return rep ? txtReponse(qu, rep.reponses[qu.id]) : ''; }));
+          })));
+        };
+        $('qv-oc').onclick = function () { q(sb.from('questionnaires').update({ ouvert: !x.ouvert }).eq('id', x.id)).then(function () { x.ouvert = !x.ouvert; toast(x.ouvert ? 'Questionnaire rouvert' : 'Questionnaire fermé'); suivi(x); charger(); }).catch(function () { toast('Action impossible'); }); };
+        $('qv-x').onclick = function () { if (confirm('Supprimer ce questionnaire et ses ' + REP.length + ' réponse(s) ?')) q(sb.from('questionnaires').delete().eq('id', x.id)).then(function () { toast('Questionnaire supprimé'); fermer(); charger(); }).catch(function () { toast('Suppression impossible'); }); };
+        $('qv-rel').onclick = function () {
+          var premier = !faits.length;
+          var limite = x.date_limite ? ' avant le ' + fmtJ(new Date(x.date_limite + 'T12:00:00')) : '';
+          panneau(premier ? 'Envoyer le questionnaire' : 'Relancer', '<div class="stack"><span class="mut xs">Le message part seulement aux familles des jeunes qui n\'ont pas encore répondu, avec un bouton qui ouvre le questionnaire.</span>' +
+            '<label class="l">Objet<input class="f" id="qr-t" maxlength="120" value="' + esc((premier ? '' : 'Rappel · ') + x.titre) + '"></label>' +
+            '<label class="l">Message<textarea class="f" id="qr-x" rows="5" maxlength="4000">' + esc(premier ? 'Bonjour,\n\nMerci de répondre au questionnaire « ' + x.titre + ' »' + limite + '. Ça prend 1 minute, directement dans l\'appli.\n\nVAMOS HR !' : 'Bonjour,\n\nPetit rappel : on attend encore ta réponse au questionnaire « ' + x.titre + ' »' + limite + '. Ça prend 1 minute.\n\nMerci !') + '</textarea></label>' +
+            '<button class="btn" id="qr-ok">Envoyer à ' + manquants.filter(function (p) { return p.a_compte; }).length + ' famille(s)</button></div>', function () {
+            $('qr-ok').onclick = function () {
+              var t = $('qr-t').value.trim(), tx = $('qr-x').value.trim(); if (!t || !tx) return toast('Écris un objet et un message');
+              $('qr-ok').disabled = true;
+              q(sb.rpc('envoyer_message', { p_titre: t, p_texte: tx, p_cible: 'questionnaire', p_questionnaire: x.id, p_lien: '#/questionnaire/' + x.id, p_expediteur: 'Direction sportive' })).then(function (res) {
+                return sb.functions.invoke('notifier', { body: { mode: 'message', message_id: res.id } }).then(function () { return res; }, function () { return res; });
+              }).then(function (res) { toast('Message envoyé à ' + res.destinataires + ' compte' + (res.destinataires > 1 ? 's' : '')); suivi(x); })
+                .catch(function (e) { $('qr-ok').disabled = false; toast(e && e.message ? 'Message non envoyé : ' + e.message : 'Message non envoyé'); });
+            };
+          });
+        };
+      }).catch(function () { $('qv').innerHTML = '<div class="card empty">Impossible de charger les réponses.</div>'; });
+    });
+  };
+  $('qs-new').onclick = function () { form(null); };
+  $('qs-ng').onclick = function () { form({ titre: MODELE_NG.titre, intro: MODELE_NG.intro, cible: 'nextgen', ouvert: true, modifiable: true }, MODELE_NG.questions.map(function (qu) { return { libelle: qu.libelle, type: qu.type, obligatoire: qu.obligatoire, options: qu.type === 'taille' ? TAILLES_Q.slice() : [] }; })); };
+  chargerGroupes().then(charger);
+}
+
 // ---------- Équipe du club : l'organigramme. Les fonctions donnent les accès, rattachés à la personne (pas à une adresse)
 var FONCTIONS = [
   ['direction', 'Direction sportive', 'Tout l\'espace gestion.'],
@@ -2012,7 +2190,7 @@ function pageConnexion(msg) {
 // ---------- Routeur ----------
 // ---------- Messagerie : messages aux familles, aux groupes, aux inscrits d'une séance, aux coachs
 var MSF = { vue: 'envoyes' };
-var CIBLES_MSG = { tous: 'Tout le club', coachs: 'Les coachs', groupes: 'Des groupes', evenement: 'Une séance ou un événement' };
+var CIBLES_MSG = { tous: 'Tout le club', coachs: 'Les coachs', nextgen: 'Les jeunes Next Gen', groupes: 'Des groupes', evenement: 'Une séance ou un événement' };
 var SOURCES_MSG = { direct: 'Message', actu: 'Actu', seance: 'Séance' };
 function vueMessages(m) {
   m.innerHTML = entete('Messagerie', 'Les messages arrivent dans la boîte « Messages » de l\'appli des personnes concernées, avec une notification. Ils vont sur le compte de la famille : jamais de message privé à un enfant. Les réponses partent par mail à l\'adresse que tu choisis.', '<button class="btn" id="ms-new">Nouveau message</button>') +
@@ -2021,6 +2199,7 @@ function vueMessages(m) {
   var nomCible = function (x) {
     if (x.cible === 'groupes') return (x.groupes || []).map(nomGroupe).join(', ');
     if (x.cible === 'evenement') { var e = EV.filter(function (y) { return y.id === x.evenement_id; })[0]; return e ? e.titre + ' (' + fmtJ(new Date(e.debut)) + ')' : 'Séance'; }
+    if (x.cible === 'questionnaire') return 'Sans réponse à un questionnaire';
     return CIBLES_MSG[x.cible];
   };
   var formMsg = function () {
@@ -2151,6 +2330,7 @@ var JCAT = {
   coach_missions: ['Coachs', 'mission', 'missions', 1], notes_coach: ['Coachs', 'note de coach', 'notes de coach', 1],
   absences_cours: ['Agenda', 'absence à un cours', 'absences aux cours', 1], nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
   club_presence: ['Présence au club', 'changement', 'changements'],
+  questionnaires: ['Questionnaires', 'questionnaire', 'questionnaires'], questionnaire_reponses: ['Questionnaires', 'réponse', 'réponses', 1],
   messages: ['Messagerie', 'message', 'messages'], messages_programmes: ['Messagerie', 'message programmé', 'messages programmés'], adresses_reponse: ['Messagerie', 'adresse de réponse', 'adresses de réponse', 1],
   equipe: ['Comptes et accès', 'membre de l\'équipe', 'membres de l\'équipe'], comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
 };
@@ -2429,7 +2609,7 @@ function hubEvenements(m) {
     $('hub').innerHTML = h;
   });
 }
-var VUES = { messages: vueMessages, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages, fetes: vueFetes };
+var VUES = { messages: vueMessages, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
   fermer();
