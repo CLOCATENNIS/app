@@ -281,12 +281,30 @@ nav.tabs .side-brand,nav.tabs .side-foot{display:none}
 .stepper{display:flex;gap:10px;align-items:center}
 .stepper .btn{width:56px;flex:none;font-size:24px;padding:0}
 main.wrap{max-width:640px;margin:0 auto}
+/* Discussions */
+.dfil{display:flex;flex-direction:column;gap:4px;padding:6px 0 calc(150px + env(safe-area-inset-bottom,0px))}
+.dmsg{max-width:84%;padding:7px 11px 6px;border-radius:16px;background:var(--card);border:1px solid var(--bd);align-self:flex-start;white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.38;margin-top:6px}
+.dmsg.suite{margin-top:0}
+.dmsg.moi{align-self:flex-end;background:var(--navy);border-color:var(--navy);color:#fff}
+.dmsg[data-dret]{cursor:pointer}
+.dmsg.retire{opacity:.6}
+.dmsg .qui{display:block;font-size:12px;font-weight:700;color:var(--ac);margin-bottom:1px;white-space:normal}
+.dmsg .qui .club{font-size:10px;font-weight:700;background:var(--ac);color:#fff;border-radius:6px;padding:1px 5px;margin-left:4px;vertical-align:1px}
+.dmsg .h{font-size:11px;opacity:.6;margin-left:10px;float:right;margin-top:5px;white-space:nowrap}
+.djour{align-self:center;font-size:12px;color:var(--mut);background:var(--soft);padding:3px 12px;border-radius:10px;margin:10px 0 4px}
+.dcompo{position:fixed;left:0;right:0;bottom:calc(72px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--bd);padding:8px 12px;z-index:19;display:flex;gap:8px;align-items:flex-end;min-height:60px}
+.dcompo textarea{flex:1;resize:none;border:1px solid var(--bd);border-radius:22px;padding:11px 16px;font:inherit;font-size:16px;line-height:1.3;background:var(--bg);color:var(--tx);max-height:140px;min-height:44px}
+.dcompo textarea:focus{outline:2px solid var(--ac);outline-offset:-1px}
+.dcompo button{width:44px;height:44px;border-radius:50%;border:0;background:var(--ac);flex:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.dcompo button:disabled{opacity:.5}
+@media (min-width:768px){.dcompo{padding:10px 24px}.dmsg{max-width:70%}}
+@media (min-width:1024px){.dcompo{left:var(--side);bottom:0}.dfil{padding-bottom:110px}}
 </style>
 </head>
 <body>
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611061000"></script>
+<script src="app.js?v=202611070100"></script>
 </body>
 </html>

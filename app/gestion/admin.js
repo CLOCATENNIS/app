@@ -12,6 +12,7 @@ var sb = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY, { au
 var MODULES = [
   ['accueil', 'Tableau de bord', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['messages', 'Messagerie', ['direction', 'bureau', 'accueil']],
+  ['discussions', 'Discussions', ['direction']],
   ['questionnaires', 'Questionnaires', ['direction']],
   ['actus', 'Actus', ['direction', 'bureau', 'accueil']],
   ['evenements', 'CLOC\'ARENA organisation', ['direction', 'bureau']],
@@ -38,7 +39,7 @@ var MODULES = [
 // Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
 var RUBRIQUES = [
   ['', ['accueil']],
-  ['Communication', ['messages', 'questionnaires', 'actus', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, questionnaires, actus, réseaux sociaux et petites annonces.'],
+  ['Communication', ['messages', 'discussions', 'questionnaires', 'actus', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, discussions de groupe, questionnaires, actus, réseaux sociaux et petites annonces.'],
   ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'CLOC\'ARENA, inscriptions, événements (fête de Noël, tombola, stages…), présence au club.'],
   ['Adhérents', ['adherents', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
@@ -47,7 +48,7 @@ var RUBRIQUES = [
   ['Administration', ['reglages', 'equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
-  accueil: 'Ce qui demande ton attention aujourd\'hui.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
+  accueil: 'Ce qui demande ton attention aujourd\'hui.', discussions: 'Les fils de groupe de l\'appli (annonces, CLOC\'ARENA, poules, équipes…) qui remplacent les groupes WhatsApp.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
   reseaux: 'Mettre en avant des publications Instagram et Facebook.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Organiser les séances CLOC\'ARENA : dates, groupes, places.',
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël, tombola, stages, animations et tournois : chaque catégorie a sa page.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Saisie des résultats, historique des matchs par jour et niveaux des joueurs.',
@@ -1038,6 +1039,150 @@ function annonceForm(box, m) {
       toast('Annonce publiée'); ANG.form = null; ANG.tab = 'valider'; vueAnnonces(m);
     }).catch(function (e) { console.error(e); toast('Publication impossible' + (e && e.message ? ' : ' + e.message : '')); b.disabled = false; });
   };
+}
+
+// ---------- Discussions (fils de groupe dans l'appli, à la place des groupes WhatsApp) ----------
+// Chaque fil a une source (tout le monde, des groupes, une poule du double, Next Gen, ou à la main).
+// Les membres se mettent à jour à partir de la source ; les ajouts et retraits manuels sont gardés.
+// Un fil « en test » n'est visible que par la direction : on l'ouvre aux membres quand il est prêt.
+var SRC_DISC = { tous: 'Tous les comptes', groupe: 'Un ou plusieurs groupes', double: 'Une poule du double interne', nextgen: 'Les jeunes Next Gen', manuel: 'Choisis à la main' };
+function vueDiscussions(m) {
+  m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>en test</b> n\'est visible que par la direction ; ouvre-le aux membres quand il est prêt.', '<button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
+  $('dg-new').onclick = function () { discForm(null, function () { vueDiscussions(m); }); };
+  q(sb.rpc('discussions_synchroniser_tout')).catch(function () { }).then(function () {
+    return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').order('ordre').order('nom')), chargerGroupes(),
+      q(sb.from('discussion_messages').select('discussion_id, created_at').is('supprime_le', null).order('created_at', { ascending: false }).limit(500))]);
+  }).then(function (r) {
+    var L = r[0] || [], der = {};
+    (r[2] || []).forEach(function (x) { if (!der[x.discussion_id]) der[x.discussion_id] = x.created_at; });
+    var srcTxt = function (d) {
+      if (d.source === 'groupe') return d.groupes.map(nomGroupe).join(', ') || 'Aucun groupe choisi';
+      if (d.source === 'double') return 'Double ' + (d.double_categorie || '?') + (d.double_poule ? ' · poule ' + d.double_poule : ' · toutes les poules');
+      return SRC_DISC[d.source];
+    };
+    var ouverts = L.filter(function (d) { return d.ouvert && !d.archive; }).length;
+    $('dg-l').innerHTML = '<div class="kpis"><div class="kpi"><b>' + L.filter(function (d) { return !d.archive; }).length + '</b><span>fils</span></div><div class="kpi"><b>' + ouverts + '</b><span>ouverts aux membres</span></div><div class="kpi"><b>' + L.filter(function (d) { return !d.ouvert && !d.archive; }).length + '</b><span>en test</span></div></div>' +
+      (L.length ? '<div class="tw"><table class="t"><thead><tr><th>Fil</th><th>Qui est dedans</th><th>Membres</th><th>Écriture</th><th>État</th><th></th></tr></thead><tbody>' + L.map(function (d) {
+        var n = (d.discussion_membres || []).filter(function (x) { return !x.exclu; }).length;
+        return '<tr><td><b>' + esc(d.nom) + '</b>' + (der[d.id] ? '<div class="mut xs">Dernier message le ' + esc(fmtJ(new Date(der[d.id]))) + '</div>' : '<div class="mut xs">Pas encore de message</div>') + '</td>' +
+          '<td class="small">' + esc(srcTxt(d)) + (d.jeunes ? '<div class="xs mut">Comptes jeunes acceptés</div>' : '') + '</td><td><button class="btn sm ghost" data-dgm="' + d.id + '">' + n + ' membre' + (n > 1 ? 's' : '') + '</button></td>' +
+          '<td class="small">' + (d.ecriture === 'admins' ? 'L\'équipe du club seulement' : 'Tout le monde') + '</td>' +
+          '<td>' + (d.archive ? '<span class="badge">Archivé</span>' : d.ouvert ? '<span class="badge b-ok">Ouvert</span>' : '<span class="badge b-warn">En test</span>') + '</td>' +
+          '<td class="act">' + (!d.archive ? '<button class="btn sm ' + (d.ouvert ? 'line' : 'ok') + '" data-dgo="' + d.id + '">' + (d.ouvert ? 'Repasser en test' : 'Ouvrir aux membres') + '</button> ' : '') +
+          '<a class="btn sm line" href="../#/discussion/' + d.id + '" target="_blank" rel="noopener">Voir le fil</a> <button class="btn sm line" data-dge="' + d.id + '">Modifier</button></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun fil pour le moment. Crée le premier avec « Nouveau fil ».</div>') +
+      '<div class="card small mut" style="margin-top:14px">Les membres se mettent à jour tout seuls à partir de la source (groupes, poules, Next Gen) à chaque ouverture de cette page. Les comptes jeunes (mineurs avec leur propre compte) n\'entrent que dans les fils qui les acceptent ; les parents voient les fils des groupes de leurs enfants. Il n\'y a pas de messages privés : uniquement des fils de groupe, où la direction est toujours présente.</div>';
+    var get = function (id) { return L.filter(function (d) { return d.id === id; })[0]; };
+    all('[data-dge]').forEach(function (b) { b.onclick = function () { discForm(get(b.dataset.dge), function () { vueDiscussions(m); }); }; });
+    all('[data-dgm]').forEach(function (b) { b.onclick = function () { discMembres(get(b.dataset.dgm), function () { vueDiscussions(m); }); }; });
+    all('[data-dgo]').forEach(function (b) {
+      b.onclick = function () {
+        var d = get(b.dataset.dgo), n = (d.discussion_membres || []).filter(function (x) { return !x.exclu; }).length;
+        if (!d.ouvert && !confirm('Ouvrir « ' + d.nom + ' » à ses ' + n + ' membres ?\n\nIls verront le fil dans l\'appli (rubrique Discussions) et recevront les notifications des nouveaux messages.')) return;
+        q(sb.from('discussions').update({ ouvert: !d.ouvert }).eq('id', d.id)).then(function () { toast(d.ouvert ? 'Fil repassé en test' : 'Fil ouvert aux membres'); vueDiscussions(m); }).catch(function () { toast('Action impossible'); });
+      };
+    });
+    etiqueterTableaux();
+  }).catch(function () { $('dg-l').innerHTML = '<div class="card empty">Impossible de charger les discussions.</div>'; });
+}
+function discForm(d, apres) {
+  var F = d ? JSON.parse(JSON.stringify(d)) : { nom: '', description: '', source: 'groupe', groupes: [], double_categorie: '', double_poule: null, ecriture: 'tous', jeunes: false, ouvert: false, archive: false, ordre: 100 };
+  q(sb.from('double_equipes').select('categorie, poule')).catch(function () { return []; }).then(function (eqs) {
+    var cats = [], poules = {};
+    (eqs || []).forEach(function (e) { if (cats.indexOf(e.categorie) < 0) cats.push(e.categorie); (poules[e.categorie] = poules[e.categorie] || []); if (poules[e.categorie].indexOf(e.poule) < 0) poules[e.categorie].push(e.poule); });
+    Object.keys(poules).forEach(function (c) { poules[c].sort(function (a, b) { return a - b; }); });
+    var dessiner = function () {
+      var src = F.source;
+      panneau(d ? 'Modifier le fil' : 'Nouveau fil', '<div class="stack">' +
+        '<label class="l">Nom du fil<input class="f" id="dgf-nom" maxlength="80" value="' + esc(F.nom) + '" placeholder="Ex. Interclub Senior Eq.1 H"></label>' +
+        '<label class="l">Description (facultatif)<input class="f" id="dgf-desc" maxlength="200" value="' + esc(F.description || '') + '" placeholder="Ex. Organisation des rencontres, covoiturage…"></label>' +
+        '<label class="l">Qui est dedans ?<select class="f" id="dgf-src">' + Object.keys(SRC_DISC).map(function (k) { return '<option value="' + k + '"' + (src === k ? ' selected' : '') + '>' + SRC_DISC[k] + '</option>'; }).join('') + '</select></label>' +
+        (src === 'groupe' ? '<div><span class="mut xs">Coche un ou plusieurs groupes. Les familles des joueurs et les coachs responsables du groupe sont ajoutés.</span>' + choixGroupes(F.groupes || [], 'dgf-g') + '</div>' : '') +
+        (src === 'double' ? '<div class="row2"><label class="l">Catégorie<select class="f" id="dgf-cat"><option value="">Choisir…</option>' + cats.map(function (c) { return '<option' + (F.double_categorie === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' +
+          '<label class="l">Poule<select class="f" id="dgf-poule"><option value="">Toutes les poules</option>' + (poules[F.double_categorie] || []).map(function (p) { return '<option value="' + p + '"' + (F.double_poule === p ? ' selected' : '') + '>Poule ' + p + '</option>'; }).join('') + '</select></label></div>' : '') +
+        (src === 'manuel' ? '<span class="mut xs">Après l\'enregistrement, ajoute les membres un par un avec le bouton « membres ».</span>' : '') +
+        (src === 'tous' ? '<span class="mut xs">Tous les comptes de l\'appli, y compris les nouveaux.</span>' : '') +
+        '<label class="l">Qui peut écrire ?<select class="f" id="dgf-ecr"><option value="tous"' + (F.ecriture === 'tous' ? ' selected' : '') + '>Tout le monde dans le fil</option><option value="admins"' + (F.ecriture === 'admins' ? ' selected' : '') + '>L\'équipe du club seulement (fil d\'annonces)</option></select></label>' +
+        '<label class="c"><input type="checkbox" id="dgf-jeunes"' + (F.jeunes ? ' checked' : '') + '>Accepter les comptes jeunes (mineurs avec leur propre compte)</label>' +
+        '<label class="c"><input type="checkbox" id="dgf-ouvert"' + (F.ouvert ? ' checked' : '') + '>Ouvert aux membres (sinon : en test, visible seulement par la direction)</label>' +
+        (d ? '<label class="c"><input type="checkbox" id="dgf-arch"' + (F.archive ? ' checked' : '') + '>Archivé (plus personne ne peut écrire, le fil disparaît de cette liste de synchro)</label>' : '') +
+        '<label class="l">Ordre d\'affichage (petit = en haut)<input class="f" id="dgf-ordre" type="number" min="0" max="999" value="' + esc(F.ordre) + '"></label>' +
+        '<div class="chips" style="justify-content:space-between">' + (d ? '<button class="btn ko" id="dgf-sup">Supprimer le fil</button>' : '<span></span>') + '<button class="btn" id="dgf-ok">' + (d ? 'Enregistrer' : 'Créer le fil') + '</button></div></div>', function (root) {
+        lierChips(root);
+        var lire = function () {
+          F.nom = $('dgf-nom').value; F.description = $('dgf-desc').value; F.ecriture = $('dgf-ecr').value; F.jeunes = $('dgf-jeunes').checked; F.ouvert = $('dgf-ouvert').checked;
+          F.archive = $('dgf-arch') ? $('dgf-arch').checked : false; F.ordre = +$('dgf-ordre').value || 100;
+          if (F.source === 'groupe') F.groupes = lus(root, 'dgf-g');
+          if ($('dgf-cat')) { F.double_categorie = $('dgf-cat').value; F.double_poule = $('dgf-poule') && $('dgf-poule').value ? +$('dgf-poule').value : null; }
+        };
+        $('dgf-src').onchange = function () { lire(); F.source = this.value; dessiner(); };
+        if ($('dgf-cat')) $('dgf-cat').onchange = function () { lire(); F.double_poule = null; if (!F.nom.trim()) F.nom = 'Double interne · ' + F.double_categorie; dessiner(); };
+        if ($('dgf-poule')) $('dgf-poule').onchange = function () { lire(); if (!F.nom.trim() || /^Double interne · /.test(F.nom)) F.nom = 'Double interne · ' + F.double_categorie + (F.double_poule ? ' poule ' + F.double_poule : ''); dessiner(); };
+        $('dgf-ok').onclick = function () {
+          lire();
+          if (!F.nom.trim()) return toast('Donne un nom au fil');
+          if (F.source === 'groupe' && !F.groupes.length) return toast('Coche au moins un groupe');
+          if (F.source === 'double' && !F.double_categorie) return toast('Choisis la catégorie du double');
+          var row = { nom: F.nom.trim(), description: F.description.trim() || null, source: F.source, groupes: F.source === 'groupe' ? F.groupes : [],
+            double_categorie: F.source === 'double' ? F.double_categorie : null, double_poule: F.source === 'double' ? F.double_poule : null,
+            type: F.ecriture === 'admins' && F.source === 'tous' ? 'annonce' : F.source === 'tous' ? 'general' : 'groupe',
+            ecriture: F.ecriture, jeunes: F.jeunes, ouvert: F.ouvert, archive: F.archive, ordre: F.ordre };
+          var b = this; b.disabled = true;
+          (d ? q(sb.from('discussions').update(row).eq('id', d.id).select('id').single()) : q(sb.from('discussions').insert(row).select('id').single())).then(function (x) {
+            return q(sb.rpc('discussion_synchroniser', { p_disc: x.id }));
+          }).then(function (n) { toast((d ? 'Fil enregistré' : 'Fil créé') + ' · ' + n + ' membre' + (n > 1 ? 's' : '')); fermer(); if (apres) apres(); })
+            .catch(function (e) { b.disabled = false; toast('Enregistrement impossible' + (e && e.message ? ' : ' + e.message : '')); });
+        };
+        if ($('dgf-sup')) $('dgf-sup').onclick = function () {
+          if (!confirm('Supprimer définitivement « ' + d.nom + ' » et tous ses messages ?\n\nPour simplement le fermer, coche plutôt « Archivé ».')) return;
+          q(sb.from('discussions').delete().eq('id', d.id)).then(function () { toast('Fil supprimé'); fermer(); if (apres) apres(); }).catch(function () { toast('Suppression impossible'); });
+        };
+      });
+    };
+    dessiner();
+  });
+}
+function discMembres(d, apres) {
+  Promise.all([q(sb.from('discussion_membres').select('user_id, role, origine, exclu, muet').eq('discussion_id', d.id)), q(sb.rpc('comptes_liste')), chargerPers()]).then(function (r) {
+    var M = r[0] || [], C = {}, P = {};
+    (r[1] || []).forEach(function (c) { C[c.user_id] = c; });
+    A.pers.forEach(function (p) { P[p.id] = p; });
+    var nomC = function (uid) {
+      var c = C[uid]; if (!c) return { nom: 'Compte supprimé', det: '' };
+      var p = c.personne_id && P[c.personne_id];
+      var nom = p ? p.prenom + ' ' + p.nom : (c.prenom ? c.prenom + ' ' + (c.nom || '') : c.email);
+      var enf = (c.voit || []).map(function (id) { return P[id]; }).filter(function (x) { return x && x.id !== c.personne_id; }).map(function (x) { return x.prenom; });
+      return { nom: nom, det: c.email + (enf.length ? ' · ' + (p ? 'voit ' : 'parent de ') + enf.join(', ') : '') };
+    };
+    var tri = function (a, b) { return (a.role === b.role ? 0 : a.role === 'admin' ? -1 : 1) || nomC(a.user_id).nom.localeCompare(nomC(b.user_id).nom, 'fr'); };
+    var actifs = M.filter(function (x) { return !x.exclu; }).sort(tri), exclus = M.filter(function (x) { return x.exclu; }).sort(tri);
+    var ligne = function (x) {
+      var n = nomC(x.user_id);
+      return '<div class="row" style="align-items:flex-start"><span class="stack" style="gap:2px;min-width:0"><b class="small">' + esc(n.nom) + '</b><span class="xs mut" style="overflow-wrap:anywhere">' + esc(n.det) + '</span>' +
+        '<span>' + (x.role === 'admin' ? '<span class="badge b-ac">Admin</span> ' : '') + (x.origine === 'manuel' ? '<span class="badge">Ajouté à la main</span> ' : '') + (x.muet ? '<span class="badge">Notifs coupées</span>' : '') + '</span></span>' +
+        '<span class="chips" style="flex:none">' + (x.exclu ? '<button class="btn sm line" data-dmr="' + x.user_id + '">Réintégrer</button>' :
+          '<button class="btn sm ghost" data-dma="' + x.user_id + '">' + (x.role === 'admin' ? 'Retirer admin' : 'Admin') + '</button> <button class="btn sm ko" data-dmx="' + x.user_id + '">Retirer</button>') + '</span></div>';
+    };
+    panneau(d.nom + ' · membres', '<div class="stack"><span class="mut small">' + actifs.length + ' membre' + (actifs.length > 1 ? 's' : '') + '. Les <b>admins</b> peuvent écrire même dans un fil d\'annonces et retirer des messages. Un membre retiré à la main ne revient pas avec la mise à jour automatique.</span>' +
+      '<div class="card stack" style="gap:6px"><b class="small">Ajouter un compte</b><input class="f" id="dmm-q" placeholder="Nom, prénom ou adresse mail (2 lettres minimum)"><div id="dmm-r"></div></div>' +
+      '<div class="card tight">' + (actifs.length ? actifs.map(ligne).join('') : '<div class="empty">Personne pour le moment.</div>') + '</div>' +
+      (exclus.length ? '<div class="sect">Retirés à la main (' + exclus.length + ')</div><div class="card tight">' + exclus.map(ligne).join('') + '</div>' : '') + '</div>', function (root) {
+      var maj = function (uid, champs) {
+        return q(sb.from('discussion_membres').upsert(Object.assign({ discussion_id: d.id, user_id: uid, origine: 'manuel' }, champs), { onConflict: 'discussion_id,user_id' })).then(function () { discMembres(d, apres); if (apres) apres(); }).catch(function () { toast('Action impossible'); });
+      };
+      all('[data-dmx]', root).forEach(function (b) { b.onclick = function () { maj(b.dataset.dmx, { exclu: true }); }; });
+      all('[data-dmr]', root).forEach(function (b) { b.onclick = function () { maj(b.dataset.dmr, { exclu: false }); }; });
+      all('[data-dma]', root).forEach(function (b) { b.onclick = function () { var x = M.filter(function (y) { return y.user_id === b.dataset.dma; })[0]; maj(b.dataset.dma, { role: x.role === 'admin' ? 'membre' : 'admin' }); }; });
+      $('dmm-q').oninput = function () {
+        var t = norm(this.value).trim();
+        if (t.length < 2) { $('dmm-r').innerHTML = ''; return; }
+        var dans = {}; M.forEach(function (x) { if (!x.exclu) dans[x.user_id] = 1; });
+        var l = Object.keys(C).filter(function (uid) { var n = nomC(uid); return !dans[uid] && norm(n.nom + ' ' + n.det).indexOf(t) >= 0; }).slice(0, 8);
+        $('dmm-r').innerHTML = l.length ? l.map(function (uid) { return '<button class="chip" data-dmp="' + uid + '" style="margin:4px 4px 0 0">' + esc(nomC(uid).nom) + '</button>'; }).join('') : '<span class="mut xs">Aucun compte trouvé.</span>';
+        all('[data-dmp]', $('dmm-r')).forEach(function (b) { b.onclick = function () { maj(b.dataset.dmp, { exclu: false, role: 'membre' }); }; });
+      };
+    });
+  }).catch(function () { toast('Membres indisponibles'); });
 }
 
 // ---------- Cordage ----------
@@ -2614,7 +2759,7 @@ function hubEvenements(m) {
     $('hub').innerHTML = h;
   });
 }
-var VUES = { messages: vueMessages, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages, fetes: vueFetes };
+var VUES = { messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
   fermer();

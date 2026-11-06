@@ -63,6 +63,9 @@ var IC = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   check: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   back: '<path d="M15 18l-6-6 6-6"/>', next: '<path d="M9 18l6-6-6-6"/>',
+  send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/>',
+  mute: '<path d="M18 8a6 6 0 0 0-9.3-5M6 8c0 7-3 9-3 9h14"/><path d="M13.7 21a2 2 0 0 1-3.4 0M3 3l18 18"/>',
   pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5h.01"/>',
   dl: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
@@ -311,7 +314,7 @@ function tabs(actif) {
   t.push(aDesEspaces() ? ['gestion', 'tool', 'Gestion'] : ['profil', 'user', 'Profil']);
   $('tabs-in').style.setProperty('--n', t.length);
   $('tabs-in').innerHTML = t.map(function (x) {
-    return '<a href="#/' + x[0] + '" class="' + (actif === x[0] ? 'on' : '') + '"' + (actif === x[0] ? ' aria-current="page"' : '') + ' style="position:relative">' + ic(x[1], 24) + x[2] + (x[0] === 'accueil' && nonLus().length ? '<span class="pastille" aria-label="Messages non lus"></span>' : '') + '</a>';
+    return '<a href="#/' + x[0] + '" class="' + (actif === x[0] ? 'on' : '') + '"' + (actif === x[0] ? ' aria-current="page"' : '') + ' style="position:relative">' + ic(x[1], 24) + x[2] + (x[0] === 'accueil' && (nonLus().length || discNonLus()) ? '<span class="pastille" aria-label="Messages non lus"></span>' : '') + '</a>';
   }).join('');
 }
 function backLink(h, label, light) { return '<a class="back" href="' + h + '" style="color:' + (light ? '#fff' : 'var(--tx)') + '">' + ic('back', 20) + esc(label) + '</a>'; }
@@ -340,7 +343,7 @@ function pageAccueil() {
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
-  var top = h, P = { presence: '<div id="presence"></div>', msg: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
+  var top = h, P = { presence: '<div id="presence"></div>', msg: '', disc: carteDiscussionsAccueil(), qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -385,9 +388,9 @@ function pageAccueil() {
   // (l'espace coach est dans l'onglet Gestion)
   P.partners = '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div>';
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
-  if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent || P.qst ? '<div class="dk-top">' + P.urgent + P.msg + P.qst + '</div>' : '') +
+  if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent || P.qst || P.disc ? '<div class="dk-top">' + P.urgent + P.msg + P.disc + P.qst + '</div>' : '') +
     '<div class="dk-col">' + P.rdv + P.fete + P.actu + P.login + P.install + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
-  return top + P.presence + P.msg + P.qst + P.urgent + P.rdv + P.fete + P.actu + P.tiles + P.login + P.install + P.reseaux + P.partners + '</main>';
+  return top + P.presence + P.msg + P.disc + P.qst + P.urgent + P.rdv + P.fete + P.actu + P.tiles + P.login + P.install + P.reseaux + P.partners + '</main>';
 }
 
 function lierAccueilAide() {
@@ -2993,8 +2996,172 @@ function chargerQuestionnaire(id, choix) {
 }
 
 // ---------- Routeur ----------
+// ---------- Discussions : un fil par groupe (remplace les groupes WhatsApp) ----------
+// Les droits (qui lit, qui écrit) sont appliqués par la base. Un fil « en test » n'est visible que par la direction.
+var DISC = { id: null, msgs: [], canal: null, tout: false, luT: null };
+function chargerDiscussions() {
+  S.discs = [];
+  if (!S.user || S.apercu) return Promise.resolve();
+  return q(sb.rpc('mes_discussions')).then(function (l) { S.discs = l || []; }).catch(function () { S.discs = []; });
+}
+function discNonLus() { return (S.discs || []).reduce(function (s, d) { return s + (d.muet ? 0 : d.non_lus || 0); }, 0); }
+function discCouleur(t) { var h = 0; String(t || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 360; }); return 'hsl(' + h + ',45%,42%)'; }
+function discAvatar(d, taille) {
+  var t = taille || 44, txt = d.type === 'annonce' ? '📣' : esc(String(d.nom).replace(/^[^A-Za-zÀ-ÿ0-9]+/, '').charAt(0).toUpperCase());
+  return '<span style="width:' + t + 'px;height:' + t + 'px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:' + Math.round(t * 0.42) + 'px;color:#fff;background:' + (d.type === 'annonce' ? 'var(--ac)' : d.couleur || discCouleur(d.nom)) + '">' + txt + '</span>';
+}
+function discQuand(d) {
+  var j = new Date(d), n = new Date();
+  if (isoJour(j) === isoJour(n)) return fmtH(j);
+  var hier = new Date(); hier.setDate(hier.getDate() - 1);
+  if (isoJour(j) === isoJour(hier)) return 'Hier';
+  return (n - j) < 6 * 864e5 ? j.toLocaleDateString('fr-FR', { weekday: 'short' }) : fmtCourt(j);
+}
+function discTexte(t) {
+  return esc(t).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">$1</a>');
+}
+function carteDiscussionsAccueil() {
+  var l = S.discs || [];
+  if (!l.length) return '';
+  var n = discNonLus(), test = l.every(function (d) { return !d.ouvert; });
+  return '<a class="card stack" href="#/discussions" style="gap:4px;text-decoration:none;color:inherit' + (n ? ';border-left:4px solid var(--ac)' : '') + '"><span class="eyebrow">Discussions' + (test ? ' · en test' : '') + '</span>' +
+    '<b>' + (n ? n + ' nouveau' + (n > 1 ? 'x' : '') + ' message' + (n > 1 ? 's' : '') : 'Tes groupes du club') + '</b>' +
+    '<span class="mut small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l.slice(0, 3).map(function (d) { return d.nom; }).join(' · ')) + (l.length > 3 ? '…' : '') + '</span></a>';
+}
+function discListeHtml() {
+  var l = S.discs || [];
+  if (!l.length) return '<section class="card empty">Aucune discussion pour le moment. Les groupes du club arriveront ici.</section>';
+  return '<section class="card tight">' + l.map(function (d) {
+    var n = d.muet ? 0 : d.non_lus;
+    return '<a class="row" href="#/discussion/' + d.id + '" style="text-decoration:none;color:inherit;gap:12px">' + discAvatar(d) +
+      '<span class="stack" style="flex:1;gap:2px;min-width:0"><span style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b>' +
+      '<span class="xs" style="flex:none;color:' + (n ? 'var(--ac)' : 'var(--mut)') + '">' + (d.dernier_le ? esc(discQuand(d.dernier_le)) : '') + '</span></span>' +
+      '<span style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (n ? 'font-weight:600;color:var(--tx)' : '') + '">' +
+      (d.dernier_texte ? esc(d.dernier_auteur + ' : ' + d.dernier_texte) : (d.description ? esc(d.description) : 'Pas encore de message')) + '</span>' +
+      '<span style="display:flex;gap:6px;align-items:center;flex:none">' + (!d.ouvert ? '<span class="badge" style="background:var(--soft);color:var(--mut)">Test</span>' : '') + (d.muet ? ic('mute', 16, 'var(--mut)') : '') +
+      (n ? '<span class="badge" style="background:var(--ac);color:#fff;min-width:22px;justify-content:center">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</span></span></span></a>';
+  }).join('') + '</section>';
+}
+function pageDiscussions() {
+  var h = '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1 style="font-size:26px">Discussions</h1><p class="mut small" style="margin:4px 0 0">Tes groupes du club : annonces, CLOC\'ARENA, poules, équipes…</p></div><main>';
+  if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes discussions.</section></main>';
+  setTimeout(function () { chargerDiscussions().then(function () { if ($('disc-l')) $('disc-l').innerHTML = discListeHtml(); tabs('accueil'); }); });
+  return h + '<div id="disc-l" class="stack" style="gap:12px">' + discListeHtml() + '</div></main>';
+}
+function pageDiscussion(id) {
+  var d = (S.discs || []).filter(function (x) { return x.id === id; })[0];
+  if (!S.user) return '<div class="pagehead wrap">' + backLink('#/discussions', 'Discussions') + '</div><main><section class="card empty">Connecte-toi pour voir cette discussion.</section></main>';
+  if (!d) {
+    // Arrivée directe (notification) : on recharge la liste avant d'afficher
+    setTimeout(function () { chargerDiscussions().then(function () { if ((S.discs || []).some(function (x) { return x.id === id; })) render(); else if ($('disc-fil')) $('disc-fil').innerHTML = '<section class="card empty">Cette discussion n\'existe plus ou ne te concerne pas.</section>'; }); });
+    return '<div class="pagehead wrap">' + backLink('#/discussions', 'Discussions') + '</div><main><div id="disc-fil"><div class="card empty">Chargement…</div></div></main>';
+  }
+  var h = '<div class="pagehead wrap" style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:18;background:var(--bg)">' +
+    '<a class="back" href="#/discussions" aria-label="Retour aux discussions" style="color:var(--tx);margin:0">' + ic('back', 22) + '</a>' + discAvatar(d, 38) +
+    '<span class="stack" style="flex:1;min-width:0;gap:0"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut">' + d.membres + ' membre' + (d.membres > 1 ? 's' : '') + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
+    '<button class="chip" id="disc-muet" aria-label="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '" title="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '">' + ic(d.muet ? 'bell' : 'mute', 18) + '</button></div><main style="gap:0">';
+  if (!d.ouvert) h += '<div class="card small" style="background:var(--sun);border-color:var(--peach);color:#5a2a14;margin-bottom:10px"><b>En test</b> : ce fil n\'est visible que par la direction. Ouvre-le aux membres depuis l\'espace gestion quand il est prêt.</div>';
+  if (d.description) h += '<p class="xs mut" style="text-align:center;margin:4px 0 8px">' + esc(d.description) + '</p>';
+  h += '<div id="disc-fil" class="dfil"><div class="card empty">Chargement…</div></div></main>';
+  if (d.peut_ecrire) h += '<form class="dcompo" id="disc-f"><textarea id="disc-t" rows="1" maxlength="2000" placeholder="Écrire un message" aria-label="Message"></textarea><button type="submit" aria-label="Envoyer">' + ic('send', 20, '#fff') + '</button></form>';
+  else h += '<div class="dcompo" style="justify-content:center"><span class="small mut">' + (d.archive ? 'Cette discussion est archivée.' : 'Seule l\'équipe du club écrit dans ce fil.') + '</span></div>';
+  setTimeout(function () { ouvrirFil(d); });
+  return h;
+}
+function discFermerCanal() { if (DISC.canal) { try { sb.removeChannel(DISC.canal); } catch (e) { } DISC.canal = null; } DISC.id = null; }
+function discMarquerLu(d) {
+  clearTimeout(DISC.luT);
+  DISC.luT = setTimeout(function () { q(sb.rpc('discussion_lu', { p_disc: d.id })).then(function () { d.non_lus = 0; d.lu_le = new Date().toISOString(); tabs('accueil'); }).catch(function () { }); }, 400);
+}
+function ouvrirFil(d) {
+  discFermerCanal();
+  DISC.id = d.id; DISC.msgs = []; DISC.tout = false;
+  var champs = 'id, user_id, auteur, auteur_club, texte, supprime_le, created_at';
+  var charger = function (avant) {
+    var r = sb.from('discussion_messages').select(champs).eq('discussion_id', d.id).order('created_at', { ascending: false }).limit(60);
+    if (avant) r = r.lt('created_at', avant);
+    return q(r).then(function (l) { l = (l || []).reverse(); if (l.length < 60) DISC.tout = true; return l; });
+  };
+  charger().then(function (l) {
+    if (DISC.id !== d.id) return;
+    DISC.msgs = l; dessinerFil(d, true); discMarquerLu(d);
+  }).catch(function () { if ($('disc-fil')) $('disc-fil').innerHTML = '<section class="card empty">Impossible de charger les messages.</section>'; });
+  // Temps réel : nouveaux messages et messages retirés
+  DISC.canal = sb.channel('disc-' + d.id).on('postgres_changes', { event: '*', schema: 'public', table: 'discussion_messages', filter: 'discussion_id=eq.' + d.id }, function (p) {
+    if (DISC.id !== d.id || !p.new || !p.new.id) return;
+    var i = DISC.msgs.map(function (m) { return m.id; }).indexOf(p.new.id);
+    if (i >= 0) DISC.msgs[i] = p.new; else DISC.msgs.push(p.new);
+    var bas = (window.innerHeight + window.scrollY) >= document.body.scrollHeight - 160;
+    dessinerFil(d, bas || p.new.user_id === S.user.id);
+    if (document.visibilityState === 'visible') discMarquerLu(d);
+  }).subscribe();
+  if ($('disc-muet')) $('disc-muet').onclick = function () {
+    q(sb.rpc('discussion_muet', { p_disc: d.id, p_muet: !d.muet })).then(function () { d.muet = !d.muet; toast(d.muet ? 'Notifications coupées pour ce fil' : 'Notifications réactivées'); render(); }).catch(function () { toast('Action impossible'); });
+  };
+  var t = $('disc-t');
+  if (t) {
+    var taille = function () { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; };
+    t.oninput = taille;
+    // Sur ordinateur, Entrée envoie (Maj+Entrée pour aller à la ligne) ; sur téléphone, Entrée va à la ligne
+    t.onkeydown = function (e) { if (e.key === 'Enter' && !e.shiftKey && !estMobile()) { e.preventDefault(); $('disc-f').requestSubmit ? $('disc-f').requestSubmit() : $('disc-f').onsubmit(e); } };
+    $('disc-f').onsubmit = function (e) {
+      e.preventDefault();
+      var v = t.value.trim();
+      if (!v) return;
+      var btn = $('disc-f').querySelector('button'); btn.disabled = true;
+      q(sb.from('discussion_messages').insert({ discussion_id: d.id, texte: v }).select(champs).single()).then(function (m) {
+        t.value = ''; taille(); btn.disabled = false; t.focus();
+        if (DISC.msgs.map(function (x) { return x.id; }).indexOf(m.id) < 0) { DISC.msgs.push(m); dessinerFil(d, true); }
+        d.dernier_texte = m.texte; d.dernier_auteur = m.auteur; d.dernier_le = m.created_at;
+        sb.functions.invoke('discussion-notifier', { body: { message_id: m.id } }).catch(function () { });
+      }).catch(function () { btn.disabled = false; toast('Message non envoyé'); });
+    };
+  }
+  DISC.plus = function () {
+    var premier = DISC.msgs[0];
+    if (!premier) return;
+    var hAvant = document.body.scrollHeight;
+    charger(premier.created_at).then(function (l) { DISC.msgs = l.concat(DISC.msgs); dessinerFil(d, false); window.scrollTo(0, document.body.scrollHeight - hAvant + window.scrollY); });
+  };
+}
+function dessinerFil(d, enBas) {
+  var box = $('disc-fil');
+  if (!box) return;
+  var moi = S.user.id, jour = '', h = '';
+  if (!DISC.tout) h += '<button class="chip" id="disc-plus" style="align-self:center;margin-bottom:6px">Voir les messages précédents</button>';
+  if (!DISC.msgs.length) h += '<div class="card empty" style="margin-top:12px">Pas encore de message. ' + (d.peut_ecrire ? 'Lance la discussion !' : '') + '</div>';
+  DISC.msgs.forEach(function (m, i) {
+    var dt = new Date(m.created_at), j = isoJour(dt);
+    if (j !== jour) { jour = j; h += '<div class="djour">' + esc(discQuand(m.created_at) === fmtH(dt) ? 'Aujourd\'hui' : fmtJour(dt)) + '</div>'; }
+    var mien = m.user_id === moi, prec = DISC.msgs[i - 1];
+    var suite = prec && prec.user_id === m.user_id && isoJour(new Date(prec.created_at)) === j && (dt - new Date(prec.created_at)) < 5 * 60e3;
+    var retirable = !m.supprime_le && (mien || d.admin);
+    h += '<div class="dmsg' + (mien ? ' moi' : '') + (suite ? ' suite' : '') + (m.supprime_le ? ' retire' : '') + '"' + (retirable ? ' data-dret="' + m.id + '" role="button" tabindex="0" title="Appuie pour retirer ce message"' : '') + '>' +
+      (!mien && !suite ? '<span class="qui">' + esc(m.auteur) + (m.auteur_club ? ' <span class="club">Club</span>' : '') + '</span>' : '') +
+      (m.supprime_le ? '<i>Message retiré</i>' : discTexte(m.texte)) + '<span class="h">' + fmtH(dt) + '</span></div>';
+  });
+  box.innerHTML = h;
+  if ($('disc-plus')) $('disc-plus').onclick = function () { DISC.plus(); };
+  Array.prototype.forEach.call(box.querySelectorAll('[data-dret]'), function (el) {
+    el.onclick = function (e) {
+      if (e.target.tagName === 'A') return;
+      if (!confirm('Retirer ce message ? Il sera remplacé par « Message retiré » pour tout le monde.')) return;
+      q(sb.rpc('discussion_message_retirer', { p_msg: el.dataset.dret })).then(function () {
+        DISC.msgs.forEach(function (m) { if (m.id === el.dataset.dret) m.supprime_le = new Date().toISOString(); }); dessinerFil(d, false); toast('Message retiré');
+      }).catch(function () { toast('Action impossible'); });
+    };
+  });
+  if (enBas) setTimeout(function () { window.scrollTo(0, document.body.scrollHeight); }, 0);
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState !== 'visible' || !S.user) return;
+  var d = DISC.id && (S.discs || []).filter(function (x) { return x.id === DISC.id; })[0];
+  if (d) discMarquerLu(d); else chargerDiscussions().then(function () { if (document.body.getAttribute('data-page') === 'accueil' || document.body.getAttribute('data-page') === 'discussions') render(); });
+});
+
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
+  if (parts[0] !== 'discussion') discFermerCanal();
   var p = parts[0] || 'accueil', arg = parts[1];
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
@@ -3013,6 +3180,8 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') { html = pageCoach(); actif = 'gestion'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'accueil'; }
+  else if (p === 'discussions') { html = pageDiscussions(); actif = 'accueil'; }
+  else if (p === 'discussion') { html = pageDiscussion(arg); actif = 'accueil'; }
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'accueil'; }
   else if (p === 'questionnaire') { html = pageQuestionnaire(arg); actif = 'accueil'; }
@@ -3035,12 +3204,12 @@ function demarrer() {
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires()]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions()]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
       S.user = session.user;
-      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
+      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
     }
   });
 }
