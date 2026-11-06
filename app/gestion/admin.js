@@ -508,11 +508,12 @@ var ADF = { t: '', profil: '', groupe: '', impayes: false };
 function choisirTitulaire(c, foyer, pid, apres) {
   var membres = foyer ? A.pers.filter(function (p) { return p.foyer_id === foyer; }) : A.pers.filter(function (p) { return p.id === pid; });
   var majeur = function (p) { return p.date_naissance ? age(p.date_naissance) >= 18 : p.profil !== 'jeune'; };
-  var adultes = membres.filter(majeur);
+  var adultes = membres.filter(majeur), jeunes = membres.filter(function (p) { return !majeur(p); });
   panneau('Relier ' + c.email, '<div class="stack"><span class="mut small">' + (c.prenom ? 'Nom indiqué : <b>' + esc(c.prenom + ' ' + c.nom) + '</b>. ' : '') + 'À qui est ce compte ?</span>' +
     adultes.map(function (p) { return '<button class="btn line" data-tit="' + p.id + '" style="justify-content:flex-start">C\'est le compte de <b style="margin-left:4px">' + esc(p.prenom + ' ' + p.nom) + '</b></button>'; }).join('') +
     (foyer ? '<button class="btn line" data-tit="" style="justify-content:flex-start">Un parent qui n\'a pas de fiche adhérent</button>' : '') +
-    '<span class="mut xs">Un adulte voit sa propre fiche et les mineurs de sa famille. Un compte parent voit les mineurs (et les adultes qui n\'ont pas leur propre compte).</span></div>', function (r) {
+    (jeunes.length ? '<span class="mut xs" style="margin-top:6px">Compte jeune (mineur avec son téléphone, accord des parents) :</span>' + jeunes.map(function (p) { return '<button class="btn line" data-tit="' + p.id + '" style="justify-content:flex-start">Compte jeune de <b style="margin-left:4px">' + esc(p.prenom + ' ' + p.nom) + '</b></button>'; }).join('') : '') +
+    '<span class="mut xs">Un adulte voit sa propre fiche et les mineurs de sa famille. Un compte parent voit les mineurs (et les adultes qui n\'ont pas leur propre compte). Un compte jeune ne voit que sa propre fiche.</span></div>', function (r) {
     all('[data-tit]', r).forEach(function (b) { b.onclick = function () {
       q(sb.rpc('compte_definir', { p_user: c.user_id, p_foyer: foyer || null, p_personne: b.dataset.tit || null })).then(function () { toast('Compte relié'); fermer(); if (apres) apres(); }).catch(function () { toast('Action impossible'); });
     }; });
