@@ -176,11 +176,15 @@ details.acc .tw{margin:0;border:0;border-radius:0}
 .card.tight{padding:4px 14px}
 .card .row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--bd)}
 .card .row:first-child{border-top:0}
+
+.ac-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:640px){.ac-2{grid-template-columns:1fr}}
+.ac-save{position:sticky;bottom:0;display:flex;justify-content:space-between;gap:10px;padding:12px 0;background:linear-gradient(transparent,var(--bg) 30%)}
 </style>
 </head>
 <body>
 <div id="root"><div class="login"><div class="skel"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="admin.js?v=202611072245"></script>
+<script src="admin.js?v=202611080030"></script>
 </body>
 </html>

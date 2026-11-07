@@ -327,7 +327,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '03/11 17h15b';
+var VERSION_APPLI = '08/11 01h00';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -338,13 +338,62 @@ function nomAffiche() {
 }
 
 // ---------- Accueil ----------
+
+// ---------- Accueil réglable depuis la gestion (Communication → Accueil de l'appli) ----------
+var ACC_BLOCS = [['presence', 'Présence au club'], ['rdv', 'Prochain rendez-vous'], ['fete', 'Fête à la une'], ['actu', 'Dernière actu'], ['tiles', 'Raccourcis'], ['reseaux', 'Réseaux sociaux'], ['partners', 'Partenaires']];
+var ACC_TUILES = {
+  double: ['Double interne', 'trophy', '#/double'], inscriptions: ['Inscriptions', 'check', '#/inscriptions'], reserver: ['Réserver un court', 'cal', ''],
+  cordage: ['Cordage', 'racket', '#/cordage'], arena: ['CLOC\'ARENA', 'trophy', '#/arena'], agenda: ['Mon agenda', 'cal', '#/agenda'],
+  annonces: ['Petites annonces', 'chat', '#/club/annonces'], club: ['Infos du club', 'club', '#/club/infos'], fete: ['Fête de Noël', 'people', '#/noel'], aide: ['Aide', 'user', '#/aide']
+};
+var ACC_DEF = {
+  mot: { actif: false, titre: '', texte: '', lien: '', lien_txt: '', couleur: 'ac', fin: '' },
+  blocs: ACC_BLOCS.map(function (b) { return { k: b[0], on: true }; }),
+  tuiles: [{ type: 'double' }, { type: 'inscriptions' }, { type: 'reserver' }, { type: 'cordage' }],
+  reseaux: { instagram: 'https://www.instagram.com/cloc.acheres.tennis', facebook: 'https://www.facebook.com/ClocaTennis/' },
+  partenaires: [{ nom: 'Ecosport', lien: 'https://ecosport-tennis.fr/' }, { nom: 'Tecnifibre', lien: 'https://www.tecnifibre.com/?country=FR' }],
+  faq: []
+};
+function accueilCfg() {
+  var c = (S.reglages && S.reglages.accueil) || {}, d = ACC_DEF;
+  var blocs = Array.isArray(c.blocs) ? c.blocs.filter(function (b) { return b && ACC_BLOCS.some(function (x) { return x[0] === b.k; }); }) : [];
+  ACC_BLOCS.forEach(function (x) { if (!blocs.some(function (b) { return b.k === x[0]; })) blocs.push({ k: x[0], on: true }); }); // un bloc ajouté plus tard apparaît par défaut
+  return {
+    mot: Object.assign({}, d.mot, c.mot || {}), blocs: blocs,
+    tuiles: Array.isArray(c.tuiles) ? c.tuiles.filter(function (t) { return t && (ACC_TUILES[t.type] || (t.type === 'lien' && t.titre && t.lien)); }) : d.tuiles,
+    reseaux: Object.assign({}, d.reseaux, c.reseaux || {}),
+    partenaires: Array.isArray(c.partenaires) ? c.partenaires.filter(function (x) { return x && x.nom; }) : d.partenaires,
+    faq: Array.isArray(c.faq) ? c.faq.filter(function (x) { return x && x.q; }) : d.faq
+  };
+}
+function lienSur(u) { u = String(u || '').trim(); return /^(https?:\/\/|#\/|mailto:|tel:)/i.test(u) ? u : (u && /^[\w.-]+\.[a-z]{2,}/i.test(u) ? 'https://' + u : ''); }
+function lienExterne(u) { return /^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''; }
+function motDuClub(cfg) {
+  var m = cfg.mot; if (!m.actif || !(m.titre || m.texte)) return '';
+  if (m.fin && m.fin < isoJour(new Date())) return '';
+  var fond = { ac: 'var(--ac)', navy: 'var(--navy)', ok: 'var(--ok)', sun: '#f3d98a' }[m.couleur] || 'var(--ac)', clair = m.couleur === 'sun', tx = clair ? '#12304a' : '#fff';
+  var lien = lienSur(m.lien);
+  return '<section class="card stack mot-club" style="gap:6px;background:' + fond + ';border-color:' + fond + ';color:' + tx + '">' +
+    (m.titre ? '<b style="font-size:18px;line-height:1.25">' + esc(m.titre) + '</b>' : '') + (m.texte ? '<span class="small" style="white-space:pre-line;line-height:1.5">' + esc(m.texte) + '</span>' : '') +
+    (lien ? '<a class="btn" href="' + esc(lien) + '"' + lienExterne(lien) + ' style="align-self:flex-start;margin-top:4px;background:' + (clair ? 'var(--navy)' : '#fff') + ';color:' + (clair ? '#fff' : 'var(--navy)') + '">' + esc(m.lien_txt || 'En savoir plus') + '</a>' : '') + '</section>';
+}
+function tuilesAccueil(cfg, dyn) {
+  var l = cfg.tuiles; if (!l.length) return '';
+  return '<div class="grid2">' + l.map(function (t) {
+    if (t.type === 'lien') { var u = lienSur(t.lien); if (!u) return ''; return '<a class="tile" href="' + esc(u) + '"' + lienExterne(u) + '>' + ic(IC[t.icone] ? t.icone : 'pin', 24) + '<b>' + esc(t.titre) + '</b><span class="mut small">' + esc(t.sous || '') + '</span></a>'; }
+    var d = ACC_TUILES[t.type], href = t.type === 'reserver' ? ADOC_URL : d[2];
+    var sous = t.sous || dyn[t.type] || '';
+    return '<a class="tile" href="' + href + '"' + lienExterne(href) + '>' + ic(d[1], 24) + '<b>' + esc(t.titre || d[0]) + '</b><span class="mut small">' + sous + '</span></a>';
+  }).join('') + '</div>';
+}
+
 function pageAccueil() {
   var urgent = (S.pubs || []).filter(function (p) { return p.urgent; })[0];
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
   var tDisc = tuileDiscussions();
-  var top = h, P = { presence: '<div class="grid2 top2"><div id="presence"' + (tDisc ? '' : ' style="grid-column:1/-1"') + '></div>' + tDisc + '</div><div id="presence-det"></div>', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '' };
+  var top = h, P = { presence: '<div class="grid2 top2"><div id="presence"' + (tDisc ? '' : ' style="grid-column:1/-1"') + '></div>' + tDisc + '</div><div id="presence-det"></div>', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -372,12 +421,9 @@ function pageAccueil() {
     }).filter(Boolean);
     if (rangs.length) arenaTxt = rangs.join(' · ');
   }
-  P.tiles = '<div class="grid2">' +
-    '<a class="tile" href="#/double">' + ic('trophy', 24) + '<b>Double interne</b><span class="mut small">Poules, dispos, scores</span></a>' +
-    '<a class="tile" href="#/inscriptions">' + ic('check', 24) + '<b>Inscriptions</b><span class="mut small">' + (ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements') + '</span></a>' +
-    '<a class="tile" href="' + ADOC_URL + '" target="_blank" rel="noopener">' + ic('cal', 24) + '<b>Réserver un court</b><span class="mut small">Sur Ten\'Up</span></a>' +
-    '<a class="tile" href="#/cordage">' + ic('racket', 24) + '<b>Cordage</b><span class="mut small">' + resumeCordage() + '</span></a></div>';
-
+  var cfg = accueilCfg();
+  P.tiles = tuilesAccueil(cfg, { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' });
+  P.mot = motDuClub(cfg);
   if (!S.user) P.login = '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
     '<ol class="small" style="margin:0;padding-left:20px;line-height:1.7"><li>Tape l\'adresse mail donnée au club</li><li>Ouvre le mail : tu reçois un code</li><li>Tape le code : c\'est fait !</li></ol>' +
     '<a class="btn" href="#/profil">Me connecter</a><button class="btn line" data-guide="1">Besoin d\'aide ? Le guide pas à pas</button></section>';
@@ -387,11 +433,27 @@ function pageAccueil() {
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
   if (actu) P.actu = carteActu(actu, 'Dernière actu');
   // (l'espace coach est dans l'onglet Gestion)
-  P.partners = '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div><a href="https://ecosport-tennis.fr/" target="_blank" rel="noopener">Ecosport</a><a href="https://www.tecnifibre.com/?country=FR" target="_blank" rel="noopener">Tecnifibre</a></div>';
+  P.partners = cfg.partenaires.length ? '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div>' + cfg.partenaires.map(function (x) { var u = lienSur(x.lien); return u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(x.nom) + '</a>' : '<span>' + esc(x.nom) + '</span>'; }).join('') + '</div>' : '';
+  // Blocs masqués dans la gestion
+  cfg.blocs.forEach(function (b) { if (!b.on) P[b.k] = ''; });
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
-  if (vueLarge()) return top + '<div class="dk-home">' + (P.msg || P.urgent || P.qst || P.disc ? '<div class="dk-top">' + P.urgent + P.msg + P.disc + P.qst + '</div>' : '') +
-    '<div class="dk-col">' + P.rdv + P.fete + P.actu + P.login + P.install + '</div><div class="dk-col">' + P.presence + P.tiles + P.reseaux + '</div></div>' + P.partners + '</main>';
-  return top + P.presence + P.msg + P.disc + P.qst + P.urgent + P.rdv + P.fete + P.actu + P.tiles + P.login + P.install + P.reseaux + P.partners + '</main>';
+  // Ordre réglable : messages, questionnaires et alertes restent juste après la présence (ou en haut si elle est masquée)
+  var auto = P.msg + P.disc + P.qst + P.urgent, ordre = cfg.blocs.filter(function (b) { return b.on; }).map(function (b) { return b.k; });
+  if (vueLarge()) {
+    var col1 = ['rdv', 'fete', 'actu'], c1 = '', c2 = '';
+    ordre.forEach(function (k) { if (k === 'partners') return; if (col1.indexOf(k) >= 0) c1 += P[k]; else c2 += P[k]; });
+    return top + P.mot + '<div class="dk-home">' + (auto ? '<div class="dk-top">' + P.urgent + P.msg + P.disc + P.qst + '</div>' : '') +
+      '<div class="dk-col">' + c1 + P.login + P.install + '</div><div class="dk-col">' + c2 + '</div></div>' + P.partners + '</main>';
+  }
+  var corps = '', autoPlace = ordre.indexOf('presence') < 0;
+  if (autoPlace) corps += auto;
+  ordre.forEach(function (k) {
+    corps += P[k];
+    if (k === 'presence') corps += auto;
+    if (k === 'tiles') corps += P.login + P.install;
+  });
+  if (ordre.indexOf('tiles') < 0) corps += P.login + P.install;
+  return top + P.mot + corps + '</main>';
 }
 
 function lierAccueilAide() {
@@ -1418,6 +1480,7 @@ function resumeCoach() {
 var RESEAUX = { instagram: 'https://www.instagram.com/cloc.acheres.tennis', facebook: 'https://www.facebook.com/ClocaTennis/' };
 function remplirReseaux() {
   var box = $('reseaux'); if (!box) return;
+  var R = accueilCfg().reseaux; RESEAUX = { instagram: lienSur(R.instagram) || RESEAUX.instagram, facebook: lienSur(R.facebook) || RESEAUX.facebook };
   var boutons = '<div class="grid2"><a class="btn" href="' + RESEAUX.instagram + '" target="_blank" rel="noopener" style="background:linear-gradient(45deg,#f09433,#dc2743,#bc1888)">Instagram</a><a class="btn" href="' + RESEAUX.facebook + '" target="_blank" rel="noopener" style="background:#1877f2">Facebook</a></div>';
   var dessiner = function (l) {
     box.innerHTML = '<section class="card stack" style="gap:10px"><span class="eyebrow">Suivez le club</span>' + (l.length ? '<div style="display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px">' + l.map(function (x) {
@@ -2513,6 +2576,8 @@ function pageAide() {
   h += bloc('Se connecter', ['Va dans <b>Profil</b>.', 'Tape l\'adresse mail donnée au club à l\'inscription.', 'Ouvre le mail reçu et tape le <b>code à 6 chiffres</b> dans l\'appli.', 'Pas de mail ? Regarde dans les <b>spams</b> ou <b>Promotions</b>, attends une minute, puis redemande un code.'], maquette('connexion'));
   h += bloc('Activer les notifications', ['Ouvre l\'appli <b>depuis son icône</b> (obligatoire sur iPhone).', 'Va dans <b>Profil</b> → <b>Activer les notifications</b>.', 'Touche <b>« Autoriser »</b>.'], maquette('notifs'));
   h += bloc('Mon adresse n\'est pas reconnue', ['Vérifie que c\'est bien l\'adresse donnée au club à l\'inscription.', 'Remplis <b>Profil → Mes informations</b> (prénom, nom, enfants) : le club reliera ton compte à ta famille.', 'Sinon, demande à l\'accueil du club house.']);
+  var faq = accueilCfg().faq;
+  if (faq.length) h += '<div class="eyebrow" style="margin-top:6px">Questions fréquentes</div>' + faq.map(function (x) { return '<details class="card"><summary style="cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:8px">' + esc(x.q) + '<span class="mut">▾</span></summary><p class="small" style="margin:12px 0 0;line-height:1.6;white-space:pre-line">' + esc(x.r || '') + '</p></details>'; }).join('');
   h += '</main>';
   setTimeout(function () { if ($('aide-go')) $('aide-go').onclick = function () { ouvrirGuide(0); }; });
   return h;
@@ -2808,22 +2873,19 @@ function blocInviter(f) {
 }
 
 function blocTombola(f, lots, T, P, passe) {
-  var gagnants = {};
-  if (f.tirage_publie) lots.forEach(function (l) { if (l.gagnant_numero) gagnants[l.gagnant_numero] = l; });
-  var mesNum = []; T.forEach(function (t) { (t.numeros || []).forEach(function (n) { mesNum.push(n); }); });
   var h = '<section class="card stack" style="gap:12px" id="fete-tombola"><div class="stack" style="gap:4px"><b style="font-size:18px">🎟️ Tombola</b>' +
     '<span class="small"><b>' + euros(f.prix_ticket) + ' le ticket</b> · <b>' + f.carnet_nb + ' tickets pour ' + euros(f.prix_carnet) + '</b></span>' +
     '<span class="mut small">Tirage pendant la fête. 100 % tennis !</span></div>';
   h += '<div class="stack" style="gap:6px"><span class="eyebrow">Les lots</span>' + (lots.length ? lots.map(function (l, i) {
-    var gagne = f.tirage_publie && l.gagnant_numero;
+    var gagne = f.tirage_publie && l.gagnant_nom;
     return '<div class="lot">' + (l.photo_url ? '<button class="lot-ph" data-lotimg="' + esc(l.photo_url) + '" aria-label="Voir la photo du lot"><img src="' + esc(l.photo_url) + '" alt=""></button>' : '<span class="lot-n">' + (i + 1) + '</span>') + '<div class="stack" style="flex:1;min-width:0"><b>' + esc(l.nom) + '</b>' + (l.detail ? '<span class="mut small">' + esc(l.detail) + '</span>' : '') +
-      (gagne ? '<span class="small" style="color:' + (mesNum.indexOf(l.gagnant_numero) >= 0 ? 'var(--ok);font-weight:700' : 'var(--mut)') + '">Ticket gagnant : n° ' + l.gagnant_numero + (mesNum.indexOf(l.gagnant_numero) >= 0 ? ' 🎉 C\'est toi !' : '') + '</span>' : '') + '</div></div>';
+      (gagne ? '<span class="small" style="color:var(--ok);font-weight:700">🎉 Gagnant : ' + esc(l.gagnant_nom) + '</span>' : '') + '</div></div>';
   }).join('') : '<span class="mut small">Les lots seront dévoilés très bientôt 🎁</span>') + '</div>';
   if (T.length) {
     h += '<div class="stack" style="gap:6px"><span class="eyebrow">Mes tickets</span>' + T.map(function (t) {
       var paye = t.statut === 'paye';
       return '<div class="lot" style="align-items:flex-start"><span class="lot-n" style="background:' + (paye ? 'var(--ok)' : 'var(--ac)') + '">' + t.nb + '</span><div class="stack" style="flex:1;min-width:0"><b>' + t.nb + ' ticket' + (t.nb > 1 ? 's' : '') + ' · ' + euros(t.montant) + '</b>' +
-        (paye ? '<span class="small" style="color:var(--ok)">Payé ✅ · n° ' + esc((t.numeros || []).join(', ')) + '</span>' : '<span class="small" style="color:var(--ac)">Réservé · à régler au club house ou le jour de la fête</span>') + '</div>' +
+        (paye ? '<span class="small" style="color:var(--ok)">Payé ✅ · tes tickets papier t\'ont été remis</span>' : '<span class="small" style="color:var(--ac)">Réservé · à régler au club house ou le jour de la fête</span>') + '</div>' +
         (!paye ? '<button class="chip" data-tkx="' + t.id + '">Annuler</button>' : '') + '</div>';
     }).join('') + '</div>';
   }
@@ -2835,7 +2897,7 @@ function blocTombola(f, lots, T, P, passe) {
       '<label class="f">Au nom de<input class="f" id="tk-nom" maxlength="80" value="' + esc((P && P.nom) || nomFamilleDefaut()) + '"></label>' +
       (S.user ? '' : '<label class="f">Téléphone <span class="mut" style="font-weight:400">(facultatif)</span><input class="f" id="tk-contact" maxlength="120" value="' + esc((P && P.contact) || '') + '"></label>') +
       '<button class="btn" id="tk-ok">Réserver mes tickets</button>' +
-      '<span class="mut xs">Paiement au club house ou le jour de la fête. Tes numéros s\'affichent ici dès que c\'est payé. Seuls les tickets payés participent au tirage.</span></div>';
+      '<span class="mut xs">Paiement au club house ou le jour de la fête : on te remet alors tes tickets papier, avec ton nom noté sur chaque talon pour le tirage.</span></div>';
   }
   return h + '</section>';
 }
