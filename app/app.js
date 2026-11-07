@@ -3046,24 +3046,71 @@ function carteDiscussionsAccueil() {
     '<b>' + (n ? n + ' nouveau' + (n > 1 ? 'x' : '') + ' message' + (n > 1 ? 's' : '') : 'Tes groupes du club') + '</b>' +
     '<span class="mut small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(l.slice(0, 3).map(function (d) { return d.nom; }).join(' · ')) + (l.length > 3 ? '…' : '') + '</span></a>';
 }
+// Liste des fils regroupés par catégorie (dossiers repliables). Une catégorie avec un seul fil s'affiche directement.
+function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+var DISC_OUV = (function () { try { return JSON.parse(localStorage.getItem('disc_ouverts') || '{}'); } catch (e) { return {}; } })();
+function discLigne(d, dansDossier) {
+  var n = d.muet ? 0 : d.non_lus, nom = d.nom;
+  // Dans le dossier « Double interne », « Double interne · Dames poule 1 » devient « Dames poule 1 »
+  if (dansDossier && d.categorie && nom.indexOf(d.categorie + ' · ') === 0) nom = nom.slice(d.categorie.length + 3);
+  return '<a class="row" href="#/discussion/' + d.id + '" style="text-decoration:none;color:inherit;gap:12px' + (dansDossier ? ';padding-left:14px' : '') + '">' + discAvatar(Object.assign({}, d, { nom: nom }), dansDossier ? 36 : 44) +
+    '<span class="stack" style="flex:1;gap:2px;min-width:0"><span style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(nom) + '</b>' +
+    '<span class="xs" style="flex:none;color:' + (n ? 'var(--ac)' : 'var(--mut)') + '">' + (d.dernier_le ? esc(discQuand(d.dernier_le)) : '') + '</span></span>' +
+    '<span style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (n ? 'font-weight:600;color:var(--tx)' : '') + '">' +
+    (d.dernier_texte ? esc(d.dernier_auteur + ' : ' + d.dernier_texte) : (d.description ? esc(d.description) : 'Pas encore de message')) + '</span>' +
+    '<span style="display:flex;gap:6px;align-items:center;flex:none">' + (!d.ouvert ? '<span class="badge" style="background:var(--soft);color:var(--mut)">Test</span>' : '') + (d.muet ? ic('mute', 16, 'var(--mut)') : '') +
+    (n ? '<span class="badge" style="background:var(--ac);color:#fff;min-width:22px;justify-content:center">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</span></span></span></a>';
+}
 function discListeHtml() {
   var l = S.discs || [];
   if (!l.length) return '<section class="card empty">Aucune discussion pour le moment. Les groupes du club arriveront ici.</section>';
-  return '<section class="card tight">' + l.map(function (d) {
-    var n = d.muet ? 0 : d.non_lus;
-    return '<a class="row" href="#/discussion/' + d.id + '" style="text-decoration:none;color:inherit;gap:12px">' + discAvatar(d) +
-      '<span class="stack" style="flex:1;gap:2px;min-width:0"><span style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b>' +
-      '<span class="xs" style="flex:none;color:' + (n ? 'var(--ac)' : 'var(--mut)') + '">' + (d.dernier_le ? esc(discQuand(d.dernier_le)) : '') + '</span></span>' +
-      '<span style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (n ? 'font-weight:600;color:var(--tx)' : '') + '">' +
-      (d.dernier_texte ? esc(d.dernier_auteur + ' : ' + d.dernier_texte) : (d.description ? esc(d.description) : 'Pas encore de message')) + '</span>' +
-      '<span style="display:flex;gap:6px;align-items:center;flex:none">' + (!d.ouvert ? '<span class="badge" style="background:var(--soft);color:var(--mut)">Test</span>' : '') + (d.muet ? ic('mute', 16, 'var(--mut)') : '') +
-      (n ? '<span class="badge" style="background:var(--ac);color:#fff;min-width:22px;justify-content:center">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</span></span></span></a>';
+  var cats = [], par = {};
+  l.forEach(function (d) { var c = d.categorie || 'Autres'; if (!par[c]) { par[c] = []; cats.push(c); } par[c].push(d); });
+  var recherche = l.length > 10 ? '<input class="f" id="disc-q" type="search" placeholder="Chercher une discussion" aria-label="Chercher une discussion" style="margin-bottom:2px">' : '';
+  return recherche + '<section class="card tight" id="disc-box">' + cats.map(function (c) {
+    var fils = par[c];
+    if (fils.length === 1) return discLigne(fils[0], false);
+    var n = fils.reduce(function (s, d) { return s + (d.muet ? 0 : d.non_lus || 0); }, 0);
+    var der = fils.filter(function (d) { return d.dernier_le; }).sort(function (a, b) { return a.dernier_le < b.dernier_le ? 1 : -1; })[0];
+    var ouvert = !!DISC_OUV[c];
+    return '<div class="dossier" data-cat="' + esc(c) + '"><button class="row dos-tete" data-dos="' + esc(c) + '" aria-expanded="' + ouvert + '" style="width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;gap:12px">' +
+      discAvatar({ nom: c, couleur: fils[0].couleur, type: fils.every(function (d) { return d.type === 'annonce'; }) ? 'annonce' : 'groupe' }) +
+      '<span class="stack" style="flex:1;gap:2px;min-width:0"><span style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c) + '</b>' +
+      '<span class="xs" style="flex:none;color:' + (n ? 'var(--ac)' : 'var(--mut)') + '">' + (der ? esc(discQuand(der.dernier_le)) : '') + '</span></span>' +
+      '<span style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + fils.length + ' discussions' + (der ? ' · ' + esc(der.dernier_auteur + ' : ' + der.dernier_texte) : '') + '</span>' +
+      '<span style="display:flex;gap:6px;align-items:center;flex:none">' + (n ? '<span class="badge" style="background:var(--ac);color:#fff;min-width:22px;justify-content:center">' + (n > 99 ? '99+' : n) + '</span>' : '') +
+      '<span class="dos-fl" style="display:inline-flex;transition:transform .2s;transform:rotate(' + (ouvert ? 90 : 0) + 'deg)">' + ic('next', 18, 'var(--mut)') + '</span></span></span></span></button>' +
+      '<div class="dos-fils"' + (ouvert ? '' : ' hidden') + ' style="border-left:3px solid var(--soft);margin-left:20px">' + fils.map(function (d) { return discLigne(d, true); }).join('') + '</div></div>';
   }).join('') + '</section>';
+}
+function lierListeDisc() {
+  var box = $('disc-box'); if (!box) return;
+  Array.prototype.forEach.call(box.querySelectorAll('[data-dos]'), function (b) {
+    b.onclick = function () {
+      var c = b.dataset.dos, ouv = !DISC_OUV[c];
+      if (ouv) DISC_OUV[c] = 1; else delete DISC_OUV[c];
+      try { localStorage.setItem('disc_ouverts', JSON.stringify(DISC_OUV)); } catch (e) { }
+      b.setAttribute('aria-expanded', ouv); b.nextElementSibling.hidden = !ouv;
+      b.querySelector('.dos-fl').style.transform = 'rotate(' + (ouv ? 90 : 0) + 'deg)';
+    };
+  });
+  // Recherche : ouvre les dossiers et ne garde que les fils dont le nom correspond
+  if ($('disc-q')) $('disc-q').oninput = function () {
+    var t = norm(this.value).trim(), mots = t.split(/\s+/);
+    var colle = function (txt) { txt = norm(txt); return mots.every(function (m) { return txt.indexOf(m) >= 0; }); };
+    Array.prototype.forEach.call(box.querySelectorAll('.dossier'), function (dos) {
+      var vus = 0;
+      Array.prototype.forEach.call(dos.querySelectorAll('.dos-fils > a'), function (a) { var ok = !t || colle(a.textContent + ' ' + dos.dataset.cat); a.hidden = !ok; if (ok) vus++; });
+      dos.hidden = !!t && !vus;
+      dos.querySelector('.dos-fils').hidden = t ? false : !DISC_OUV[dos.dataset.cat];
+    });
+    Array.prototype.forEach.call(box.querySelectorAll(':scope > a.row'), function (a) { a.hidden = !!t && !colle(a.textContent); });
+  };
 }
 function pageDiscussions() {
   var h = '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1 style="font-size:26px">Discussions</h1><p class="mut small" style="margin:4px 0 0">Tes groupes du club : annonces, CLOC\'ARENA, poules, équipes…</p></div><main>';
   if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes discussions.</section></main>';
-  setTimeout(function () { chargerDiscussions().then(function () { if ($('disc-l')) $('disc-l').innerHTML = discListeHtml(); tabs('accueil'); }); });
+  setTimeout(function () { lierListeDisc(); chargerDiscussions().then(function () { if ($('disc-l') && !($('disc-q') && $('disc-q').value)) { $('disc-l').innerHTML = discListeHtml(); lierListeDisc(); } tabs('accueil'); }); });
   return h + '<div id="disc-l" class="stack" style="gap:12px">' + discListeHtml() + '</div></main>';
 }
 function pageDiscussion(id) {

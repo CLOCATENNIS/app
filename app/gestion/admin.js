@@ -1050,7 +1050,7 @@ function vueDiscussions(m) {
   m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>en test</b> n\'est visible que par la direction ; ouvre-le aux membres quand il est prêt.', '<button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
   $('dg-new').onclick = function () { discForm(null, function () { vueDiscussions(m); }); };
   q(sb.rpc('discussions_synchroniser_tout')).catch(function () { }).then(function () {
-    return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').order('ordre').order('nom')), chargerGroupes(),
+    return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').order('categorie', { nullsFirst: false }).order('ordre').order('nom')), chargerGroupes(),
       q(sb.from('discussion_messages').select('discussion_id, created_at').is('supprime_le', null).order('created_at', { ascending: false }).limit(500))]);
   }).then(function (r) {
     var L = r[0] || [], der = {};
@@ -1064,7 +1064,7 @@ function vueDiscussions(m) {
     $('dg-l').innerHTML = '<div class="kpis"><div class="kpi"><b>' + L.filter(function (d) { return !d.archive; }).length + '</b><span>fils</span></div><div class="kpi"><b>' + ouverts + '</b><span>ouverts aux membres</span></div><div class="kpi"><b>' + L.filter(function (d) { return !d.ouvert && !d.archive; }).length + '</b><span>en test</span></div></div>' +
       (L.length ? '<div class="tw"><table class="t"><thead><tr><th>Fil</th><th>Qui est dedans</th><th>Membres</th><th>Écriture</th><th>État</th><th></th></tr></thead><tbody>' + L.map(function (d) {
         var n = (d.discussion_membres || []).filter(function (x) { return !x.exclu; }).length;
-        return '<tr><td><b>' + esc(d.nom) + '</b>' + (der[d.id] ? '<div class="mut xs">Dernier message le ' + esc(fmtJ(new Date(der[d.id]))) + '</div>' : '<div class="mut xs">Pas encore de message</div>') + '</td>' +
+        return '<tr><td>' + (d.categorie ? '<span class="xs mut" style="text-transform:uppercase;letter-spacing:.5px">' + esc(d.categorie) + '</span><br>' : '') + '<b>' + esc(d.nom) + '</b>' + (der[d.id] ? '<div class="mut xs">Dernier message le ' + esc(fmtJ(new Date(der[d.id]))) + '</div>' : '<div class="mut xs">Pas encore de message</div>') + '</td>' +
           '<td class="small">' + esc(srcTxt(d)) + (d.jeunes ? '<div class="xs mut">Comptes jeunes acceptés</div>' : '') + '</td><td><button class="btn sm ghost" data-dgm="' + d.id + '">' + n + ' membre' + (n > 1 ? 's' : '') + '</button></td>' +
           '<td class="small">' + (d.ecriture === 'admins' ? 'L\'équipe du club seulement' : 'Tout le monde') + '</td>' +
           '<td>' + (d.archive ? '<span class="badge">Archivé</span>' : d.ouvert ? '<span class="badge b-ok">Ouvert</span>' : '<span class="badge b-warn">En test</span>') + '</td>' +
@@ -1086,8 +1086,10 @@ function vueDiscussions(m) {
   }).catch(function () { $('dg-l').innerHTML = '<div class="card empty">Impossible de charger les discussions.</div>'; });
 }
 function discForm(d, apres) {
-  var F = d ? JSON.parse(JSON.stringify(d)) : { nom: '', description: '', source: 'groupe', groupes: [], double_categorie: '', double_poule: null, ecriture: 'tous', jeunes: false, ouvert: false, archive: false, ordre: 100 };
-  q(sb.from('double_equipes').select('categorie, poule')).catch(function () { return []; }).then(function (eqs) {
+  var F = d ? JSON.parse(JSON.stringify(d)) : { nom: '', categorie: '', description: '', source: 'groupe', groupes: [], double_categorie: '', double_poule: null, ecriture: 'tous', jeunes: false, ouvert: false, archive: false, ordre: 100 };
+  Promise.all([q(sb.from('double_equipes').select('categorie, poule')).catch(function () { return []; }), q(sb.from('discussions').select('categorie')).catch(function () { return []; })]).then(function (rr) {
+    var eqs = rr[0], catsDisc = ['Club', 'CLOC\'ARENA', 'Double interne', 'Interclubs', 'CLOCA Next Gen'];
+    (rr[1] || []).forEach(function (x) { if (x.categorie && catsDisc.indexOf(x.categorie) < 0) catsDisc.push(x.categorie); });
     var cats = [], poules = {};
     (eqs || []).forEach(function (e) { if (cats.indexOf(e.categorie) < 0) cats.push(e.categorie); (poules[e.categorie] = poules[e.categorie] || []); if (poules[e.categorie].indexOf(e.poule) < 0) poules[e.categorie].push(e.poule); });
     Object.keys(poules).forEach(function (c) { poules[c].sort(function (a, b) { return a - b; }); });
@@ -1096,6 +1098,8 @@ function discForm(d, apres) {
       panneau(d ? 'Modifier le fil' : 'Nouveau fil', '<div class="stack">' +
         '<label class="l">Nom du fil<input class="f" id="dgf-nom" maxlength="80" value="' + esc(F.nom) + '" placeholder="Ex. Interclub Senior Eq.1 H"></label>' +
         '<label class="l">Description (facultatif)<input class="f" id="dgf-desc" maxlength="200" value="' + esc(F.description || '') + '" placeholder="Ex. Organisation des rencontres, covoiturage…"></label>' +
+        '<label class="l">Catégorie (dossier dans l\'appli)<input class="f" id="dgf-cat2" list="dgf-cats" maxlength="40" value="' + esc(F.categorie || '') + '" placeholder="Ex. Interclubs"><datalist id="dgf-cats">' + catsDisc.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></label>' +
+        '<span class="mut xs" style="margin-top:-6px">Les fils d\'une même catégorie sont rangés dans un dossier repliable. Choisis-en une dans la liste ou tape un nouveau nom.</span>' +
         '<label class="l">Qui est dedans ?<select class="f" id="dgf-src">' + Object.keys(SRC_DISC).map(function (k) { return '<option value="' + k + '"' + (src === k ? ' selected' : '') + '>' + SRC_DISC[k] + '</option>'; }).join('') + '</select></label>' +
         (src === 'groupe' ? '<div><span class="mut xs">Coche un ou plusieurs groupes. Les familles des joueurs et les coachs responsables du groupe sont ajoutés.</span>' + choixGroupes(F.groupes || [], 'dgf-g') + '</div>' : '') +
         (src === 'double' ? '<div class="row2"><label class="l">Catégorie<select class="f" id="dgf-cat"><option value="">Choisir…</option>' + cats.map(function (c) { return '<option' + (F.double_categorie === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' +
@@ -1110,20 +1114,20 @@ function discForm(d, apres) {
         '<div class="chips" style="justify-content:space-between">' + (d ? '<button class="btn ko" id="dgf-sup">Supprimer le fil</button>' : '<span></span>') + '<button class="btn" id="dgf-ok">' + (d ? 'Enregistrer' : 'Créer le fil') + '</button></div></div>', function (root) {
         lierChips(root);
         var lire = function () {
-          F.nom = $('dgf-nom').value; F.description = $('dgf-desc').value; F.ecriture = $('dgf-ecr').value; F.jeunes = $('dgf-jeunes').checked; F.ouvert = $('dgf-ouvert').checked;
+          F.nom = $('dgf-nom').value; F.categorie = $('dgf-cat2').value.trim(); F.description = $('dgf-desc').value; F.ecriture = $('dgf-ecr').value; F.jeunes = $('dgf-jeunes').checked; F.ouvert = $('dgf-ouvert').checked;
           F.archive = $('dgf-arch') ? $('dgf-arch').checked : false; F.ordre = +$('dgf-ordre').value || 100;
           if (F.source === 'groupe') F.groupes = lus(root, 'dgf-g');
           if ($('dgf-cat')) { F.double_categorie = $('dgf-cat').value; F.double_poule = $('dgf-poule') && $('dgf-poule').value ? +$('dgf-poule').value : null; }
         };
         $('dgf-src').onchange = function () { lire(); F.source = this.value; dessiner(); };
-        if ($('dgf-cat')) $('dgf-cat').onchange = function () { lire(); F.double_poule = null; if (!F.nom.trim()) F.nom = 'Double interne · ' + F.double_categorie; dessiner(); };
+        if ($('dgf-cat')) $('dgf-cat').onchange = function () { lire(); F.double_poule = null; if (!F.categorie) F.categorie = 'Double interne'; if (!F.nom.trim()) F.nom = 'Double interne · ' + F.double_categorie; dessiner(); };
         if ($('dgf-poule')) $('dgf-poule').onchange = function () { lire(); if (!F.nom.trim() || /^Double interne · /.test(F.nom)) F.nom = 'Double interne · ' + F.double_categorie + (F.double_poule ? ' poule ' + F.double_poule : ''); dessiner(); };
         $('dgf-ok').onclick = function () {
           lire();
           if (!F.nom.trim()) return toast('Donne un nom au fil');
           if (F.source === 'groupe' && !F.groupes.length) return toast('Coche au moins un groupe');
           if (F.source === 'double' && !F.double_categorie) return toast('Choisis la catégorie du double');
-          var row = { nom: F.nom.trim(), description: F.description.trim() || null, source: F.source, groupes: F.source === 'groupe' ? F.groupes : [],
+          var row = { nom: F.nom.trim(), categorie: F.categorie || (F.source === 'double' ? 'Double interne' : F.source === 'nextgen' ? 'CLOCA Next Gen' : null), description: F.description.trim() || null, source: F.source, groupes: F.source === 'groupe' ? F.groupes : [],
             double_categorie: F.source === 'double' ? F.double_categorie : null, double_poule: F.source === 'double' ? F.double_poule : null,
             type: F.ecriture === 'admins' && F.source === 'tous' ? 'annonce' : F.source === 'tous' ? 'general' : 'groupe',
             ecriture: F.ecriture, jeunes: F.jeunes, ouvert: F.ouvert, archive: F.archive, ordre: F.ordre };
