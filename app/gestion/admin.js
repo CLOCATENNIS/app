@@ -2038,7 +2038,10 @@ function vueQuestionnaires(m) {
       '<label class="l">Titre<input class="f" id="qf-t" maxlength="120" value="' + esc(x.titre) + '" placeholder="Ex. Engagement Next Gen jusqu\'à la fin de saison"></label>' +
       '<label class="l">Texte d\'introduction<textarea class="f" id="qf-i" rows="3" maxlength="1500">' + esc(x.intro) + '</textarea></label>' +
       '<label class="l">Pour qui ?<select class="f" id="qf-c"><option value="choix"' + (x.cible === 'choix' ? ' selected' : '') + '>Je choisis : personnes, groupes, Next Gen</option><option value="nextgen"' + (x.cible === 'nextgen' ? ' selected' : '') + '>Les jeunes Next Gen</option>' + (x.cible === 'groupes' ? '<option value="groupes" selected>Des groupes</option>' : '') + '<option value="tous"' + (x.cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label>' +
-      '<div id="qf-ps" class="stack" style="gap:6px"><div class="sect" style="margin:4px 0 0">Personnes</div><div class="chips" id="qf-psl"></div>' + CHERCHEUR + '</div>' +
+      '<div id="qf-ps" class="stack" style="gap:6px"><div class="sect" style="margin:4px 0 0">Adhérents <span class="mut xs" id="qf-psn"></span></div><div class="chips" id="qf-psl"></div>' +
+      '<input class="f" id="qf-psf" placeholder="Filtrer par nom ou prénom">' +
+      '<div class="chips"><button type="button" class="btn line sm" id="qf-psa">Cocher la liste affichée</button><button type="button" class="btn line sm" id="qf-psz">Tout décocher</button></div>' +
+      '<div id="qf-psc" class="card" style="max-height:280px;overflow:auto;padding:4px 10px"></div></div>' +
       '<label class="small" id="qf-avng"><input type="checkbox" id="qf-av"' + (x.avec_nextgen ? ' checked' : '') + '> Ajouter les jeunes Next Gen</label>' +
       '<div id="qf-ng"><div class="mut xs" style="margin-bottom:4px">Grades concernés (aucun coché = tous)</div><div class="chips">' + GRADES_NG.map(function (g) { var on = (x.grades || []).indexOf(g[0]) >= 0; return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" name="qf-gr" value="' + g[0] + '"' + (on ? ' checked' : '') + ' style="display:none">' + g[1] + '</label>'; }).join('') + '</div></div>' +
       '<div id="qf-gs">' + choixGroupes(x.groupes || [], 'qf-g') + '</div>' +
@@ -2049,12 +2052,22 @@ function vueQuestionnaires(m) {
       lierChips(r);
       var majCible = function () { var c = $('qf-c').value; $('qf-ng').hidden = !(c === 'nextgen' || (c === 'choix' && $('qf-av').checked)); $('qf-gs').hidden = c !== 'groupes' && c !== 'choix'; $('qf-ps').hidden = c !== 'choix'; $('qf-avng').hidden = c !== 'choix'; };
       $('qf-c').onchange = majCible; $('qf-av').onchange = majCible; majCible();
+      var PERS_Q = A.pers.filter(function (p) { return p.actif !== false || PS.indexOf(p.id) >= 0; });
+      var visibles = function () { var t = norm($('qf-psf').value).trim(); return PERS_Q.filter(function (p) { return !t || norm(p.prenom + ' ' + p.nom + ' ' + p.nom + ' ' + p.prenom).indexOf(t) >= 0; }); };
       var dessinerPS = function () {
-        $('qf-psl').innerHTML = PS.length ? PS.map(function (id) { var p = A.pers.filter(function (y) { return y.id === id; })[0]; return '<button class="chip on" data-psx="' + id + '" title="Retirer">' + esc(p ? p.prenom + ' ' + p.nom : '?') + ' ×</button>'; }).join('') : '<span class="mut xs">Aucune personne ajoutée. Cherche un nom ci-dessous.</span>';
-        all('[data-psx]', r).forEach(function (b) { b.onclick = function () { PS = PS.filter(function (id) { return id !== b.dataset.psx; }); dessinerPS(); }; });
+        $('qf-psn').textContent = PS.length ? '· ' + PS.length + ' coché' + (PS.length > 1 ? 's' : '') : '';
+        $('qf-psl').innerHTML = PS.map(function (id) { var p = A.pers.filter(function (y) { return y.id === id; })[0]; return '<button type="button" class="chip on" data-psx="' + id + '" title="Retirer">' + esc(p ? p.prenom + ' ' + p.nom : '?') + ' ×</button>'; }).join('');
+        all('[data-psx]', r).forEach(function (b) { b.onclick = function () { PS = PS.filter(function (id) { return id !== b.dataset.psx; }); dessinerPS(); dessinerListe(); }; });
       };
-      chercheurPers($('qf-ps'), function (p) { if (p && PS.indexOf(p.id) < 0) PS.push(p.id); dessinerPS(); });
-      dessinerPS();
+      var dessinerListe = function () {
+        var l = visibles();
+        $('qf-psc').innerHTML = l.length ? l.map(function (p) { return '<label class="small" style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line,#eee)"><input type="checkbox" data-psk="' + p.id + '"' + (PS.indexOf(p.id) >= 0 ? ' checked' : '') + '>' + esc(p.nom + ' ' + p.prenom) + (p.date_naissance ? '<span class="mut xs">' + age(p.date_naissance) + ' ans</span>' : '') + '</label>'; }).join('') : '<div class="mut xs" style="padding:8px 0">Personne trouvée.</div>';
+        all('[data-psk]', r).forEach(function (c) { c.onchange = function () { var id = c.dataset.psk; if (c.checked) { if (PS.indexOf(id) < 0) PS.push(id); } else PS = PS.filter(function (y) { return y !== id; }); dessinerPS(); }; });
+      };
+      $('qf-psf').oninput = dessinerListe;
+      $('qf-psa').onclick = function () { visibles().forEach(function (p) { if (PS.indexOf(p.id) < 0) PS.push(p.id); }); dessinerPS(); dessinerListe(); };
+      $('qf-psz').onclick = function () { PS = []; dessinerPS(); dessinerListe(); };
+      dessinerPS(); dessinerListe();
       var lire = function () {
         all('[data-qi]', r).forEach(function (bloc) {
           var i = +bloc.dataset.qi, qu = QQ[i]; if (!qu) return;
