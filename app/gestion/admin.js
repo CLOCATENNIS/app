@@ -2003,11 +2003,17 @@ function txtReponse(qu, v) {
   return Array.isArray(v) ? v.join(', ') : String(v);
 }
 function vueQuestionnaires(m) {
-  m.innerHTML = entete('Questionnaires', 'Comme un Google Form, mais dans l\'appli : tu choisis les questions et le type de réponse, les familles répondent pour leur enfant, et tu vois qui n\'a pas répondu.', '<button class="btn line" id="qs-ng">Modèle engagement Next Gen</button><button class="btn" id="qs-new">Nouveau questionnaire</button>') + '<div id="qs-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Questionnaires', 'Comme un Google Form, mais dans l\'appli : tu choisis les questions et le type de réponse, tu l\'envoies à qui tu veux (personnes, groupes, Next Gen, tout le club) et tu vois qui n\'a pas répondu.', '<button class="btn line" id="qs-ng">Modèle engagement Next Gen</button><button class="btn" id="qs-new">Nouveau questionnaire</button>') + '<div id="qs-l"><div class="skel"></div></div>';
   var QS = [], NBR = {};
   var nomCibleQ = function (x) {
     if (x.cible === 'nextgen') return 'Next Gen' + (x.grades && x.grades.length ? ' (' + x.grades.map(function (g) { return (GRADES_NG.filter(function (y) { return y[0] === g; })[0] || [g, g])[1]; }).join(', ') + ')' : '');
     if (x.cible === 'groupes') return (x.groupes || []).map(nomGroupe).join(', ');
+    if (x.cible === 'choix') {
+      var bouts = (x.groupes || []).map(nomGroupe);
+      var np = (x.personnes || []).length; if (np) bouts.push(np + ' personne' + (np > 1 ? 's' : ''));
+      if (x.avec_nextgen) bouts.push('Next Gen');
+      return bouts.join(', ') || 'Personne';
+    }
     return 'Tout le club';
   };
   var ouvertQ = function (x) { return x.ouvert && (!x.date_limite || x.date_limite >= isoJour(new Date())); };
@@ -2023,13 +2029,17 @@ function vueQuestionnaires(m) {
 
   // Création / modification
   var form = function (x, questions) {
-    var nouveau = !x || !x.id; x = x || { cible: 'nextgen', ouvert: true, modifiable: true };
+    if (!A.pers) return chargerPers().then(function () { form(x, questions); }).catch(function () { toast('Impossible de charger les adhérents'); });
+    var nouveau = !x || !x.id; x = x || { cible: 'choix', ouvert: true, modifiable: true };
+    var PS = (x.personnes || []).slice();
     var QQ = (questions || []).map(function (qu) { return { id: qu.id, libelle: qu.libelle, type: qu.type, options: (qu.options || []).slice(), obligatoire: qu.obligatoire !== false }; });
     if (!QQ.length) QQ.push({ libelle: '', type: 'oui_non', options: [], obligatoire: true });
     panneau(nouveau ? 'Nouveau questionnaire' : 'Modifier le questionnaire', '<div class="stack">' +
       '<label class="l">Titre<input class="f" id="qf-t" maxlength="120" value="' + esc(x.titre) + '" placeholder="Ex. Engagement Next Gen jusqu\'à la fin de saison"></label>' +
       '<label class="l">Texte d\'introduction<textarea class="f" id="qf-i" rows="3" maxlength="1500">' + esc(x.intro) + '</textarea></label>' +
-      '<label class="l">Pour qui ?<select class="f" id="qf-c"><option value="nextgen"' + (x.cible === 'nextgen' ? ' selected' : '') + '>Les jeunes Next Gen</option><option value="groupes"' + (x.cible === 'groupes' ? ' selected' : '') + '>Des groupes</option><option value="tous"' + (x.cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label>' +
+      '<label class="l">Pour qui ?<select class="f" id="qf-c"><option value="choix"' + (x.cible === 'choix' ? ' selected' : '') + '>Je choisis : personnes, groupes, Next Gen</option><option value="nextgen"' + (x.cible === 'nextgen' ? ' selected' : '') + '>Les jeunes Next Gen</option>' + (x.cible === 'groupes' ? '<option value="groupes" selected>Des groupes</option>' : '') + '<option value="tous"' + (x.cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label>' +
+      '<div id="qf-ps" class="stack" style="gap:6px"><div class="sect" style="margin:4px 0 0">Personnes</div><div class="chips" id="qf-psl"></div>' + CHERCHEUR + '</div>' +
+      '<label class="small" id="qf-avng"><input type="checkbox" id="qf-av"' + (x.avec_nextgen ? ' checked' : '') + '> Ajouter les jeunes Next Gen</label>' +
       '<div id="qf-ng"><div class="mut xs" style="margin-bottom:4px">Grades concernés (aucun coché = tous)</div><div class="chips">' + GRADES_NG.map(function (g) { var on = (x.grades || []).indexOf(g[0]) >= 0; return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" name="qf-gr" value="' + g[0] + '"' + (on ? ' checked' : '') + ' style="display:none">' + g[1] + '</label>'; }).join('') + '</div></div>' +
       '<div id="qf-gs">' + choixGroupes(x.groupes || [], 'qf-g') + '</div>' +
       '<div class="row2"><label class="l">Date limite (facultatif)<input class="f" type="date" id="qf-d" value="' + (x.date_limite || '') + '"></label>' +
@@ -2037,8 +2047,14 @@ function vueQuestionnaires(m) {
       '<div class="sect">Questions</div><div id="qf-q" class="stack"></div><button class="btn line sm" id="qf-add">+ Ajouter une question</button>' +
       '<div class="chips" style="margin-top:8px"><button class="btn" id="qf-ok">Enregistrer</button><button class="btn line" id="qf-an">Annuler</button></div></div>', function (r) {
       lierChips(r);
-      var majCible = function () { var c = $('qf-c').value; $('qf-ng').hidden = c !== 'nextgen'; $('qf-gs').hidden = c !== 'groupes'; };
-      $('qf-c').onchange = majCible; majCible();
+      var majCible = function () { var c = $('qf-c').value; $('qf-ng').hidden = !(c === 'nextgen' || (c === 'choix' && $('qf-av').checked)); $('qf-gs').hidden = c !== 'groupes' && c !== 'choix'; $('qf-ps').hidden = c !== 'choix'; $('qf-avng').hidden = c !== 'choix'; };
+      $('qf-c').onchange = majCible; $('qf-av').onchange = majCible; majCible();
+      var dessinerPS = function () {
+        $('qf-psl').innerHTML = PS.length ? PS.map(function (id) { var p = A.pers.filter(function (y) { return y.id === id; })[0]; return '<button class="chip on" data-psx="' + id + '" title="Retirer">' + esc(p ? p.prenom + ' ' + p.nom : '?') + ' ×</button>'; }).join('') : '<span class="mut xs">Aucune personne ajoutée. Cherche un nom ci-dessous.</span>';
+        all('[data-psx]', r).forEach(function (b) { b.onclick = function () { PS = PS.filter(function (id) { return id !== b.dataset.psx; }); dessinerPS(); }; });
+      };
+      chercheurPers($('qf-ps'), function (p) { if (p && PS.indexOf(p.id) < 0) PS.push(p.id); dessinerPS(); });
+      dessinerPS();
       var lire = function () {
         all('[data-qi]', r).forEach(function (bloc) {
           var i = +bloc.dataset.qi, qu = QQ[i]; if (!qu) return;
@@ -2076,8 +2092,10 @@ function vueQuestionnaires(m) {
         var vide = qs.filter(function (qu) { return (qu.type === 'choix' || qu.type === 'multi' || qu.type === 'taille') && !qu.options.length; })[0];
         if (vide) return toast('Ajoute les choix de « ' + vide.libelle.trim() + ' »');
         var gs = lus(r, 'qf-g');
+        var avNg = c === 'choix' && $('qf-av').checked;
         if (c === 'groupes' && !gs.length) return toast('Choisis au moins un groupe');
-        var row = { titre: t, intro: $('qf-i').value.trim() || null, cible: c, grades: c === 'nextgen' && lus(r, 'qf-gr').length ? lus(r, 'qf-gr') : null, groupes: c === 'groupes' ? gs : null, date_limite: $('qf-d').value || null, ouvert: $('qf-o').checked, modifiable: $('qf-m').checked };
+        if (c === 'choix' && !gs.length && !PS.length && !avNg) return toast('Ajoute au moins une personne, un groupe ou les Next Gen');
+        var row = { titre: t, intro: $('qf-i').value.trim() || null, cible: c, grades: (c === 'nextgen' || avNg) && lus(r, 'qf-gr').length ? lus(r, 'qf-gr') : null, groupes: c === 'groupes' || c === 'choix' ? (gs.length ? gs : null) : null, personnes: c === 'choix' && PS.length ? PS : null, avec_nextgen: avNg, date_limite: $('qf-d').value || null, ouvert: $('qf-o').checked, modifiable: $('qf-m').checked };
         $('qf-ok').disabled = true;
         (nouveau ? q(sb.from('questionnaires').insert(row).select('id').single()) : q(sb.from('questionnaires').update(row).eq('id', x.id).select('id').single())).then(function (s) {
           var qid = s.id, gardes = qs.filter(function (qu) { return qu.id; }).map(function (qu) { return qu.id; });
@@ -2139,7 +2157,7 @@ function vueQuestionnaires(m) {
         $('qv-rel').onclick = function () {
           var premier = !faits.length;
           var limite = x.date_limite ? ' avant le ' + fmtJ(new Date(x.date_limite + 'T12:00:00')) : '';
-          panneau(premier ? 'Envoyer le questionnaire' : 'Relancer', '<div class="stack"><span class="mut xs">Le message part seulement aux familles des jeunes qui n\'ont pas encore répondu, avec un bouton qui ouvre le questionnaire.</span>' +
+          panneau(premier ? 'Envoyer le questionnaire' : 'Relancer', '<div class="stack"><span class="mut xs">Le message part seulement aux personnes concernées (ou à leur famille) qui n\'ont pas encore répondu, avec un bouton qui ouvre le questionnaire.</span>' +
             '<label class="l">Objet<input class="f" id="qr-t" maxlength="120" value="' + esc((premier ? '' : 'Rappel · ') + x.titre) + '"></label>' +
             '<label class="l">Message<textarea class="f" id="qr-x" rows="5" maxlength="4000">' + esc(premier ? 'Bonjour,\n\nMerci de répondre au questionnaire « ' + x.titre + ' »' + limite + '. Ça prend 1 minute, directement dans l\'appli.\n\nVAMOS HR !' : 'Bonjour,\n\nPetit rappel : on attend encore ta réponse au questionnaire « ' + x.titre + ' »' + limite + '. Ça prend 1 minute.\n\nMerci !') + '</textarea></label>' +
             '<button class="btn" id="qr-ok">Envoyer à ' + manquants.filter(function (p) { return p.a_compte; }).length + ' famille(s)</button></div>', function () {
