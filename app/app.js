@@ -2816,7 +2816,7 @@ function blocTombola(f, lots, T, P, passe) {
     '<span class="mut small">Tirage pendant la fête. 100 % tennis !</span></div>';
   h += '<div class="stack" style="gap:6px"><span class="eyebrow">Les lots</span>' + (lots.length ? lots.map(function (l, i) {
     var gagne = f.tirage_publie && l.gagnant_numero;
-    return '<div class="lot">' + (l.photo_url ? '<img src="' + esc(l.photo_url) + '" alt="">' : '<span class="lot-n">' + (i + 1) + '</span>') + '<div class="stack" style="flex:1;min-width:0"><b>' + esc(l.nom) + '</b>' + (l.detail ? '<span class="mut small">' + esc(l.detail) + '</span>' : '') +
+    return '<div class="lot">' + (l.photo_url ? '<button class="lot-ph" data-lotimg="' + esc(l.photo_url) + '" aria-label="Voir la photo du lot"><img src="' + esc(l.photo_url) + '" alt=""></button>' : '<span class="lot-n">' + (i + 1) + '</span>') + '<div class="stack" style="flex:1;min-width:0"><b>' + esc(l.nom) + '</b>' + (l.detail ? '<span class="mut small">' + esc(l.detail) + '</span>' : '') +
       (gagne ? '<span class="small" style="color:' + (mesNum.indexOf(l.gagnant_numero) >= 0 ? 'var(--ok);font-weight:700' : 'var(--mut)') + '">Ticket gagnant : n° ' + l.gagnant_numero + (mesNum.indexOf(l.gagnant_numero) >= 0 ? ' 🎉 C\'est toi !' : '') + '</span>' : '') + '</div></div>';
   }).join('') : '<span class="mut small">Les lots seront dévoilés très bientôt 🎁</span>') + '</div>';
   if (T.length) {
@@ -2899,6 +2899,7 @@ function lierFete(f, P) {
     if (navigator.clipboard) navigator.clipboard.writeText(texte).then(ok).catch(function () { prompt('Copie ce message :', texte); });
     else prompt('Copie ce message :', texte);
   };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-lotimg]'), function (x) { x.onclick = function () { modale('<img src="' + esc(x.dataset.lotimg) + '" alt="Photo du lot" style="width:100%;border-radius:12px;display:block">'); }; });
   // Tombola
   var n = S.feteNb || 1, maj = function () { if ($('tk-n')) { $('tk-n').textContent = n; $('tk-p').textContent = euros(prixTickets(f, n)); } S.feteNb = n; };
   if ($('tk-moins')) $('tk-moins').onclick = function () { n = Math.max(1, n - 1); maj(); };
