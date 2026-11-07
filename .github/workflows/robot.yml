@@ -1,0 +1,63 @@
+# Robot de vérification de l'appli CLOCA Tennis
+# Il tourne à chaque mise à jour du site et chaque matin vers 6h, et ouvre un ticket « Problème » sur GitHub s'il trouve une page cassée.
+name: Robot de vérification
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '7 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: robot
+  cancel-in-progress: true
+
+jobs:
+  robot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer le navigateur du robot
+        run: |
+          npm install --no-save --no-package-lock playwright@1.48.2
+          npx playwright install --with-deps chromium
+
+      - name: Vérifier l'appli
+        run: node .github/tests/robot.mjs
+
+      - name: Prévenir en cas de problème
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lien = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const quand = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+            const texte = `Le robot a trouvé au moins un problème le ${quand}.\n\nLe détail (pages concernées et erreurs) est ici : ${lien}\n\nCe ticket se ferme tout seul dès que le robot repasse sans erreur.`;
+            const ouverts = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', labels: 'robot' });
+            if (ouverts.data.length) {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: ouverts.data[0].number, body: texte });
+            } else {
+              await github.rest.issues.create({ ...context.repo, title: '🤖 Le robot a trouvé un problème dans l\'appli', body: texte, labels: ['robot'] });
+            }
+
+      - name: Fermer le ticket quand tout va bien
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ouverts = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', labels: 'robot' });
+            for (const t of ouverts.data) {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: t.number, body: '✅ Le robot est repassé sans erreur : problème réglé.' });
+              await github.rest.issues.update({ ...context.repo, issue_number: t.number, state: 'closed' });
+            }
