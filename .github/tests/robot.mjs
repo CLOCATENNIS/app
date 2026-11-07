@@ -28,7 +28,8 @@ const SUPA_KEY = (appJs.match(/var SUPA_KEY = '([^']+)'/) || [])[1];
 
 // ---------- 2. Les données publiques sont lisibles par les familles ----------
 // (c'est ce qui manquait le 3 novembre : la page Noël restait vide)
-const TABLES_PUBLIQUES = ['fetes', 'tombola_lots', 'publications', 'evenements', 'reglages_publics', 'mises_en_avant', 'annonces'];
+// annonces : seules certaines colonnes sont publiques (le contact reste caché), on lit donc celles que l'appli lit
+const TABLES_PUBLIQUES = [['fetes', '*'], ['tombola_lots', '*'], ['publications', '*'], ['evenements', '*'], ['reglages_publics', '*'], ['mises_en_avant', '*'], ['annonces', 'id,titre,prix,statut']];
 async function api(chemin, opts = {}) {
   const r = await fetch(SUPA_URL + chemin, { ...opts, headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
   let corps = null; try { corps = await r.json(); } catch { }
@@ -37,8 +38,8 @@ async function api(chemin, opts = {}) {
 const HORS_LIGNE = !!process.env.HORS_LIGNE;
 if (HORS_LIGNE) note('Données', 'base réelle', true, 'non testée (mode hors ligne)');
 else if (SUPA_URL && SUPA_KEY) {
-  for (const t of TABLES_PUBLIQUES) {
-    try { const r = await api(`/rest/v1/${t}?select=*&limit=1`); note('Données', t, r.status === 200, r.status === 200 ? '' : `réponse ${r.status} ${JSON.stringify(r.corps).slice(0, 120)}`); }
+  for (const [t, cols] of TABLES_PUBLIQUES) {
+    try { const r = await api(`/rest/v1/${t}?select=${cols}&limit=1`); note('Données', t, r.status === 200, r.status === 200 ? '' : `réponse ${r.status} ${JSON.stringify(r.corps).slice(0, 120)}`); }
     catch (e) { note('Données', t, false, e.message); }
   }
   try {
