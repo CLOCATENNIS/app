@@ -2138,7 +2138,7 @@ function vueQuestionnaires(m) {
         var ligne = function (p) {
           var rep = repDe(p.personne_id);
           return '<div class="card stack" style="gap:4px;padding:10px 12px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b class="small">' + esc(p.prenom + ' ' + p.nom) + '</b>' +
-            (rep ? '<span class="mut xs">' + esc(fmtJ(new Date(rep.maj_le))) + '</span>' : p.a_compte ? '<span class="badge b-warn">Pas encore répondu</span>' : '<span class="badge b-ko">Sans compte appli</span>') + '</div>' +
+            (rep ? '<span style="display:flex;gap:8px;align-items:center"><span class="mut xs">' + esc(fmtJ(new Date(rep.maj_le))) + '</span><button class="btn sm ko" data-qrx="' + rep.id + '" data-nom="' + esc(p.prenom) + '" aria-label="Supprimer la réponse" title="Supprimer la réponse">×</button></span>' : p.a_compte ? '<span class="badge b-warn">Pas encore répondu</span>' : '<span class="badge b-ko">Sans compte appli</span>') + '</div>' +
             (rep ? QQ.map(function (qu) { var v = txtReponse(qu, rep.reponses[qu.id]); return v ? '<div class="small"><span class="mut">' + esc(qu.libelle) + ' :</span> <b>' + esc(v) + '</b></div>' : ''; }).join('') : '') + '</div>';
         };
         // Synthèse par question à choix (utile pour les tailles)
@@ -2152,12 +2152,21 @@ function vueQuestionnaires(m) {
         $('qv').innerHTML = '<div class="stack">' +
           '<div class="small"><b>' + faits.length + '</b> réponse' + (faits.length > 1 ? 's' : '') + ' sur ' + CON.length + ' · ' + (ouvertQ(x) ? 'ouvert' : 'fermé') + (x.date_limite ? ' · jusqu\'au ' + esc(fmtJ(new Date(x.date_limite + 'T12:00:00'))) : '') + '</div>' +
           '<div class="chips"><button class="btn sm" id="qv-rel"' + (manquants.length && ouvertQ(x) ? '' : ' disabled') + '>' + (faits.length ? 'Relancer les ' + manquants.length + ' sans réponse' : 'Envoyer aux ' + manquants.length + ' concernés') + '</button>' +
-          '<button class="btn line sm" id="qv-lien">Copier le lien</button><button class="btn line sm" id="qv-csv">Exporter (Excel)</button><button class="btn line sm" id="qv-mod">Modifier</button><button class="btn line sm" id="qv-oc">' + (x.ouvert ? 'Fermer' : 'Rouvrir') + '</button><button class="btn sm ko" id="qv-x">Supprimer</button></div>' +
+          '<button class="btn line sm" id="qv-lien">Copier le lien</button><button class="btn line sm" id="qv-csv">Exporter (Excel)</button><button class="btn line sm" id="qv-mod">Modifier</button><button class="btn line sm" id="qv-oc">' + (x.ouvert ? 'Fermer' : 'Rouvrir') + '</button>' + (REP.length ? '<button class="btn line sm" id="qv-rx">Effacer les ' + REP.length + ' réponse' + (REP.length > 1 ? 's' : '') + '</button>' : '') + '<button class="btn sm ko" id="qv-x">Supprimer</button></div>' +
           (sansCompte.length ? '<div class="card small" style="padding:10px 12px;border-left:4px solid var(--ko)"><b>' + sansCompte.length + ' sans compte dans l\'appli</b> : ' + esc(sansCompte.map(function (p) { return p.prenom; }).join(', ')) + '. Ils ne recevront pas le message : envoie-leur le lien par WhatsApp, ou rattache leur famille à un compte.</div>' : '') +
           (synth ? '<div class="sect">Synthèse</div><div class="stack" style="gap:8px">' + synth + '</div>' : '') +
           (manquants.length ? '<div class="sect">Sans réponse (' + manquants.length + ')</div>' + manquants.map(ligne).join('') : '') +
           (faits.length ? '<div class="sect">Réponses (' + faits.length + ')</div>' + faits.map(ligne).join('') : '') +
           (!CON.length ? '<div class="card empty">Personne n\'est concerné pour le moment.</div>' : '') + '</div>';
+        all('[data-qrx]').forEach(function (b) { b.onclick = function () {
+          if (!confirm('Supprimer la réponse de ' + b.dataset.nom + ' ? La famille pourra répondre à nouveau.')) return;
+          b.disabled = true;
+          q(sb.from('questionnaire_reponses').delete().eq('id', b.dataset.qrx)).then(function () { toast('Réponse supprimée'); suivi(x); charger(); }).catch(function () { b.disabled = false; toast('Suppression impossible'); });
+        }; });
+        if ($('qv-rx')) $('qv-rx').onclick = function () {
+          if (!confirm('Effacer les ' + REP.length + ' réponse(s) de ce questionnaire ? Le questionnaire et ses questions sont gardés, tout le monde pourra répondre à nouveau.')) return;
+          q(sb.from('questionnaire_reponses').delete().eq('questionnaire_id', x.id)).then(function () { toast('Réponses effacées'); suivi(x); charger(); }).catch(function () { toast('Suppression impossible'); });
+        };
         $('qv-mod').onclick = function () { form(x, QQ); };
         $('qv-lien').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié'); }, function () { prompt('Lien du questionnaire', lien); }); };
         $('qv-csv').onclick = function () {
