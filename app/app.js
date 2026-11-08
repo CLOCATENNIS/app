@@ -623,20 +623,19 @@ function blocSynchro() {
       '<input class="f" readonly value="' + esc(l) + '" id="sync-lien" aria-label="Lien de l\'agenda"><div class="grid2"><button class="btn ghost" id="sync-copier">Copier le lien</button><button class="btn ghost" id="sync-reset">Changer de lien</button></div>' +
       '<span class="mut xs">Ce lien est personnel : ne le partage pas. « Changer de lien » désactive l\'ancien (il faudra ré-ajouter l\'agenda).</span>' : '') + '</section>';
 }
-// Android : Google n'accepte l'abonnement à un agenda que depuis un ordinateur, d'où ce choix
+// Android : l'appli Google Agenda ne sait pas s'abonner à un lien ; on ouvre donc Google dans Chrome
 function popupGoogleAgenda() {
   var l = lienAgenda(); if (!l) return;
   var g = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(l.replace(/^https:/, 'webcal:'));
-  var mail = 'mailto:' + (S.user && S.user.email || '') + '?subject=' + encodeURIComponent('Ajouter l\'agenda CLOCA Tennis') + '&body=' + encodeURIComponent('Ouvre ce lien sur un ordinateur connecté à ton compte Google, puis clique sur « Ajouter » :\n\n' + g + '\n\nL\'agenda CLOCA Tennis apparaîtra ensuite tout seul dans Google Agenda sur ton téléphone.');
-  var opt = function (href, ext, titre, sous, principal) {
-    return '<a class="gopt' + (principal ? ' on' : '') + '" href="' + esc(href) + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '><b>' + titre + '</b><span>' + sous + '</span></a>';
-  };
-  modale('<div class="stack" style="gap:14px"><div style="text-align:center"><div class="gico">' + ic('cal', 26, '#fff') + '</div><h2 style="margin:10px 0 4px;font-size:20px">Ajouter à Google Agenda</h2>' +
-    '<span class="mut small">Sur Android, Google demande de faire l\'ajout <b>une seule fois</b> depuis un ordinateur.</span></div>' +
-    opt(mail, false, '✉️ M\'envoyer le lien par mail', 'Ouvre le mail sur un ordinateur, clique sur le lien puis sur « Ajouter ».', true) +
-    opt(g, true, '📱 Essayer sur ce téléphone', 'Ça marche parfois si Google s\'ouvre dans Chrome.', false) +
-    '<span class="mut xs" style="text-align:center">Ensuite, dans Google Agenda sur ton téléphone (menu ☰), vérifie que <b>CLOCA Tennis</b> est coché.</span></div>',
-    function (d) { d.classList.add('centre'); Array.prototype.forEach.call(d.querySelectorAll('.gopt'), function (a) { a.addEventListener('click', function () { setTimeout(fermerModale, 400); }); }); });
+  // intent:// force Chrome, sinon Android ouvre l'appli Google Agenda qui ignore le lien
+  var chrome = 'intent://' + g.replace(/^https:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(g) + ';end';
+  var et = function (n, t) { return '<div class="getape"><span>' + n + '</span><div>' + t + '</div></div>'; };
+  modale('<div class="stack" style="gap:14px"><div style="text-align:center"><div class="gico">' + ic('cal', 26, '#fff') + '</div><h2 style="margin:10px 0 0;font-size:20px">Ajouter à Google Agenda</h2></div>' +
+    '<div class="stack" style="gap:10px">' + et(1, 'Appuie sur le bouton : Google s\'ouvre dans Chrome.') +
+    et(2, 'Si la page ne propose rien : menu <b>⋮</b> en haut à droite → coche <b>« Version pour ordinateur »</b>.') +
+    et(3, 'Appuie sur <b>« Ajouter »</b>. C\'est fait pour toute la saison.') + '</div>' +
+    '<a class="btn navy" id="g-go" href="' + esc(chrome) + '">Ouvrir Google Agenda</a></div>',
+    function (d) { d.classList.add('centre'); });
 }
 function lierSynchro() {
   if ($('sync-plus')) $('sync-plus').onclick = function () { S.synchroOuverte = !S.synchroOuverte; render(); };
