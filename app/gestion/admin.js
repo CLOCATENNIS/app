@@ -2003,6 +2003,14 @@ function txtReponse(qu, v) {
   if (qu.type === 'date') return fmtJour(new Date(v + 'T12:00:00'));
   return Array.isArray(v) ? v.join(', ') : String(v);
 }
+function notifierQuestionnaire(qid, rappel) {
+  return sb.functions.invoke('notifier', { body: { mode: 'questionnaire', questionnaire_id: qid, rappel: !!rappel } }).then(function (r) {
+    if (r.error) throw r.error;
+    var d = r.data || {};
+    if (d.erreur) throw new Error(d.erreur);
+    return d;
+  });
+}
 function vueQuestionnaires(m) {
   m.innerHTML = entete('Questionnaires', 'Comme un Google Form, mais dans l\'appli : tu choisis les questions et le type de réponse, tu l\'envoies à qui tu veux (personnes, groupes, Next Gen, tout le club) et tu vois qui n\'a pas répondu.', '<button class="btn line" id="qs-ng">Modèle engagement Next Gen</button><button class="btn" id="qs-new">Nouveau questionnaire</button>') + '<div id="qs-l"><div class="skel"></div></div>';
   var QS = [], NBR = {};
@@ -2031,7 +2039,7 @@ function vueQuestionnaires(m) {
   // Création / modification
   var form = function (x, questions) {
     if (!A.pers) return chargerPers().then(function () { form(x, questions); }).catch(function () { toast('Impossible de charger les adhérents'); });
-    var nouveau = !x || !x.id; x = x || { cible: 'choix', ouvert: true, modifiable: true };
+    var nouveau = !x || !x.id; x = x || { cible: 'choix', ouvert: true, modifiable: true, rappel_auto: true };
     var PS = (x.personnes || []).slice();
     var QQ = (questions || []).map(function (qu) { return { id: qu.id, libelle: qu.libelle, type: qu.type, options: (qu.options || []).slice(), obligatoire: qu.obligatoire !== false }; });
     if (!QQ.length) QQ.push({ libelle: '', type: 'oui_non', options: [], obligatoire: true });
@@ -2048,6 +2056,9 @@ function vueQuestionnaires(m) {
       '<div id="qf-gs">' + choixGroupes(x.groupes || [], 'qf-g') + '</div>' +
       '<div class="row2"><label class="l">Date limite (facultatif)<input class="f" type="date" id="qf-d" value="' + (x.date_limite || '') + '"></label>' +
       '<div class="stack" style="gap:6px;justify-content:flex-end"><label class="small"><input type="checkbox" id="qf-o"' + (x.ouvert ? ' checked' : '') + '> Ouvert aux réponses</label><label class="small"><input type="checkbox" id="qf-m"' + (x.modifiable ? ' checked' : '') + '> Réponse modifiable après envoi</label></div></div>' +
+      '<div class="card stack" style="gap:6px;padding:10px 12px"><b class="small">Notifications sur le téléphone</b>' +
+      '<label class="small"><input type="checkbox" id="qf-n"' + (nouveau || !x.notifie_le ? ' checked' : '') + '> ' + (nouveau ? 'Prévenir les familles concernées dès l\'enregistrement' : 'Prévenir maintenant les familles qui n\'ont pas encore répondu') + '</label>' +
+      '<label class="small"><input type="checkbox" id="qf-ra"' + (x.rappel_auto !== false ? ' checked' : '') + '> Rappel automatique la veille de la date limite (seulement aux sans réponse)</label></div>' +
       '<div class="sect">Questions</div><div id="qf-q" class="stack"></div><button class="btn line sm" id="qf-add">+ Ajouter une question</button>' +
       '<div class="chips" style="margin-top:8px"><button class="btn" id="qf-ok">Enregistrer</button><button class="btn line" id="qf-an">Annuler</button></div></div>', function (r) {
       lierChips(r);
@@ -2109,7 +2120,9 @@ function vueQuestionnaires(m) {
         var avNg = c === 'choix' && $('qf-av').checked;
         if (c === 'groupes' && !gs.length) return toast('Choisis au moins un groupe');
         if (c === 'choix' && !gs.length && !PS.length && !avNg) return toast('Ajoute au moins une personne, un groupe ou les Next Gen');
-        var row = { titre: t, intro: $('qf-i').value.trim() || null, cible: c, grades: (c === 'nextgen' || avNg) && lus(r, 'qf-gr').length ? lus(r, 'qf-gr') : null, groupes: c === 'groupes' || c === 'choix' ? (gs.length ? gs : null) : null, personnes: c === 'choix' && PS.length ? PS : null, avec_nextgen: avNg, date_limite: $('qf-d').value || null, ouvert: $('qf-o').checked, modifiable: $('qf-m').checked };
+        var row = { titre: t, intro: $('qf-i').value.trim() || null, cible: c, grades: (c === 'nextgen' || avNg) && lus(r, 'qf-gr').length ? lus(r, 'qf-gr') : null, groupes: c === 'groupes' || c === 'choix' ? (gs.length ? gs : null) : null, personnes: c === 'choix' && PS.length ? PS : null, avec_nextgen: avNg, date_limite: $('qf-d').value || null, ouvert: $('qf-o').checked, modifiable: $('qf-m').checked, rappel_auto: $('qf-ra').checked };
+        if (nouveau || (row.date_limite || null) !== (x.date_limite || null)) row.rappel_envoye_le = null;
+        var notif = $('qf-n').checked && row.ouvert;
         $('qf-ok').disabled = true;
         (nouveau ? q(sb.from('questionnaires').insert(row).select('id').single()) : q(sb.from('questionnaires').update(row).eq('id', x.id).select('id').single())).then(function (s) {
           var qid = s.id, gardes = qs.filter(function (qu) { return qu.id; }).map(function (qu) { return qu.id; });
@@ -2120,7 +2133,10 @@ function vueQuestionnaires(m) {
               return qu.id ? q(sb.from('questionnaire_questions').update(l).eq('id', qu.id)) : q(sb.from('questionnaire_questions').insert(l));
             }));
           }).then(function () { return qid; });
-        }).then(function (qid) { toast('Questionnaire enregistré'); fermer(); charger(); q(sb.from('questionnaires').select('*').eq('id', qid).single()).then(suivi).catch(function () { }); })
+        }).then(function (qid) {
+          if (!notif) { toast('Questionnaire enregistré'); return qid; }
+          return notifierQuestionnaire(qid).then(function (d) { toast('Questionnaire enregistré · notification envoyée sur ' + (d.envoyes || 0) + ' téléphone' + (d.envoyes > 1 ? 's' : '')); return qid; }, function () { toast('Questionnaire enregistré, mais la notification n\'est pas partie'); return qid; });
+        }).then(function (qid) { fermer(); charger(); q(sb.from('questionnaires').select('*').eq('id', qid).single()).then(suivi).catch(function () { }); })
           .catch(function (e) { $('qf-ok').disabled = false; toast(e && e.message ? 'Enregistrement impossible : ' + e.message : 'Enregistrement impossible'); });
       };
     });
@@ -2152,7 +2168,7 @@ function vueQuestionnaires(m) {
         $('qv').innerHTML = '<div class="stack">' +
           '<div class="small"><b>' + faits.length + '</b> réponse' + (faits.length > 1 ? 's' : '') + ' sur ' + CON.length + ' · ' + (ouvertQ(x) ? 'ouvert' : 'fermé') + (x.date_limite ? ' · jusqu\'au ' + esc(fmtJ(new Date(x.date_limite + 'T12:00:00'))) : '') + '</div>' +
           '<div class="chips"><button class="btn sm" id="qv-rel"' + (manquants.length && ouvertQ(x) ? '' : ' disabled') + '>' + (faits.length ? 'Relancer les ' + manquants.length + ' sans réponse' : 'Envoyer aux ' + manquants.length + ' concernés') + '</button>' +
-          '<button class="btn line sm" id="qv-lien">Copier le lien</button><button class="btn line sm" id="qv-csv">Exporter (Excel)</button><button class="btn line sm" id="qv-mod">Modifier</button><button class="btn line sm" id="qv-oc">' + (x.ouvert ? 'Fermer' : 'Rouvrir') + '</button>' + (REP.length ? '<button class="btn line sm" id="qv-rx">Effacer les ' + REP.length + ' réponse' + (REP.length > 1 ? 's' : '') + '</button>' : '') + '<button class="btn sm ko" id="qv-x">Supprimer</button></div>' +
+          '<button class="btn line sm" id="qv-push"' + (manquants.length && ouvertQ(x) ? '' : ' disabled') + '>Notifier les sans réponse</button><button class="btn line sm" id="qv-lien">Copier le lien</button><button class="btn line sm" id="qv-csv">Exporter (Excel)</button><button class="btn line sm" id="qv-mod">Modifier</button><button class="btn line sm" id="qv-oc">' + (x.ouvert ? 'Fermer' : 'Rouvrir') + '</button>' + (REP.length ? '<button class="btn line sm" id="qv-rx">Effacer les ' + REP.length + ' réponse' + (REP.length > 1 ? 's' : '') + '</button>' : '') + '<button class="btn sm ko" id="qv-x">Supprimer</button></div>' +
           (sansCompte.length ? '<div class="card small" style="padding:10px 12px;border-left:4px solid var(--ko)"><b>' + sansCompte.length + ' sans compte dans l\'appli</b> : ' + esc(sansCompte.map(function (p) { return p.prenom; }).join(', ')) + '. Ils ne recevront pas le message : envoie-leur le lien par WhatsApp, ou rattache leur famille à un compte.</div>' : '') +
           (synth ? '<div class="sect">Synthèse</div><div class="stack" style="gap:8px">' + synth + '</div>' : '') +
           (manquants.length ? '<div class="sect">Sans réponse (' + manquants.length + ')</div>' + manquants.map(ligne).join('') : '') +
@@ -2166,6 +2182,13 @@ function vueQuestionnaires(m) {
         if ($('qv-rx')) $('qv-rx').onclick = function () {
           if (!confirm('Effacer les ' + REP.length + ' réponse(s) de ce questionnaire ? Le questionnaire et ses questions sont gardés, tout le monde pourra répondre à nouveau.')) return;
           q(sb.from('questionnaire_reponses').delete().eq('questionnaire_id', x.id)).then(function () { toast('Réponses effacées'); suivi(x); charger(); }).catch(function () { toast('Suppression impossible'); });
+        };
+        $('qv-push').onclick = function () {
+          var b = $('qv-push'); b.disabled = true;
+          notifierQuestionnaire(x.id, faits.length > 0 || !!x.notifie_le).then(function (d) {
+            toast(d.envoyes ? 'Notification envoyée sur ' + d.envoyes + ' téléphone' + (d.envoyes > 1 ? 's' : '') : 'Aucun téléphone avec les notifications activées parmi les sans réponse');
+            x.notifie_le = new Date().toISOString(); b.disabled = false;
+          }).catch(function (e) { b.disabled = false; toast(e && e.message ? 'Notification non envoyée : ' + e.message : 'Notification non envoyée'); });
         };
         $('qv-mod').onclick = function () { form(x, QQ); };
         $('qv-lien').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié'); }, function () { prompt('Lien du questionnaire', lien); }); };

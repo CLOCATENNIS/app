@@ -19,16 +19,21 @@ Deno.serve(async (req) => {
     // Message programmé : appelé par la base (tâche automatique) avec le secret partagé, à la place d'un utilisateur connecté
     const secretCron = req.headers.get("x-cron-secret");
     let auteurId: string | null = null;
+    let cronQuestionnaire = false;
     if (secretCron) {
       const attendu = (await admin.rpc("reglage_prive", { c: "cron_secret" })).data as string;
-      if (!attendu || secretCron !== attendu || b.mode !== "programme") return json({ erreur: "non autorisé" }, 401);
+      if (!attendu || secretCron !== attendu || (b.mode !== "programme" && b.mode !== "questionnaire_rappel")) return json({ erreur: "non autorisé" }, 401);
+    }
+    if (secretCron && b.mode === "questionnaire_rappel") {
+      cronQuestionnaire = true; // rappel automatique la veille de la date limite
+    } else if (secretCron) {
       const { data: m0 } = await admin.from("messages").select("auteur").eq("id", b.message_id).maybeSingle();
       if (!m0) return json({ erreur: "message introuvable" }, 404);
       auteurId = m0.auteur as string;
       b.mode = "message";
     }
     const jeton = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    const u = auteurId ? { user: { id: auteurId } } : (await admin.auth.getUser(jeton)).data;
+    const u = cronQuestionnaire ? { user: { id: "cron" } } : auteurId ? { user: { id: auteurId } } : (await admin.auth.getUser(jeton)).data;
     if (!u?.user) return json({ erreur: "non connecté" }, 401);
     const direction = async () => ((await admin.from("responsabilites").select("user_id").eq("role", "direction").is("groupe_id", null)).data || []).map((r) => r.user_id as string);
     let titre = String(b.titre || "CLOCA Tennis").slice(0, 80);
@@ -37,7 +42,25 @@ Deno.serve(async (req) => {
     let users: string[] = [];
     let perso: Record<string, string> = {}; // texte personnalisé par destinataire (messagerie)
 
-    if (b.mode === "message") {
+    if (b.mode === "questionnaire" || b.mode === "questionnaire_rappel") {
+      // Questionnaire à remplir : familles des personnes concernées qui n'ont pas encore répondu
+      if (!cronQuestionnaire) {
+        const { data: roles } = await admin.from("responsabilites").select("role").eq("user_id", u.user.id).is("groupe_id", null).eq("role", "direction");
+        if (!roles?.length) return json({ erreur: "réservé à la direction" }, 403);
+      }
+      const { data: qz } = await admin.from("questionnaires").select("id, titre, date_limite").eq("id", b.questionnaire_id).maybeSingle();
+      if (!qz) return json({ erreur: "questionnaire introuvable" }, 404);
+      const { data: cs, error } = await admin.rpc("questionnaire_a_notifier", { qid: qz.id });
+      if (error) return json({ erreur: error.message }, 500);
+      const limite = qz.date_limite ? new Date(qz.date_limite + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "Europe/Paris" }) : "";
+      const rappel = b.mode === "questionnaire_rappel" || b.rappel === true;
+      titre = (rappel ? "Rappel · questionnaire à remplir" : "Questionnaire à remplir 📋").slice(0, 80);
+      texte = ("« " + qz.titre + " »" + (b.mode === "questionnaire_rappel" ? " · dernier jour demain" : limite ? " · avant le " + limite : "") + " · 1 minute dans l'appli").slice(0, 200);
+      url = "/app/#/questionnaire/" + qz.id;
+      users = ((cs || []) as { user_id: string; pour: string | null }[]).map((x) => x.user_id);
+      ((cs || []) as { user_id: string; pour: string | null }[]).forEach((x) => { if (x.pour) perso[x.user_id] = ("Pour " + x.pour + " : " + texte).slice(0, 200); });
+      if (b.mode === "questionnaire") await admin.from("questionnaires").update({ notifie_le: new Date().toISOString() }).eq("id", qz.id);
+    } else if (b.mode === "message") {
       // Message de la messagerie : seul son auteur peut déclencher les notifications
       const { data: m } = await admin.from("messages").select("id, auteur, expediteur, titre, texte").eq("id", b.message_id).maybeSingle();
       if (!m || m.auteur !== u.user.id) return json({ erreur: "message introuvable" }, 404);
@@ -109,7 +132,7 @@ Deno.serve(async (req) => {
       const { data } = await admin.from("push_abonnements").select("id, user_id, endpoint, p256dh, auth").in("user_id", users.slice(i, i + 200));
       abos.push(...(data || []));
     }
-    if (!abos.length) return json({ envoyes: 0, appareils: 0 });
+    if (!abos.length) return json({ envoyes: 0, appareils: 0, comptes: users.length });
 
     const cle = async (c: string) => (await admin.rpc("reglage_prive", { c })).data as string;
     webpush.setVapidDetails(await cle("vapid_sujet"), await cle("vapid_public"), await cle("vapid_prive"));
@@ -124,7 +147,7 @@ Deno.serve(async (req) => {
         if (code === 404 || code === 410) await admin.from("push_abonnements").delete().eq("id", a.id);
       }
     }));
-    return json({ envoyes, appareils: abos.length });
+    return json({ envoyes, appareils: abos.length, comptes: users.length });
   } catch (e) {
     return json({ erreur: String((e as Error).message || e) }, 500);
   }
