@@ -619,23 +619,31 @@ function blocSynchro() {
   return '<section class="card stack" style="gap:10px"><b>Mon agenda dans mon téléphone</b><span class="mut small">Ajoute-le une seule fois : les séances, stages et annulations s\'y mettent ensuite à jour tout seuls, pour toute la famille.</span>' +
     '<div class="grid2"><a class="btn navy" href="' + esc(web) + '">' + ic('cal', 18, '#fff') + 'iPhone / Mac</a>' + (andr ? '<button class="btn navy" id="sync-google">Google Agenda</button>' : '<a class="btn navy" target="_blank" rel="noopener" href="' + esc(gUrl) + '">Google Agenda</a>') + '</div>' +
     '<button class="btn line" id="sync-plus">' + (ouvert ? 'Masquer' : 'Android, Outlook et autres') + '</button>' +
-    (ouvert ? '<span class="small"><b>Android et Samsung Calendar</b> : ajoute-le avec le bouton Google Agenda (l\'ajout se fait une fois depuis un ordinateur). Il apparaît ensuite dans l\'agenda du téléphone, y compris Samsung Calendar : vérifie que « CLOCA Tennis » est coché dans ses calendriers. <b>Outlook</b> : Ajouter un calendrier → À partir d\'Internet, puis colle le lien.</span>' +
+    (ouvert ? '<span class="small"><b>Android et Samsung Calendar</b> : ajoute-le avec le bouton Google Agenda (le lien est copié, puis tu le colles sur la page Google). Il apparaît ensuite dans l\'agenda du téléphone, y compris Samsung Calendar : vérifie que « CLOCA Tennis » est coché dans ses calendriers. <b>Outlook</b> : Ajouter un calendrier → À partir d\'Internet, puis colle le lien.</span>' +
       '<input class="f" readonly value="' + esc(l) + '" id="sync-lien" aria-label="Lien de l\'agenda"><div class="grid2"><button class="btn ghost" id="sync-copier">Copier le lien</button><button class="btn ghost" id="sync-reset">Changer de lien</button></div>' +
       '<span class="mut xs">Ce lien est personnel : ne le partage pas. « Changer de lien » désactive l\'ancien (il faudra ré-ajouter l\'agenda).</span>' : '') + '</section>';
 }
-// Android : l'appli Google Agenda ne sait pas s'abonner à un lien ; on ouvre donc Google dans Chrome
+// Android : seul l'ajout « À partir de l'URL » sur la page web de Google marche (testé le 8/11/2026).
+// Le bouton copie le lien puis ouvre cette page dans Chrome (l'appli Google Agenda ignorerait le lien).
 function popupGoogleAgenda() {
   var l = lienAgenda(); if (!l) return;
-  var g = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(l.replace(/^https:/, 'webcal:'));
-  // intent:// force Chrome, sinon Android ouvre l'appli Google Agenda qui ignore le lien
-  var chrome = 'intent://' + g.replace(/^https:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(g) + ';end';
+  var page = 'https://calendar.google.com/calendar/r/settings/addbyurl';
+  var chrome = 'intent://' + page.replace(/^https:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(page) + ';end';
   var et = function (n, t) { return '<div class="getape"><span>' + n + '</span><div>' + t + '</div></div>'; };
-  modale('<div class="stack" style="gap:14px"><div style="text-align:center"><div class="gico">' + ic('cal', 26, '#fff') + '</div><h2 style="margin:10px 0 0;font-size:20px">Ajouter à Google Agenda</h2></div>' +
-    '<div class="stack" style="gap:10px">' + et(1, 'Appuie sur le bouton : Google s\'ouvre dans Chrome.') +
-    et(2, 'Si la page ne propose rien : menu <b>⋮</b> en haut à droite → coche <b>« Version pour ordinateur »</b>.') +
-    et(3, 'Vérifie en haut à droite que c\'est <b>le même compte Google que sur ton téléphone</b>, puis appuie sur <b>« Ajouter »</b>. C\'est fait pour toute la saison.') + '</div>' +
-    '<a class="btn navy" id="g-go" href="' + esc(chrome) + '">Ouvrir Google Agenda</a></div>',
-    function (d) { d.classList.add('centre'); });
+  modale('<div class="stack" style="gap:14px"><div style="text-align:center"><div class="gico">' + ic('cal', 26, '#fff') + '</div><h2 style="margin:10px 0 0;font-size:20px">Ajouter à Google Agenda</h2><span class="mut small">À faire une seule fois.</span></div>' +
+    '<div class="stack" style="gap:10px">' + et(1, 'Appuie sur le bouton : le lien est copié et la page Google s\'ouvre. Si elle est en version mobile : menu <b>⋮</b> → <b>« Version pour ordinateur »</b>.') +
+    et(2, 'Vérifie en haut à droite que c\'est <b>le compte Google de ton téléphone</b>, colle le lien dans <b>« URL de l\'agenda »</b> et appuie sur <b>« Ajouter un agenda »</b>.') +
+    et(3, 'Dans l\'appli <b>Google Agenda</b> : ☰ → <b>Paramètres</b> → ton compte → <b>CLOCA Tennis</b> → active <b>« Synchroniser »</b>.') + '</div>' +
+    '<button class="btn navy" id="g-go">Ajouter à Google Agenda</button>' +
+    '<input class="f" readonly id="g-lien" value="' + esc(l) + '" aria-label="Lien de l\'agenda" style="display:none"></div>',
+    function (d) {
+      d.classList.add('centre');
+      $('g-go').onclick = function () {
+        var ouvrir = function () { location.href = chrome; };
+        (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function () { toast('Lien copié'); setTimeout(ouvrir, 600); })
+          .catch(function () { var i = $('g-lien'); i.style.display = ''; i.select(); try { document.execCommand('copy'); toast('Lien copié'); setTimeout(ouvrir, 600); } catch (e) { toast('Copie le lien ci-dessous, puis réappuie'); } });
+      };
+    });
 }
 function lierSynchro() {
   if ($('sync-plus')) $('sync-plus').onclick = function () { S.synchroOuverte = !S.synchroOuverte; render(); };
