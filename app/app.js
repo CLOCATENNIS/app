@@ -633,7 +633,7 @@ function popupGoogleAgenda() {
   modale('<div class="stack" style="gap:14px"><div style="text-align:center"><div class="gico">' + ic('cal', 26, '#fff') + '</div><h2 style="margin:10px 0 0;font-size:20px">Ajouter à Google Agenda</h2></div>' +
     '<div class="stack" style="gap:10px">' + et(1, 'Appuie sur le bouton : Google s\'ouvre dans Chrome.') +
     et(2, 'Si la page ne propose rien : menu <b>⋮</b> en haut à droite → coche <b>« Version pour ordinateur »</b>.') +
-    et(3, 'Appuie sur <b>« Ajouter »</b>. C\'est fait pour toute la saison.') + '</div>' +
+    et(3, 'Vérifie en haut à droite que c\'est <b>le même compte Google que sur ton téléphone</b>, puis appuie sur <b>« Ajouter »</b>. C\'est fait pour toute la saison.') + '</div>' +
     '<a class="btn navy" id="g-go" href="' + esc(chrome) + '">Ouvrir Google Agenda</a></div>',
     function (d) { d.classList.add('centre'); });
 }
