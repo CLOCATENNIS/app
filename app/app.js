@@ -1878,8 +1878,21 @@ function chargerCordage() {
     q(sb.rpc('cordage_file')),
     q(sb.from('cordage_demandes').select('*, cordages(nom)').in('statut', ['attente', 'fini', 'recupere']).order('created_at')),
     q(sb.from('cordages').select('*').order('ordre').order('nom')),
-    q(sb.from('cordage_tarifs').select('*'))
-  ]).then(function (r) { C = { file: r[0] || [], dem: r[1] || [], cordages: r[2] || [], tarifs: r[3] || [] }; return C; });
+    q(sb.from('cordage_tarifs').select('*')),
+    q(sb.from('cordage_memos').select('*')).catch(function () { return []; })
+  ]).then(function (r) { C = { file: r[0] || [], dem: r[1] || [], cordages: r[2] || [], tarifs: r[3] || [], memos: r[4] || [] }; return C; });
+}
+// Réglages de cordage mémorisés (case « Enregistrer pour mes prochaines demandes »)
+function memoCordage(pid) { return pid && C && C.memos ? C.memos.filter(function (m) { return m.personne_id === pid; })[0] || null : null; }
+function appliquerMemoCordage(F, pid) {
+  var m = memoCordage(pid); if (!m) { F.memo = false; F.memoNom = ''; return false; }
+  var g = m.reglages || {}, actifs = C.cordages.filter(function (c) { return c.actif; });
+  F.raquette = g.raquette || ''; F.fourni = g.fourni === 'joueur' ? 'joueur' : 'club';
+  F.cordage = g.cordage && actifs.some(function (c) { return c.id === g.cordage; }) ? g.cordage : '';
+  F.perso = g.perso || ''; F.tension = g.tension || ''; F.note = g.note || ''; if (g.tel) F.tel = g.tel;
+  var p = S.pers.filter(function (x) { return x.id === pid; })[0];
+  F.memo = true; F.memoNom = p ? p.prenom : ''; F.memoPerdu = g.fourni !== 'joueur' && !!g.cordage && !F.cordage;
+  return true;
 }
 function estCordeur() { return S.roles.some(function (x) { return (x.role === 'cordeur' || x.role === 'direction') && !x.groupe_id; }); }
 function aMoi(d) { return d.cree_par === S.user.id || S.pers.some(function (p) { return p.id === d.personne_id; }); }
@@ -1929,7 +1942,8 @@ function cordDeposer(box) {
   if (!S.pers.length && !cordeur) { box.innerHTML = '<section class="card empty">Ton adresse n\'est rattachée à aucun adhérent. Contacte le club.</section>'; return; }
   if (!CF) {
     var dernier = C.dem.filter(function (d) { return d.cree_par === S.user.id && d.telephone; }).slice(-1)[0];
-    CF = { qui: S.pers.length === 1 ? S.pers[0].id : '', autre: false, autreNom: '', nomExt: '', raquette: '', fourni: 'club', cordage: '', perso: '', tension: '', avant: '', tel: dernier ? dernier.telephone : '', note: '' };
+    CF = { qui: S.pers.length === 1 ? S.pers[0].id : '', autre: false, autreNom: '', nomExt: '', raquette: '', fourni: 'club', cordage: '', perso: '', tension: '', avant: '', tel: dernier ? dernier.telephone : '', note: '', memo: false };
+    if (CF.qui) appliquerMemoCordage(CF, CF.qui);
   }
   var F = CF, actifs = C.cordages.filter(function (c) { return c.actif; });
   var prix = F.fourni === 'club' ? (actifs.filter(function (c) { return c.id === F.cordage; })[0] || {}).prix : tarifPose();
@@ -1947,6 +1961,7 @@ function cordDeposer(box) {
       (F.autre ? '<label class="f">Nom et prénom de la personne<input class="f" data-cf="autreNom" value="' + esc(F.autreNom) + '" maxlength="80" placeholder="Prénom Nom" autocomplete="off"></label><span class="mut xs">C\'est toi qui es prévenu quand la raquette est prête, et toi qui la récupères.</span>' : '') : '') +
     (cordeur ? pick('cqui', 'ext', F.qui === 'ext', 'Autre joueur (saisi par le cordeur)') + (F.qui === 'ext' ? '<label class="f">Nom du joueur<input class="f" data-cf="nomExt" value="' + esc(F.nomExt) + '" placeholder="Prénom Nom"></label>' : '') : '') +
     '<label class="f">Raquette (facultatif)<input class="f" data-cf="raquette" value="' + esc(F.raquette) + '" placeholder="Ex. Babolat Pure Drive bleue"></label></section>' +
+    (F.memo && F.memoNom && !F.autre && F.qui !== 'ext' ? '<div class="small" style="background:var(--soft);border-left:4px solid var(--ok, #2e7d32);border-radius:10px;padding:10px 12px">✓ Réglages enregistrés de ' + esc(F.memoNom) + ' remplis automatiquement. Vérifie et dépose.' + (F.memoPerdu ? ' Le cordage habituel n\'est plus proposé : choisis-en un autre.' : '') + '</div>' : '') +
     '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Cordage</span><a class="small" href="#/cordage/guide" style="font-weight:600">Quel cordage choisir ? →</a></div><div class="grid2">' +
     pick('cfour', 'club', F.fourni === 'club', 'Fourni par le club') + pick('cfour', 'joueur', F.fourni === 'joueur', 'J\'apporte le mien') + '</div>' +
     (F.fourni === 'club'
@@ -1958,10 +1973,13 @@ function cordDeposer(box) {
     '<label class="f">Téléphone (pour te prévenir)<input class="f" type="tel" inputmode="tel" autocomplete="tel" data-cf="tel" value="' + esc(F.tel) + '" placeholder="06 12 34 56 78"></label>' +
     '<label class="f">Un mot pour le cordeur (facultatif)<textarea class="f" data-cf="note" placeholder="Ex. garder le même grip">' + esc(F.note) + '</textarea></label></section>' +
     '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span>Prix</span><b class="disp" style="font-size:28px">' + (prix != null ? euros(prix) : '—') + '</b></div>' +
-    '<span class="mut xs">À régler au club house en récupérant la raquette.</span><button class="btn" id="cf-go">Déposer ma raquette</button></section>';
+    '<span class="mut xs">À régler au club house en récupérant la raquette.</span>' +
+    (F.qui && F.qui !== 'ext' && !F.autre ? '<label class="check"><input type="checkbox" id="cf-memo"' + (F.memo ? ' checked' : '') + '><span>Enregistrer ces réglages pour mes prochaines demandes<span class="mut xs" style="display:block">Raquette, cordage, tension, téléphone et mot au cordeur seront remplis tout seuls la prochaine fois.</span></span></label>' : '') +
+    '<button class="btn" id="cf-go">Déposer ma raquette</button></section>';
   box.innerHTML = h;
   Array.prototype.forEach.call(box.querySelectorAll('[data-cf]'), function (i) { i.oninput = function () { F[i.dataset.cf] = i.value; }; });
-  Array.prototype.forEach.call(box.querySelectorAll('[data-cqui]'), function (b) { b.onclick = function () { F.qui = b.dataset.cqui; cordDeposer(box); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cqui]'), function (b) { b.onclick = function () { if (F.qui !== b.dataset.cqui) { F.qui = b.dataset.cqui; if (F.qui !== 'ext') appliquerMemoCordage(F, F.qui); else F.memo = false; } cordDeposer(box); }; });
+  if ($('cf-memo')) $('cf-memo').onchange = function () { F.memo = this.checked; };
   if ($('cf-autre')) $('cf-autre').onchange = function () { F.autre = this.checked; if (F.autre && (!F.qui || F.qui === 'ext')) F.qui = S.pers[0].id; cordDeposer(box); };
   Array.prototype.forEach.call(box.querySelectorAll('[data-crefaire]'), function (b) {
     b.onclick = function () {
@@ -1989,8 +2007,15 @@ function cordDeposer(box) {
       tension: F.tension.trim() || null, besoin_avant: F.avant || null, note: F.note.trim() || null
     };
     $('cf-go').disabled = true;
+    var memoPid = F.qui !== 'ext' && !F.autre ? F.qui : null, garder = !!F.memo, avait = !!memoCordage(memoPid);
+    var reglages = { raquette: row.raquette || '', fourni: F.fourni, cordage: row.cordage_id || '', perso: row.cordage_perso || '', tension: row.tension || '', tel: row.telephone, note: row.note || '' };
     q(sb.from('cordage_demandes').insert(row)).then(function () {
       CF = null;
+      if (!memoPid) return;
+      var m = garder ? sb.from('cordage_memos').upsert({ personne_id: memoPid, reglages: reglages, maj_le: new Date().toISOString() }, { onConflict: 'user_id,personne_id' })
+        : avait ? sb.from('cordage_memos').delete().eq('personne_id', memoPid) : null;
+      return m ? q(m).catch(function () { toast('Demande enregistrée, mais les réglages n\'ont pas pu être mémorisés'); }) : null;
+    }).then(function () {
       return chargerCordage();
     }).then(function () {
       var att = C.file.filter(function (x) { return x.a_moi && x.statut === 'attente'; }).slice(-1)[0];
