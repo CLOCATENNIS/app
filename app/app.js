@@ -72,7 +72,10 @@ var IC = {
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
   racket: '<ellipse cx="14" cy="9" rx="6" ry="7" transform="rotate(35 14 9)"/><path d="M9.5 13.5L3 20M11 6l6 6M9 9l6 6M12 4l4 8"/>',
-  people: '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M15 20a4.5 4.5 0 0 1 6-4.2"/>'
+  people: '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M15 20a4.5 4.5 0 0 1 6-4.2"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  wa: '<path d="M3 21l1.7-4.6A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1.2-1.6-2-1-.9.9a4.5 4.5 0 0 1-2.6-2.6l.9-.9-1-2L9 8.5z"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>'
 };
 function ic(n, size, color) {
   return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + (color || 'currentColor') +
@@ -888,16 +891,48 @@ function clubInfos() {
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Installer l\'appli</span><span class="small"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l\'écran d\'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Installer l\'application ».</span></section>' +
     suivre() + '<p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p>';
 }
-// Petites annonces : recherche de partenaire et matériel à vendre, validées par le club
-var AN = { liste: null, type: 'partenaire', form: null, f: {} };
+// Petites annonces : recherche de partenaire et matériel à vendre, validées par le club.
+// L'auteur choisit lui-même comment on le contacte (messages dans l'appli, numéro, WhatsApp) : les adhérents se mettent
+// en relation directement. Numéro visible seulement des adhérents connectés et tant que l'annonce est en ligne (règle en base).
+var AN = { liste: null, type: 'partenaire', form: null, f: {}, contacts: {} };
 function photoUrl(p) { return p ? SUPA_URL + '/storage/v1/object/public/annonces/' + p.split('/').map(encodeURIComponent).join('/') : ''; }
+// Compte jeune (mineur avec son propre téléphone) : ni message privé, ni numéro, ni WhatsApp
+function estCompteJeune() { return !!(S.compte && S.compte.personne_id && !S.compte.foyer_id); }
+function annonceDirecte(a) { return !!(a.contact_appli || a.contact_tel || a.contact_wa); }
 function chargerAnnonces() {
-  return q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false }))
-    .then(function (l) { AN.liste = l || []; return AN.liste; });
+  return Promise.all([
+    q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le, contact_appli, contact_tel, contact_wa').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })),
+    S.user && !estCompteJeune() ? q(sb.rpc('annonces_contacts')).catch(function () { return []; }) : Promise.resolve([])
+  ]).then(function (r) {
+    AN.liste = r[0] || []; AN.contacts = {};
+    (r[1] || []).forEach(function (c) { AN.contacts[c.annonce_id] = c; });
+    return AN.liste;
+  });
+}
+function moyensTexte(a) {
+  var m = [];
+  if (a.contact_appli) m.push('messages dans l\'appli'); if (a.contact_tel) m.push('numéro affiché'); if (a.contact_wa) m.push('WhatsApp');
+  return m.length ? m.join(' · ') : 'mise en relation par le club';
+}
+function blocContact(a) {
+  var c = AN.contacts[a.id] || {}, qui = a.type === 'partenaire' ? a.prenom : c.prenom || 'le vendeur';
+  if (!S.user) return '<a class="btn line" href="#/profil">Connecte-toi pour contacter ' + esc(qui) + '</a>';
+  if (estCompteJeune()) return '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px">' + ic('lock', 16) + ' <b>Compte jeune</b> : pour contacter ' + esc(qui) + ', demande à un parent depuis son compte.</div>';
+  if (!annonceDirecte(a)) {
+    var wa = function (t) { return 'https://wa.me/' + WA_CLUB + '?text=' + encodeURIComponent(t); };
+    return '<a class="btn" target="_blank" rel="noopener" href="' + esc(wa(a.type === 'vente' ? 'Bonjour, je suis intéressé(e) par l\'annonce n°' + a.num + ' : ' + a.titre + '. Pouvez-vous me mettre en relation ?' : 'Bonjour, je suis intéressé(e) par la demande de partenaire n°' + a.num + ' (' + a.prenom + ', ' + a.niveau + '). Pouvez-vous nous mettre en relation ?')) + '">Me mettre en relation</a>';
+  }
+  var tel = c.tel && telWa(c.tel), h = '<div class="stack" style="gap:8px;margin-top:2px">';
+  if (a.contact_appli) h += '<button class="btn" data-anmsg="' + a.id + '">' + ic('chat', 18, '#fff') + 'Envoyer un message</button>';
+  var bas = [];
+  if (a.contact_tel && tel) bas.push('<a class="btn line" href="tel:+' + tel + '">' + ic('phone', 17) + 'Appeler</a>');
+  if (a.contact_wa && tel) bas.push('<a class="btn line" target="_blank" rel="noopener" href="https://wa.me/' + tel + '?text=' + encodeURIComponent('Bonjour, je te contacte pour ton annonce n°' + a.num + (a.titre ? ' (' + a.titre + ')' : '') + ' sur l\'appli CLOCA Tennis.') + '">' + ic('wa', 17) + 'WhatsApp</a>');
+  if (bas.length) h += bas.length > 1 ? '<div class="grid2">' + bas.join('') + '</div>' : bas[0];
+  if (a.contact_tel && c.tel) h += '<span class="small" style="text-align:center">' + ic('phone', 14, 'var(--mut)') + ' ' + esc(qui.charAt(0).toUpperCase() + qui.slice(1)) + ' : <b>' + esc(c.tel) + '</b></span>';
+  return h + '</div>';
 }
 function carteAnnonce(a, opts) {
-  var wa = function (t) { return 'https://wa.me/' + WA_CLUB + '?text=' + encodeURIComponent(t); };
-  var h = '<section class="card stack" style="gap:6px">';
+  var h = '<section class="card stack" style="gap:6px">', c = AN.contacts[a.id] || {};
   if (a.type === 'vente') {
     var imgs = (a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []);
     if (imgs.length) h += carrousel(imgs);
@@ -907,47 +942,44 @@ function carteAnnonce(a, opts) {
     h += '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(a.prenom) + '</b>' + (NIV[a.niveau] ? niveauBadge(a.niveau) : '<span class="badge" style="background:var(--soft);color:var(--tx)">' + esc(a.niveau) + '</span>') + '</div>' +
       '<span class="mut small">' + esc(a.dispo) + '</span>' + (a.description ? '<span class="small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
   }
-  h += '<span class="mut xs">Annonce n°' + a.num + ' · ' + esc(fmtCourt(new Date(a.created_at))) + '</span>';
-  if (opts.statut) h += '<span><span class="badge" style="background:' + (a.statut === 'attente' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (a.statut === 'attente' ? 'var(--tx)' : '#fff') + '">' + (a.statut === 'attente' ? 'En attente de validation' : 'Publiée jusqu\'au ' + esc(fmtCourt(new Date(a.expire_le + 'T12:00:00')))) + '</span></span>';
-  if (opts.contact && !opts.staff) h += '<a class="btn" target="_blank" rel="noopener" href="' + esc(wa(a.type === 'vente' ? 'Bonjour, je suis intéressé(e) par l\'annonce n°' + a.num + ' : ' + a.titre + '. Pouvez-vous me mettre en relation ?' : 'Bonjour, je suis intéressé(e) par la demande de partenaire n°' + a.num + ' (' + a.prenom + ', ' + a.niveau + '). Pouvez-vous nous mettre en relation ?')) + '">Me mettre en relation</a>';
-  if (opts.staff) h += '<div class="stack" style="gap:8px" data-ancontact="' + a.id + '"><button class="btn ghost" data-anvoir="' + a.id + '">Voir le numéro de l\'auteur</button></div>' +
-    (a.statut === 'attente' ? '<div class="grid2"><button class="btn line" data-anstat="' + a.id + '|refusee">Refuser</button><button class="btn" data-anstat="' + a.id + '|publiee">Publier</button></div>' : '<button class="btn line" data-anstat="' + a.id + '|close">Retirer l\'annonce</button>');
-  else if (opts.retirer) h += '<button class="btn line" data-anstat="' + a.id + '|close">Retirer mon annonce</button>';
+  h += '<span class="mut xs">Annonce n°' + a.num + ' · ' + esc(fmtCourt(new Date(a.created_at))) + (a.type === 'vente' && c.prenom ? ' · ' + esc(c.prenom) : '') + '</span>';
+  if (opts.statut) h += '<span><span class="badge" style="background:' + (a.statut === 'attente' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (a.statut === 'attente' ? 'var(--tx)' : '#fff') + '">' + (a.statut === 'attente' ? 'En attente de validation' : 'Publiée jusqu\'au ' + esc(fmtCourt(new Date(a.expire_le + 'T12:00:00')))) + '</span></span>' +
+    '<span class="xs mut">On te contacte par : ' + esc(moyensTexte(a)) + '</span>';
+  if (opts.contact) h += blocContact(a);
+  if (opts.retirer) h += '<button class="btn line" data-anstat="' + a.id + '|close">Retirer mon annonce</button>';
   return h + '</section>';
 }
 function clubAnnonces(box) {
   if (AN.form) return formAnnonce(box);
   box.innerHTML = '<div class="skel"></div>';
   chargerAnnonces().then(function (l) {
-    var staff = false, moi = S.user ? S.user.id : null; // validation et gestion : espace gestion
+    var moi = S.user ? S.user.id : null; // validation et gestion : espace gestion
     var pub = l.filter(function (a) { return a.statut === 'publiee' && a.type === AN.type; });
     var h = '';
-    var att = staff ? l.filter(function (a) { return a.statut === 'attente'; }) : [];
-    if (att.length) h += '<div class="dayhead">À valider (' + att.length + ')</div>' + att.map(function (a) { return carteAnnonce(a, { staff: true }); }).join('');
-    var mes = moi ? l.filter(function (a) { return a.cree_par === moi && !(staff && a.statut === 'attente'); }) : [];
+    var mes = moi ? l.filter(function (a) { return a.cree_par === moi; }) : [];
     if (mes.length) h += '<div class="dayhead">Mes annonces</div>' + mes.map(function (a) { return carteAnnonce(a, { statut: true, retirer: true }); }).join('');
     h += '<div class="chips" style="margin-top:6px"><button class="chip ' + (AN.type === 'partenaire' ? 'on' : '') + '" data-antype="partenaire">Recherche de partenaire</button><button class="chip ' + (AN.type === 'vente' ? 'on' : '') + '" data-antype="vente">Matériel à vendre</button></div>';
-    h += pub.length ? pub.map(function (a) { return carteAnnonce(a, { contact: a.cree_par !== moi, staff: staff && a.cree_par !== moi }); }).join('')
+    h += pub.length ? pub.map(function (a) { return carteAnnonce(a, { contact: a.cree_par !== moi }); }).join('')
       : '<section class="card empty">' + (AN.type === 'vente' ? 'Aucun article à vendre pour le moment.' : 'Aucune demande pour le moment. Sois le premier à en déposer une !') + '</section>';
     h += '<button class="btn" id="an-new">' + (AN.type === 'vente' ? 'Vendre du matériel' : 'Déposer une demande de partenaire') + '</button>' +
-      '<p class="mut xs" style="text-align:center">Les numéros ne sont jamais affichés : le club fait la mise en relation. Les annonces restent en ligne ' + (reg('annonces_duree') || 60) + ' jours.</p>';
+      '<p class="mut xs" style="text-align:center">Tu contactes directement l\'auteur, par les moyens qu\'il a choisis. Un problème ? Bouton « Signaler » dans la conversation. Les annonces restent en ligne ' + (reg('annonces_duree') || 60) + ' jours.</p>';
     box.innerHTML = h;
     Array.prototype.forEach.call(box.querySelectorAll('[data-antype]'), function (b) { b.onclick = function () { AN.type = b.dataset.antype; clubAnnonces(box); }; });
     $('an-new').onclick = function () { if (!S.user) return go('#/profil'); AN.form = AN.type; AN.f = {}; clubAnnonces(box); };
     Array.prototype.forEach.call(box.querySelectorAll('[data-anstat]'), function (b) {
       b.onclick = function () {
         var x = b.dataset.anstat.split('|');
-        if (x[1] === 'close' && !confirm('Retirer cette annonce ?')) return;
-        q(sb.from('annonces').update({ statut: x[1] }).eq('id', x[0])).then(function () { toast({ publiee: 'Annonce publiée', refusee: 'Annonce refusée', close: 'Annonce retirée' }[x[1]]); clubAnnonces(box); }).catch(function () { toast('Action impossible'); });
+        if (x[1] === 'close' && !confirm('Retirer cette annonce ? Ton numéro ne sera plus affiché.')) return;
+        q(sb.from('annonces').update({ statut: x[1] }).eq('id', x[0])).then(function () { toast('Annonce retirée'); clubAnnonces(box); }).catch(function () { toast('Action impossible'); });
       };
     });
-    Array.prototype.forEach.call(box.querySelectorAll('[data-anvoir]'), function (b) {
+    // Message privé : la base crée (ou retrouve) la conversation entre l'acheteur et l'auteur, liée à l'annonce
+    Array.prototype.forEach.call(box.querySelectorAll('[data-anmsg]'), function (b) {
       b.onclick = function () {
-        q(sb.rpc('annonce_contact', { a: b.dataset.anvoir })).then(function (r) {
-          var c = r && r[0], w = c && telWa(c.contact);
-          box.querySelector('[data-ancontact="' + b.dataset.anvoir + '"]').innerHTML = c ? '<span class="small"><b>' + esc(c.contact || '—') + '</b>' + (c.email ? ' · ' + esc(c.email) : '') + '</span>' +
-            '<div class="grid2">' + (c.contact ? '<a class="btn line" href="tel:' + esc(String(c.contact).replace(/\s/g, '')) + '">Appeler</a>' : '<span></span>') + (w ? '<a class="btn line" target="_blank" rel="noopener" href="https://wa.me/' + w + '">WhatsApp</a>' : '') + '</div>' : '<span class="mut small">Numéro introuvable.</span>';
-        }).catch(function () { toast('Action impossible'); });
+        b.disabled = true;
+        q(sb.rpc('annonce_discussion', { p_annonce: b.dataset.anmsg })).then(function (id) {
+          return chargerDiscussions().then(function () { go('#/discussion/' + id); });
+        }).catch(function () { b.disabled = false; toast('Conversation impossible pour le moment'); });
       };
     });
   }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les annonces pour le moment.</section>'; });
@@ -981,9 +1013,32 @@ function reduirePhoto(fichier) {
     img.src = url;
   });
 }
+// Réglages de contact retenus par compte (pré-remplissent la prochaine annonce, comme le mémo du cordage)
+function chargerPrefsAnnonce() {
+  if (!S.user) return Promise.resolve(null);
+  return q(sb.from('annonce_prefs').select('contact_appli, contact_tel, contact_wa, tel').eq('user_id', S.user.id).maybeSingle()).catch(function () { return null; });
+}
 function formAnnonce(box) {
-  var v = AN.form === 'vente', F = AN.f;
+  var v = AN.form === 'vente', F = AN.f, jeune = estCompteJeune();
+  if (!F._init) {
+    F._init = true; F.appli = !jeune; F.tel = false; F.wa = false;
+    chargerPrefsAnnonce().then(function (m) {
+      if (!m || jeune || AN.form === null) return;
+      F.appli = !!m.contact_appli; F.tel = !!m.contact_tel; F.wa = !!m.contact_wa; F.contact = F.contact || m.tel || ''; F.memo = true;
+      formAnnonce(box);
+    });
+  }
   var champ = function (k, label, attrs, ta) { return '<label class="f">' + label + (ta ? '<textarea class="f" data-anf="' + k + '" ' + attrs + '>' + esc(F[k] || '') + '</textarea>' : '<input class="f" data-anf="' + k + '" ' + attrs + ' value="' + esc(F[k] || '') + '">') + '</label>'; };
+  var caseC = function (id, k, titre, aide) { return '<label class="check" style="min-height:0;padding:4px 0"><input type="checkbox" id="' + id + '"' + (F[k] ? ' checked' : '') + '><span><b>' + titre + '</b><br><span class="mut xs">' + aide + '</span></span></label>'; };
+  var numero = F.tel || F.wa;
+  var moyens = jeune
+    ? '<div class="f" id="an-moyens"><b style="font-size:15px">Comment te contacter ?</b><span class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px;font-weight:400">' + ic('lock', 16) + ' <b>Compte jeune</b> : ton numéro n\'est jamais affiché et personne ne peut t\'écrire en privé. Le club fait la mise en relation avec tes parents.</span></div>'
+    : '<div class="f stack" id="an-moyens" style="gap:2px;border:1px solid var(--bd);border-radius:14px;padding:12px 14px"><b style="font-size:15px">Comment veux-tu être contacté ?</b><span class="mut xs" style="font-weight:400;margin-bottom:4px">Les adhérents connectés te contactent directement, sans passer par le club.</span>' +
+      caseC('an-appli', 'appli', 'Messages dans l\'appli', 'Recommandé : ton numéro reste caché.') +
+      caseC('an-tel', 'tel', 'Afficher mon numéro', 'Bouton « Appeler » sous l\'annonce.') +
+      caseC('an-wa', 'wa', 'Bouton WhatsApp', 'Créé à partir de ton numéro, rien d\'autre à faire.') +
+      (numero ? champ('contact', 'Mon numéro <span class="mut" style="font-weight:400">(visible des adhérents connectés tant que l\'annonce est en ligne)</span>', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="06 12 34 56 78"') : '') +
+      '<label class="check" style="min-height:0;padding:8px 0 0;border-top:1px solid var(--bd);margin-top:6px"><input type="checkbox" id="an-memo"' + (F.memo ? ' checked' : '') + '><span class="small">Retenir ces choix pour mes prochaines annonces</span></label></div>';
   box.innerHTML = '<section class="card stack" style="gap:12px"><b style="font-size:17px">' + (v ? 'Vendre du matériel' : 'Chercher un partenaire') + '</b>' +
     (v ? champ('titre', 'Quoi ?', 'maxlength="80" placeholder="Ex. Raquette Babolat Pure Drive 26"') + champ('prix', 'Prix', 'maxlength="30" placeholder="Ex. 40 €"') +
       champ('description', 'Description (facultatif)', 'maxlength="600" placeholder="État, taille, tension…"', true) +
@@ -992,10 +1047,14 @@ function formAnnonce(box) {
       '<label class="f">Niveau<select class="f" data-anf="niveau"><option value="">Choisir…</option>' + NIVEAUX.concat(['Adulte / autre']).map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
       champ('dispo', 'Mes disponibilités', 'maxlength="140" placeholder="Ex. mercredi après-midi, samedi matin"') +
       champ('description', 'Message (facultatif)', 'maxlength="600" placeholder="Ex. je cherche quelqu\'un pour m\'entraîner"', true)) +
-    champ('contact', 'Téléphone ou WhatsApp <span class="mut">(jamais affiché)</span>', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="06 12 34 56 78"') +
-    '<label class="check"><input type="checkbox" id="an-ok"><span>J\'accepte que mon annonce soit publiée dans l\'appli après validation par le club. Mon numéro n\'est jamais publié : le club fait la mise en relation. Pour un mineur, le numéro est celui d\'un parent.</span></label>' +
+    moyens +
+    '<label class="check"><input type="checkbox" id="an-ok"' + (F.ok ? ' checked' : '') + '><span>J\'accepte que mon annonce soit publiée dans l\'appli après validation par le club' + (jeune ? '.' : ', et que les adhérents connectés me contactent par les moyens cochés. Je peux retirer l\'annonce à tout moment : mon numéro disparaît avec elle.') + '</span></label>' +
     '<button class="btn" id="an-go">Envoyer</button><button class="btn line" id="an-back">Annuler</button></section>';
   Array.prototype.forEach.call(box.querySelectorAll('[data-anf]'), function (i) { i.oninput = i.onchange = function () { F[i.dataset.anf] = i.value; }; });
+  // Cocher « numéro » ou « WhatsApp » fait apparaître le champ du numéro
+  [['an-appli', 'appli'], ['an-tel', 'tel'], ['an-wa', 'wa'], ['an-memo', 'memo'], ['an-ok', 'ok']].forEach(function (x) {
+    if ($(x[0])) $(x[0]).onchange = function () { var avant = F.tel || F.wa; F[x[1]] = this.checked; if ((F.tel || F.wa) !== avant) { formAnnonce(box); if ($('an-moyens')) $('an-moyens').scrollIntoView({ block: 'nearest' }); } };
+  });
   AN.photos = AN.photos || [];
   var majPhotos = function () {
     if (!$('an-ph')) return;
@@ -1013,11 +1072,17 @@ function formAnnonce(box) {
     var t = function (k) { return String(F[k] || '').trim(); };
     if (v && !t('titre')) return toast('Indique ce que tu vends');
     if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
-    if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
+    if (!jeune && !F.appli && !F.tel && !F.wa) return toast('Choisis au moins un moyen d\'être contacté');
+    if ((F.tel || F.wa) && !telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
     if (!$('an-ok').checked) return toast('Coche la case d\'accord');
-    var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
-      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
+    var moyens = { contact_appli: !jeune && !!F.appli, contact_tel: !jeune && !!F.tel, contact_wa: !jeune && !!F.wa, contact: (F.tel || F.wa) && !jeune ? t('contact') : null };
+    var row = Object.assign(v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null }
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null }, moyens);
     $('an-go').disabled = true;
+    // Mémo : enregistré si la case est cochée, oublié si elle est décochée
+    var memo = jeune ? Promise.resolve() : F.memo
+      ? q(sb.from('annonce_prefs').upsert({ user_id: S.user.id, contact_appli: moyens.contact_appli, contact_tel: moyens.contact_tel, contact_wa: moyens.contact_wa, tel: moyens.contact })).catch(function () { })
+      : q(sb.from('annonce_prefs').delete().eq('user_id', S.user.id)).catch(function () { });
     var chemins = [], base = Date.now();
     var photo = (v ? AN.photos : []).reduce(function (pr, f, i) {
       return pr.then(function () { return reduirePhoto(f); }).then(function (blob) {
@@ -1025,7 +1090,7 @@ function formAnnonce(box) {
         return sb.storage.from('annonces').upload(chemin, blob, { contentType: 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; chemins.push(chemin); });
       });
     }, Promise.resolve()).then(function () { if (chemins.length) { row.images = chemins; row.image_path = chemins[0]; } });
-    photo.then(function () { return q(sb.from('annonces').insert(row)); }).then(function () {
+    Promise.all([photo, memo]).then(function () { return q(sb.from('annonces').insert(row)); }).then(function () {
       AN.form = null; AN.photos = []; AN.type = row.type;
       toast(S.isStaff ? 'Annonce publiée' : 'Merci ! Ton annonce sera visible après validation par le club.');
       clubAnnonces(box);
@@ -3232,10 +3297,16 @@ function pageDiscussion(id) {
     setTimeout(function () { chargerDiscussions().then(function () { if ((S.discs || []).some(function (x) { return x.id === id; })) render(); else if ($('disc-fil')) $('disc-fil').innerHTML = '<section class="card empty">Cette discussion n\'existe plus ou ne te concerne pas.</section>'; }); });
     return '<div class="pagehead wrap">' + backLink('#/discussions', 'Discussions') + '</div><main><div id="disc-fil"><div class="card empty">Chargement…</div></div></main>';
   }
+  var prive = d.type === 'prive';
   var h = '<div class="pagehead wrap" style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:18;background:var(--bg)">' +
     '<a class="back" href="#/discussions" aria-label="Retour aux discussions" style="color:var(--tx);margin:0">' + ic('back', 22) + '</a>' + discAvatar(d, 38) +
-    '<span class="stack" style="flex:1;min-width:0;gap:0"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut">' + d.membres + ' membre' + (d.membres > 1 ? 's' : '') + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
-    '<button class="chip" id="disc-muet" aria-label="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '" title="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '">' + ic(d.muet ? 'bell' : 'mute', 18) + '</button></div><main style="gap:0">';
+    '<span class="stack" style="flex:1;min-width:0;gap:0"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+    (prive ? esc(d.annonce_titre || 'Annonce n°' + d.annonce_num) : d.membres + ' membre' + (d.membres > 1 ? 's' : '')) + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
+    '<button class="chip" id="disc-muet" aria-label="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '" title="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '">' + ic(d.muet ? 'bell' : 'mute', 18) + '</button>' +
+    (prive ? '<button class="chip" id="disc-signal" style="color:var(--ac);border-color:var(--ac)">' + ic('flag', 16) + 'Signaler</button>' : '') + '</div><main style="gap:0">';
+  // Conversation privée liée à une petite annonce : rappel des règles et lien vers l'annonce
+  if (prive) h += '<div class="card small stack" style="gap:6px;margin:10px 0 4px;background:var(--soft);border-color:var(--soft)"><span>' + ic('lock', 15) + ' Conversation privée avec <b>' + esc(d.nom) + '</b>, à propos de son annonce. Reste courtois : en cas de signalement, la direction du club peut lire cette conversation.</span>' +
+    '<a href="#/club/annonces" style="color:var(--ac);font-weight:600">Voir l\'annonce n°' + d.annonce_num + (d.annonce_prix ? ' · ' + esc(d.annonce_prix) : '') + '</a></div>';
   if (!d.ouvert) h += '<div class="card small" style="background:var(--sun);border-color:var(--peach);color:#5a2a14;margin-bottom:10px"><b>En test</b> : ce fil n\'est visible que par la direction. Ouvre-le aux membres depuis l\'espace gestion quand il est prêt.</div>';
   if (d.description) h += '<p class="xs mut" style="text-align:center;margin:4px 0 8px">' + esc(d.description) + '</p>';
   h += '<div id="disc-fil" class="dfil"><div class="card empty">Chargement…</div></div></main>';
@@ -3243,6 +3314,34 @@ function pageDiscussion(id) {
   else h += '<div class="dcompo" style="justify-content:center"><span class="small mut">' + (d.archive ? 'Cette discussion est archivée.' : 'Seule l\'équipe du club écrit dans ce fil.') + '</span></div>';
   setTimeout(function () { ouvrirFil(d); });
   return h;
+}
+// Signaler une conversation privée : la direction reçoit le motif et la conversation ; l'autre personne n'est pas prévenue
+function signalerDiscussion(d) {
+  var M = { motif: '', bloquer: false };
+  var MOTIFS = [['arnaque', 'Arnaque ou demande suspecte', 'Paiement à l\'avance, lien douteux, demande de coordonnées…'], ['propos', 'Propos déplacés ou insultants', ''], ['autre', 'Autre chose', '']];
+  var dessin = function () {
+    modale('<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:20px">' + ic('flag', 20, 'var(--ac)') + ' Signaler la conversation</h2>' +
+      '<span class="small mut">La direction du club reçoit ce signalement et peut lire la conversation. L\'autre personne n\'est pas prévenue.</span>' +
+      '<div class="stack" style="gap:8px">' + MOTIFS.map(function (m) {
+        var on = M.motif === m[0];
+        return '<button class="btn line" data-motif="' + m[0] + '" style="justify-content:flex-start;text-align:left;height:auto;padding:10px 14px;flex-direction:column;align-items:flex-start;gap:2px' + (on ? ';border:2px solid var(--ac);background:var(--sun)' : '') + '"><b>' + (on ? '● ' : '○ ') + m[1] + '</b>' + (m[2] ? '<span class="xs mut" style="font-weight:400">' + m[2] + '</span>' : '') + '</button>';
+      }).join('') + '</div>' +
+      '<label class="f">Précise si tu veux (facultatif)<textarea class="f" id="sig-t" rows="2" maxlength="600" placeholder="Ce qui s\'est passé">' + esc(M.detail || '') + '</textarea></label>' +
+      '<label class="check" style="min-height:0"><input type="checkbox" id="sig-b"' + (M.bloquer ? ' checked' : '') + '><span class="small"><b>Bloquer ' + esc(d.nom) + '</b> : cette personne ne pourra plus m\'écrire.</span></label>' +
+      '<button class="btn" id="sig-go"' + (M.motif ? '' : ' disabled style="opacity:.5"') + '>Envoyer le signalement</button><button class="btn line" id="sig-x">Annuler</button></div>', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-motif]'), function (b) { b.onclick = function () { M.motif = b.dataset.motif; M.bloquer = $('sig-b').checked; dessin(); }; });
+      $('sig-b').onchange = function () { M.bloquer = this.checked; };
+      $('sig-t').oninput = function () { M.detail = this.value; };
+      $('sig-x').onclick = fermerModale;
+      $('sig-go').onclick = function () {
+        if (!M.motif) return;
+        q(sb.rpc('discussion_signaler', { p_disc: d.id, p_motif: M.motif, p_detail: $('sig-t').value.trim() || null, p_bloquer: M.bloquer })).then(function () {
+          fermerModale(); toast('Merci, la direction du club a reçu ton signalement');
+        }).catch(function () { toast('Envoi impossible, réessaie'); });
+      };
+    });
+  };
+  dessin();
 }
 function discFermerCanal() { if (DISC.canal) { try { sb.removeChannel(DISC.canal); } catch (e) { } DISC.canal = null; } DISC.id = null; }
 function discMarquerLu(d) {
@@ -3271,6 +3370,7 @@ function ouvrirFil(d) {
     dessinerFil(d, bas || p.new.user_id === S.user.id);
     if (document.visibilityState === 'visible') discMarquerLu(d);
   }).subscribe();
+  if ($('disc-signal')) $('disc-signal').onclick = function () { signalerDiscussion(d); };
   if ($('disc-muet')) $('disc-muet').onclick = function () {
     q(sb.rpc('discussion_muet', { p_disc: d.id, p_muet: !d.muet })).then(function () { d.muet = !d.muet; toast(d.muet ? 'Notifications coupées pour ce fil' : 'Notifications réactivées'); render(); }).catch(function () { toast('Action impossible'); });
   };
