@@ -2583,8 +2583,13 @@ function quandMsg(d) {
   if (j.toDateString() === hier.toDateString()) return 'Hier';
   return fmtCourt(j);
 }
-// Onglet Messages : la messagerie du club et les discussions (groupes, annonces) au même endroit
-var MSGF = 'tout';
+// Onglet Messages : un filtre par usage. « Annonces » en premier (messages du club : remplace le WhatsApp Annonces),
+// puis un filtre par catégorie de fils (CLOC'ARENA, Next Gen, Interclub, Double interne…), puis « Privés » (petites annonces).
+// Seuls les filtres où la personne a quelque chose apparaissent ; chaque filtre affiche ses non-lus.
+var MSGF = 'annonces';
+var MSG_ORDRE = ['annonces', 'CLOC\'ARENA', 'CLOCA Next Gen', 'Interclub', 'Double interne'];
+var MSG_NOM = { annonces: 'Annonces', 'CLOCA Next Gen': 'Next Gen', prives: 'Privés' };
+function msgCat(d) { return d.type === 'prive' ? 'prives' : d.type === 'annonce' ? 'annonces' : d.categorie || 'Autres'; }
 function ligneMsgClub(x) {
   var m = x.messages, nl = !x.lu_le;
   return '<a class="row" href="#/message/' + m.id + '" style="text-decoration:none;color:inherit;gap:12px;align-items:flex-start">' +
@@ -2596,23 +2601,25 @@ function ligneMsgClub(x) {
 function pageMessages() {
   var h = '<div class="pagehead wrap"><h1>Messages</h1></div><main>';
   if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes messages.</section></main>';
-  var club = S.msgs || [], discs = S.discs || [];
-  var nb = { club: nonLus().length, groupes: 0, annonces: 0 };
-  discs.forEach(function (d) { nb[d.type === 'prive' ? 'annonces' : 'groupes'] += d.muet ? 0 : d.non_lus || 0; });
-  var items = [];
-  if (MSGF === 'tout' || MSGF === 'club') club.forEach(function (x) { items.push({ t: x.messages.created_at, h: ligneMsgClub(x) }); });
+  var club = S.msgs || [], discs = S.discs || [], par = { annonces: [] }, nb = { annonces: nonLus().length };
+  club.forEach(function (x) { par.annonces.push({ t: x.messages.created_at, h: ligneMsgClub(x) }); });
   discs.forEach(function (d) {
-    var f = d.type === 'prive' ? 'annonces' : 'groupes';
-    if (MSGF === 'tout' || MSGF === f) items.push({ t: d.dernier_le || '', h: discLigne(d, false) });
+    var c = msgCat(d);
+    (par[c] = par[c] || []).push({ t: d.dernier_le || '', h: discLigne(d, false) });
+    nb[c] = (nb[c] || 0) + (d.muet ? 0 : d.non_lus || 0);
   });
-  items.sort(function (a, b) { return a.t < b.t ? 1 : -1; });
-  h += '<div class="seg seg5">' + [['tout', 'Tout'], ['club', 'Club'], ['groupes', 'Groupes'], ['annonces', 'Annonces']].map(function (f) {
-    var n = f[0] === 'tout' ? 0 : nb[f[0]];
-    return '<button class="' + (MSGF === f[0] ? 'on' : '') + '" data-msgf="' + f[0] + '">' + f[1] + (n ? ' <span style="display:inline-block;min-width:17px;height:17px;line-height:17px;border-radius:9px;background:var(--ac);color:#fff;font-size:11px;font-weight:700;margin-left:3px">' + n + '</span>' : '') + '</button>';
+  var cats = Object.keys(par).sort(function (a, b) {
+    var ia = a === 'prives' ? 98 : MSG_ORDRE.indexOf(a), ib = b === 'prives' ? 98 : MSG_ORDRE.indexOf(b);
+    return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib) || a.localeCompare(b);
+  });
+  if (cats.indexOf(MSGF) < 0) MSGF = 'annonces';
+  var items = (par[MSGF] || []).sort(function (a, b) { return a.t < b.t ? 1 : -1; });
+  h += '<div class="chips" style="flex-wrap:wrap;overflow:visible">' + cats.map(function (c) {
+    return '<button class="chip ' + (MSGF === c ? 'on' : '') + '" data-msgf="' + esc(c) + '">' + esc(MSG_NOM[c] || c) + (nb[c] ? ' <span style="display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--ac);color:#fff;font-size:11px;font-weight:700;text-align:center;margin-left:2px;padding:0 4px">' + nb[c] + '</span>' : '') + '</button>';
   }).join('') + '</div>';
-  if (nonLus().length > 1 && (MSGF === 'tout' || MSGF === 'club')) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
+  if (MSGF === 'annonces' && nonLus().length > 1) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
   h += items.length ? '<section class="card tight">' + items.map(function (i) { return i.h; }).join('') + '</section>'
-    : '<section class="card empty">' + ({ tout: 'Aucun message pour le moment. Les messages du club, de tes groupes et des petites annonces arriveront ici, avec une notification.', club: 'Aucun message du club pour le moment.', groupes: 'Aucune discussion de groupe pour le moment.', annonces: 'Aucune conversation. Touche « Envoyer un message » sous une petite annonce pour en démarrer une.' })[MSGF] + '</section>';
+    : '<section class="card empty">' + (MSGF === 'annonces' ? 'Aucune annonce du club pour le moment. Les infos du club et des coachs arriveront ici, avec une notification.' : 'Rien pour le moment.') + '</section>';
   h += '</main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-msgf]'), function (b) { b.onclick = function () { MSGF = b.dataset.msgf; render(); }; });
@@ -3612,7 +3619,7 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') { html = pageCoach(); actif = 'gestion'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'messages'; }
-  else if (p === 'discussions') { MSGF = 'groupes'; html = pageMessages(); actif = 'messages'; }
+  else if (p === 'discussions') { MSGF = 'CLOC\'ARENA'; html = pageMessages(); actif = 'messages'; }
   else if (p === 'discussion') { html = pageDiscussion(arg); actif = 'messages'; }
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'messages'; }
