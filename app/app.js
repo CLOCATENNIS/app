@@ -911,10 +911,28 @@ function carteActu(a, sur) {
     (a.texte ? '<span class="mut small clamp2">' + esc(String(a.texte).replace(/\s+/g, ' ')) + '</span>' : '') +
     '<span style="font-weight:600;color:var(--ac);margin-top:2px">Voir les infos →</span></a>';
 }
+// Actus : l'actu épinglée en premier, puis « À ne pas manquer » (rempli tout seul : fête, inscriptions ouvertes), puis les autres actus
+function aNePasManquer() {
+  var now = new Date(), l = [];
+  (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut) > now; }).forEach(function (f) {
+    l.push({ d: new Date(f.debut), lien: '#/noel', k: f.inscription_ouverte ? 'Réponse attendue' : 'Fête du club', t: f.titre + ' · ' + fmtJour(new Date(f.debut)).toLowerCase(),
+      s: (f.inscription_ouverte ? 'Dis-nous si tu viens' : 'Toutes les infos') + (f.tombola_ouverte ? ' · tombola ' + (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') : '') });
+  });
+  (S.evts || []).filter(function (e) { return e.type !== 'seance' && inscOuverte(e); }).forEach(function (e) {
+    l.push({ d: new Date(e.debut), lien: '#/evenement/' + e.id, k: 'Inscriptions ouvertes', t: e.titre, s: fmtJour(new Date(e.debut)) + (e.lieu ? ' · ' + e.lieu : '') });
+  });
+  return l.sort(function (a, b) { return a.d - b.d; });
+}
+function carteAuto(x) {
+  return '<a class="card stack" href="' + x.lien + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">' + esc(x.k) + '</span><b>' + esc(x.t) + '</b><span class="mut small">' + esc(x.s) + '</span></a>';
+}
 function clubActus() {
-  var l = S.pubs || [];
-  if (!l.length) return '<section class="card empty">Pas d\'actu pour le moment.</section>' + suivre();
-  return l.map(function (a) { return carteActu(a); }).join('') + suivre();
+  var l = S.pubs || [], auto = aNePasManquer();
+  var ep = l.filter(function (a) { return a.epingle; }), autres = l.filter(function (a) { return !a.epingle; });
+  if (!l.length && !auto.length) return '<section class="card empty">Pas d\'actu pour le moment.</section>' + suivre();
+  return ep.map(function (a) { return carteActu(a, 'À la une'); }).join('') +
+    (auto.length ? '<div class="dayhead">À ne pas manquer</div>' + auto.map(carteAuto).join('') : '') +
+    (autres.length ? '<div class="dayhead">Dernières actus</div>' + autres.map(function (a) { return carteActu(a); }).join('') : '') + suivre();
 }
 function pageActu(id) {
   var a = (S.pubs || []).filter(function (x) { return x.id === id; })[0];
@@ -932,11 +950,41 @@ function pageActu(id) {
 function suivre() {
   return '<section class="card stack" style="gap:10px"><b>Suivez-nous</b><span class="mut small">Photos, moments forts et performances des joueurs.</span><div class="grid2"><a class="btn line" href="' + INSTAGRAM_URL + '" target="_blank" rel="noopener">Instagram</a><a class="btn line" href="' + FACEBOOK_URL + '" target="_blank" rel="noopener">Facebook</a></div></section>';
 }
+// Événements : tout ce qui se passe au club, rempli tout seul (fêtes et tombola, stages et animations, prochaine séance CLOC'ARENA, vacances sans cours)
 function clubEvenements() {
+  var now = new Date(), lim = new Date(); lim.setMonth(lim.getMonth() + 4);
+  if (!S.pauses) {
+    q(sb.from('periodes_sans_cours').select('debut, fin, libelle')).catch(function () { return []; }).then(function (p) { S.pauses = p || []; if ($('club-main') && S.clubTab === 'evenements') $('club-main').innerHTML = clubEvenements(); });
+    return '<div class="skel"></div>';
+  }
+  var it = [];
+  (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut) >= now; }).forEach(function (f) {
+    var d = new Date(f.debut);
+    it.push({ d: d, h: '<a class="ev" href="#/noel"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(f.titre) + '</b><span class="mut small">' + fmtH(d) + (f.fin ? ' – ' + fmtH(new Date(f.fin)) : '') + ' · au club</span>' +
+      '<span style="display:flex;gap:6px;flex-wrap:wrap">' + (f.inscription_ouverte ? '<span class="badge" style="background:var(--ok);color:#fff">Réponds dans l\'appli</span>' : '') + (f.tombola_ouverte ? '<span class="badge" style="background:var(--sun);color:#12304a">Tombola</span>' : '') + '</span></div></a>' });
+  });
+  (S.evts || []).filter(function (e) { return e.type !== 'seance' && e.statut !== 'annule' && new Date(e.fin || e.debut) >= now; }).forEach(function (e) {
+    var d = new Date(e.debut);
+    it.push({ d: d, h: '<a class="ev" href="#/evenement/' + e.id + '"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(e.titre) + '</b><span class="mut small">' + [fmtH(d), e.lieu].filter(Boolean).map(esc).join(' · ') + '</span>' +
+      (e.inscription_ouverte ? '<span><span class="badge" style="background:var(--ok);color:#fff">Inscriptions ouvertes</span></span>' : '') + '</div></a>' });
+  });
+  var arena = (S.evts || []).filter(function (e) { return e.type === 'seance' && e.statut !== 'annule' && new Date(e.debut) > now; })[0];
+  if (arena) { var da = new Date(arena.debut); it.push({ d: da, h: '<a class="ev" href="#/club/competitions"><div class="datebox" style="background:linear-gradient(135deg,#5b3a86,#c62f2f);color:#fff"><span>' + esc(da.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + da.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>Prochaine séance CLOC\'ARENA</b><span class="mut small">' + esc(fmtJour(da)) + ' à ' + fmtH(da) + ' · toutes les séances dans Compét.</span></div></a>' }); }
+  S.pauses.filter(function (p) { var f = new Date(p.fin + 'T23:59:00'); return f >= now && new Date(p.debut) <= lim; }).forEach(function (p) {
+    var d = new Date(p.debut + 'T12:00:00'), f = new Date(p.fin + 'T12:00:00'), un = p.debut === p.fin;
+    it.push({ d: d, h: '<div class="ev off" style="cursor:default"><div class="datebox" style="background:var(--soft);color:var(--mut);box-shadow:none"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b style="color:var(--mut)">' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(p.libelle) + '</b><span class="mut small">Pas de cours collectifs' + (un ? '' : ' du ' + esc(fmtCourt(d)) + ' au ' + esc(fmtCourt(f))) + '</span></div></div>' });
+  });
+  it = it.filter(function (x) { return x.d <= lim || x.d < now; }).sort(function (a, b) { return a.d - b.d; });
+  if (!it.length) return '<section class="card empty">Pas d\'événement annoncé pour le moment.</section>';
+  var mois = '';
+  return it.map(function (x) { var m = x.d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); var t = m !== mois ? '<div class="dayhead">' + esc(m.charAt(0).toUpperCase() + m.slice(1)) + '</div>' : ''; mois = m; return t + x.h; }).join('') +
+    '<p class="mut xs" style="text-align:center">Fêtes, stages, animations et vacances s\'ajoutent ici tout seuls.</p>';
+}
+function clubEvenementsAncien() {
   var now = new Date();
   var l = (S.evts || []).filter(function (e) { return e.type !== 'seance'; });
   var avenir = l.filter(function (e) { return new Date(e.fin || e.debut) >= now; }), passes = l.filter(function (e) { return new Date(e.fin || e.debut) < now; }).reverse().slice(0, 6);
-  if (!l.length) return '<section class="card empty">Pas d\'événement annoncé pour le moment.<br>Les séances CLOC\'ARENA sont dans l\'onglet Arena.</section>';
+  if (!l.length) return '<section class="card empty">Pas d\'événement annoncé pour le moment.</section>';
   var carte = function (e, passe) {
     var d = new Date(e.debut);
     return '<a class="ev' + (passe ? ' off' : '') + '" href="#/evenement/' + e.id + '"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0">' +
