@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     if (!r || r.user_id !== u.user.id) return json({ erreur: "retour introuvable" }, 404);
     if (r.mail_envoye) return json({ mail: true });
 
-    const genre = r.type === "bug" ? "Bug signalé" : "Boîte à idées";
+    const genre = r.type === "bug" ? "Bug signalé" : r.type === "signalement" ? "Conversation signalée" : "Boîte à idées";
     const qui = [r.prenom, r.nom].filter(Boolean).join(" ") || "Adhérent";
     let mail = false;
     const user = Deno.env.get("SMTP_USER"), pass = Deno.env.get("SMTP_PASS");

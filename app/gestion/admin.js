@@ -1059,8 +1059,10 @@ function annonceEdition(a, recharger) {
         { contact_appli: E.appli, contact_tel: E.tel, contact_wa: E.wa, expire_le: E.expire_le, statut: E.statut });
       if (E.tel || E.wa) row.contact = t('contact');
       var b = this; b.disabled = true;
-      q(sb.from('annonces').update(row).eq('id', a.id)).then(function () {
-        return E.prevenir ? q(sb.rpc('annonce_prevenir_auteur', { p_annonce: a.id })).catch(function () { }) : null;
+      q(sb.rpc('annonce_modifier', { p_annonce: a.id, p: row })).then(function () {
+        return E.prevenir ? q(sb.rpc('annonce_prevenir_auteur', { p_annonce: a.id })).then(function (mid) {
+          if (mid) return sb.functions.invoke('notifier', { body: { mode: 'message', message_id: mid } }).catch(function () { });
+        }).catch(function () { }) : null;
       }).then(function () { fermer(); toast('Annonce n°' + a.num + ' modifiée'); recharger(); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
     };
   };
@@ -1117,7 +1119,7 @@ function vueDiscussions(m) {
   m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>en test</b> n\'est visible que par la direction ; ouvre-le aux membres quand il est prêt.', '<button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
   $('dg-new').onclick = function () { discForm(null, function () { vueDiscussions(m); }); };
   q(sb.rpc('discussions_synchroniser_tout')).catch(function () { }).then(function () {
-    return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').order('categorie', { nullsFirst: false }).order('ordre').order('nom')), chargerGroupes(),
+    return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').neq('type', 'prive').order('categorie', { nullsFirst: false }).order('ordre').order('nom')), chargerGroupes(),
       q(sb.from('discussion_messages').select('discussion_id, created_at').is('supprime_le', null).order('created_at', { ascending: false }).limit(500))]);
   }).then(function (r) {
     var L = r[0] || [], der = {};
@@ -2674,11 +2676,11 @@ function vueHistorique(m) {
 // ---------- Idées et bugs ----------
 function vueRetours(m) {
   var F = { statut: 'ouverts', type: '' };
-  m.innerHTML = entete('Idées et bugs', 'Ce que les adhérents envoient depuis Profil → « Boîte à idées » et « Signaler un bug ». Chaque envoi part aussi par mail à contact@clocatennis.fr.') +
+  m.innerHTML = entete('Idées et bugs', 'Ce que les adhérents envoient depuis Profil → « Boîte à idées » et « Signaler un bug », et les conversations d\'annonces signalées (lien dans le détail : tu peux alors la lire). Chaque envoi part aussi par mail à contact@clocatennis.fr.') +
     '<div class="chips" id="rt-f" style="margin-bottom:12px"></div><div id="rt-l"><div class="skel"></div></div>';
   var filtres = function () {
     $('rt-f').innerHTML = [['ouverts', 'À traiter'], ['traite', 'Traités'], ['tous', 'Tout']].map(function (x) { return '<button class="chip' + (F.statut === x[0] ? ' on' : '') + '" data-rfs="' + x[0] + '">' + x[1] + '</button>'; }).join('') + ' · ' +
-      [['', 'Idées et bugs'], ['idee', 'Idées'], ['bug', 'Bugs']].map(function (x) { return '<button class="chip' + (F.type === x[0] ? ' on' : '') + '" data-rft="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+      [['', 'Tout'], ['idee', 'Idées'], ['bug', 'Bugs'], ['signalement', 'Signalements']].map(function (x) { return '<button class="chip' + (F.type === x[0] ? ' on' : '') + '" data-rft="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     all('[data-rfs]').forEach(function (b) { b.onclick = function () { F.statut = b.dataset.rfs; filtres(); charger(); }; });
     all('[data-rft]').forEach(function (b) { b.onclick = function () { F.type = b.dataset.rft; filtres(); charger(); }; });
   };
@@ -2691,10 +2693,10 @@ function vueRetours(m) {
         var qui = [x.prenom, x.nom].filter(Boolean).join(' ');
         var mt = 'mailto:' + encodeURIComponent(x.email || '') + '?subject=' + encodeURIComponent('Re : ' + (x.type === 'bug' ? 'ton signalement' : 'ton idée') + ' (' + x.categorie + ')') + '&body=' + encodeURIComponent('Bonjour ' + (x.prenom || '') + ',\n\n\n\n—\nTon message : « ' + x.texte.slice(0, 500) + ' »');
         return '<div class="card" style="margin-bottom:10px;' + (x.statut === 'nouveau' ? 'border-left:4px solid var(--ac)' : '') + '"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">' +
-          '<span><span class="badge ' + (x.type === 'bug' ? 'b-ko' : 'b-ac') + '">' + (x.type === 'bug' ? 'Bug' : 'Idée') + '</span> <b>' + esc(x.categorie) + '</b> · ' + esc(qui || 'Adhérent') + (x.statut === 'nouveau' ? ' <span class="badge b-ac">Nouveau</span>' : '') + '</span>' +
+          '<span><span class="badge ' + (x.type === 'idee' ? 'b-ac' : 'b-ko') + '">' + ({ bug: 'Bug', signalement: 'Conversation signalée' }[x.type] || 'Idée') + '</span> <b>' + esc(x.categorie) + '</b> · ' + esc(qui || 'Adhérent') + (x.statut === 'nouveau' ? ' <span class="badge b-ac">Nouveau</span>' : '') + '</span>' +
           '<span class="mut xs">' + esc(new Date(x.cree_le).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + (x.mail_envoye ? ' · mail envoyé' : ' · <span title="Le mail n\'est pas parti : vérifie les réglages SMTP de la fonction retour">pas de mail</span>') + '</span></div>' +
           '<div style="white-space:pre-wrap;margin:8px 0">' + esc(x.texte) + '</div>' +
-          (x.contexte ? '<details class="xs mut"><summary>Appareil</summary>' + esc(x.contexte) + '</details>' : '') +
+          (x.contexte ? (x.type === 'signalement' ? '<span class="xs">' + esc(x.contexte.replace(/ : https:\/\/\S+$/, '')) + ' · <a href="' + esc((x.contexte.match(/https:\/\/\S+$/) || [''])[0]) + '" target="_blank" rel="noopener">Lire la conversation</a></span>' : '<details class="xs mut"><summary>Appareil</summary>' + esc(x.contexte) + '</details>') : '') +
           '<div class="chips" style="margin-top:8px">' + (x.email ? '<a class="btn sm line" href="' + mt + '">Répondre par mail</a>' : '') +
           (x.statut === 'nouveau' ? '<button class="btn sm ghost" data-rts="' + x.id + '|lu">Marquer lu</button>' : '') +
           (x.statut !== 'traite' ? '<button class="btn sm ok" data-rts="' + x.id + '|traite">Traité</button>' : '<button class="btn sm ghost" data-rts="' + x.id + '|lu">Rouvrir</button>') +

@@ -897,13 +897,14 @@ function clubInfos() {
 var AN = { liste: null, type: 'partenaire', form: null, f: {}, contacts: {} };
 function photoUrl(p) { return p ? SUPA_URL + '/storage/v1/object/public/annonces/' + p.split('/').map(encodeURIComponent).join('/') : ''; }
 // Compte jeune (mineur avec son propre téléphone) : ni message privé, ni numéro, ni WhatsApp
-function estCompteJeune() { return !!(S.compte && S.compte.personne_id && !S.compte.foyer_id); }
+function estCompteJeune() { return !!S.jeune; } // fixé par la base (suis_compte_jeune), chargé avec les annonces
 function annonceDirecte(a) { return !!(a.contact_appli || a.contact_tel || a.contact_wa); }
 function chargerAnnonces() {
-  return Promise.all([
+  var jeune = S.user && S.jeune == null ? q(sb.rpc('suis_compte_jeune')).then(function (j) { S.jeune = !!j; }).catch(function () { S.jeune = false; }) : Promise.resolve();
+  return jeune.then(function () { return Promise.all([
     q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le, contact_appli, contact_tel, contact_wa').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })),
     S.user && !estCompteJeune() ? q(sb.rpc('annonces_contacts')).catch(function () { return []; }) : Promise.resolve([])
-  ]).then(function (r) {
+  ]); }).then(function (r) {
     AN.liste = r[0] || []; AN.contacts = {};
     (r[1] || []).forEach(function (c) { AN.contacts[c.annonce_id] = c; });
     return AN.liste;
@@ -3335,8 +3336,10 @@ function signalerDiscussion(d) {
       $('sig-x').onclick = fermerModale;
       $('sig-go').onclick = function () {
         if (!M.motif) return;
-        q(sb.rpc('discussion_signaler', { p_disc: d.id, p_motif: M.motif, p_detail: $('sig-t').value.trim() || null, p_bloquer: M.bloquer })).then(function () {
-          fermerModale(); toast('Merci, la direction du club a reçu ton signalement');
+        q(sb.rpc('discussion_signaler', { p_disc: d.id, p_motif: M.motif, p_detail: $('sig-t').value.trim() || null, p_bloquer: M.bloquer })).then(function (rid) {
+          if (rid) sb.functions.invoke('retour', { body: { retour_id: rid } }).catch(function () { });
+          if (M.bloquer) { d.archive = true; d.peut_ecrire = false; }
+          fermerModale(); toast('Merci, la direction du club a reçu ton signalement'); if (M.bloquer) render();
         }).catch(function () { toast('Envoi impossible, réessaie'); });
       };
     });
