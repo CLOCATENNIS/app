@@ -3436,7 +3436,8 @@ var DISC = { id: null, msgs: [], canal: null, tout: false, luT: null };
 function chargerDiscussions() {
   S.discs = [];
   if (!S.user || S.apercu) return Promise.resolve();
-  return q(sb.rpc('mes_discussions')).then(function (l) { S.discs = l || []; }).catch(function () { S.discs = []; });
+  // Fils archivés masqués (double interne, anciens fils…) ; une conversation privée bloquée reste visible de ses deux membres
+  return q(sb.rpc('mes_discussions')).then(function (l) { S.discs = (l || []).filter(function (d) { return !d.archive || d.type === 'prive'; }); }).catch(function () { S.discs = []; });
 }
 function discNonLus() { return (S.discs || []).reduce(function (s, d) { return s + (d.muet ? 0 : d.non_lus || 0); }, 0); }
 function discCouleur(t) { var h = 0; String(t || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 360; }); return 'hsl(' + h + ',45%,42%)'; }
