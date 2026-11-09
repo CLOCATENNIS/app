@@ -329,7 +329,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '08/11 01h00';
+var VERSION_APPLI = '09/11 23h30';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -511,7 +511,16 @@ function carteArenaAccueil() {
   var joueurs = S.user ? S.pers.filter(function (p) { return p.niveau_arena; }) : [];
   if (!joueurs.length) return '';
   var cl = S.classement || [], now = new Date();
-  var seance = (S.evts || []).filter(function (e) { return e.type === 'seance' && e.statut !== 'annule' && new Date(e.debut) > now; })[0];
+  // Prochaine séance de CHAQUE joueur : seulement celles de ses groupes (son niveau), pas la première du club
+  var aVenir = (S.evts || []).filter(function (e) { return e.type === 'seance' && e.statut !== 'annule' && new Date(e.debut) > now; });
+  var prochaine = function (p) {
+    return aVenir.filter(function (e) { var ids = evGroupes(e).ids; return !ids.length || ids.some(function (g) { return (S.groupesDe[g] || []).indexOf(p) >= 0; }); })[0] || null;
+  };
+  var parJoueur = joueurs.map(prochaine), distinctes = parJoueur.filter(function (s, i) { return s && parJoueur.indexOf(s) === i; });
+  var ligne = function (s, qui) { return '<span class="small" style="opacity:.92">Prochaine séance' + (qui ? ' de ' + esc(qui) : '') + ' : <b>' + esc(fmtJour(new Date(s.debut))) + ' à ' + fmtH(new Date(s.debut)) + '</b></span>'; };
+  var lignesSeance = joueurs.length === 1 || (distinctes.length === 1 && parJoueur.every(Boolean))
+    ? (distinctes[0] ? ligne(distinctes[0]) : '')
+    : joueurs.map(function (p, i) { return parJoueur[i] ? ligne(parJoueur[i], p.prenom) : ''; }).join('');
   return '<a href="#/arena/tweener" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#5b3a86,#c62f2f);border:0">' +
     '<div style="display:flex;justify-content:space-between;align-items:center"><span class="xs" style="letter-spacing:1.2px;font-weight:700;opacity:.9">MON CLOC\'ARENA</span>' + ic('trophy', 20, '#fff') + '</div>' +
     joueurs.map(function (p) {
@@ -519,7 +528,7 @@ function carteArenaAccueil() {
       return '<div style="display:flex;align-items:center;gap:10px"><span class="disp" style="font-size:30px;line-height:1;min-width:46px">' + (i >= 0 ? (i + 1) + '<sup style="font-size:14px">' + (i ? 'e' : 'er') + '</sup>' : '–') + '</span>' +
         '<span class="stack" style="gap:2px;flex:1"><b>' + esc(p.prenom) + '</b><span class="xs" style="opacity:.85">' + (c ? (+c.points) + ' points · ' + c.participations + ' séance' + (c.participations > 1 ? 's' : '') : 'Pas encore classé') + '</span></span>' + niveauBadge(p.niveau_arena) + '</div>';
     }).join('') +
-    (seance ? '<span class="small" style="opacity:.92">Prochaine séance : <b>' + esc(fmtJour(new Date(seance.debut))) + ' à ' + fmtH(new Date(seance.debut)) + '</b></span>' : '') +
+    lignesSeance +
     '<span class="small" style="font-weight:700">Classement et programme →</span></a>';
 }
 function lierAccueilAide() {
