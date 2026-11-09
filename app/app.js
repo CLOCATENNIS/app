@@ -950,7 +950,7 @@ function pageActu(id) {
 function suivre() {
   return '<section class="card stack" style="gap:10px"><b>Suivez-nous</b><span class="mut small">Photos, moments forts et performances des joueurs.</span><div class="grid2"><a class="btn line" href="' + INSTAGRAM_URL + '" target="_blank" rel="noopener">Instagram</a><a class="btn line" href="' + FACEBOOK_URL + '" target="_blank" rel="noopener">Facebook</a></div></section>';
 }
-// Événements : tout ce qui se passe au club, rempli tout seul (fêtes et tombola, stages et animations, prochaine séance CLOC'ARENA, vacances sans cours)
+// Événements : tout ce qui se passe au club, rempli tout seul (fêtes et tombola, stages et animations, vacances sans cours)
 function clubEvenements() {
   var now = new Date(), lim = new Date(); lim.setMonth(lim.getMonth() + 4);
   if (!S.pauses) {
@@ -968,8 +968,7 @@ function clubEvenements() {
     it.push({ d: d, h: '<a class="ev" href="#/evenement/' + e.id + '"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(e.titre) + '</b><span class="mut small">' + [fmtH(d), e.lieu].filter(Boolean).map(esc).join(' · ') + '</span>' +
       (e.inscription_ouverte ? '<span><span class="badge" style="background:var(--ok);color:#fff">Inscriptions ouvertes</span></span>' : '') + '</div></a>' });
   });
-  var arena = (S.evts || []).filter(function (e) { return e.type === 'seance' && e.statut !== 'annule' && new Date(e.debut) > now; })[0];
-  if (arena) { var da = new Date(arena.debut); it.push({ d: da, h: '<a class="ev" href="#/club/competitions"><div class="datebox" style="background:linear-gradient(135deg,#5b3a86,#c62f2f);color:#fff"><span>' + esc(da.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + da.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>Prochaine séance CLOC\'ARENA</b><span class="mut small">' + esc(fmtJour(da)) + ' à ' + fmtH(da) + ' · toutes les séances dans Compét.</span></div></a>' }); }
+  // séances CLOC'ARENA : pas ici (déjà dans l'agenda de chaque joueur et la carte Mon CLOC'ARENA)
   S.pauses.filter(function (p) { var f = new Date(p.fin + 'T23:59:00'); return f >= now && new Date(p.debut) <= lim; }).forEach(function (p) {
     var d = new Date(p.debut + 'T12:00:00'), f = new Date(p.fin + 'T12:00:00'), un = p.debut === p.fin;
     it.push({ d: d, h: '<div class="ev off" style="cursor:default"><div class="datebox" style="background:var(--soft);color:var(--mut);box-shadow:none"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b style="color:var(--mut)">' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(p.libelle) + '</b><span class="mut small">Pas de cours collectifs' + (un ? '' : ' du ' + esc(fmtCourt(d)) + ' au ' + esc(fmtCourt(f))) + '</span></div></div>' });
