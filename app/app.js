@@ -2587,9 +2587,11 @@ function quandMsg(d) {
 // puis un filtre par catégorie de fils (CLOC'ARENA, Next Gen, Interclub, Double interne…), puis « Privés » (petites annonces).
 // Seuls les filtres où la personne a quelque chose apparaissent ; chaque filtre affiche ses non-lus.
 var MSGF = 'annonces';
-var MSG_ORDRE = ['annonces', 'CLOC\'ARENA', 'CLOCA Next Gen', 'Interclub', 'Double interne'];
-var MSG_NOM = { annonces: 'Annonces', 'CLOCA Next Gen': 'Next Gen', prives: 'Privés' };
-function msgCat(d) { return d.type === 'prive' ? 'prives' : d.type === 'annonce' ? 'annonces' : d.categorie || 'Autres'; }
+// « Club » réunit les fils de la vie sportive du club (CLOC'ARENA Tweener / Masters / Versus, CLOCA Next Gen…) : chacun ne voit que les siens
+var MSG_ORDRE = ['annonces', 'club', 'Interclub'];
+var MSG_NOM = { annonces: 'Annonces', club: 'Club', prives: 'Privés' };
+var MSG_CLUB = ['CLOC\'ARENA', 'CLOCA Next Gen', 'Double interne', 'Club'];
+function msgCat(d) { return d.type === 'prive' ? 'prives' : d.type === 'annonce' ? 'annonces' : MSG_CLUB.indexOf(d.categorie) >= 0 || !d.categorie ? 'club' : d.categorie; }
 function ligneMsgClub(x) {
   var m = x.messages, nl = !x.lu_le;
   return '<a class="row" href="#/message/' + m.id + '" style="text-decoration:none;color:inherit;gap:12px;align-items:flex-start">' +
@@ -3619,7 +3621,7 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') { html = pageCoach(); actif = 'gestion'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'messages'; }
-  else if (p === 'discussions') { MSGF = 'CLOC\'ARENA'; html = pageMessages(); actif = 'messages'; }
+  else if (p === 'discussions') { MSGF = 'club'; html = pageMessages(); actif = 'messages'; }
   else if (p === 'discussion') { html = pageDiscussion(arg); actif = 'messages'; }
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'messages'; }
