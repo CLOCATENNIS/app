@@ -2694,6 +2694,8 @@ function pageMessages() {
     (par[c] = par[c] || []).push({ t: d.dernier_le || '', h: discLigne(d, false) });
     nb[c] = (nb[c] || 0) + (d.muet ? 0 : d.non_lus || 0);
   });
+  // Les 4 filtres sont toujours affichés, même vides
+  ['club', 'Interclub', 'prives'].forEach(function (c) { par[c] = par[c] || []; });
   var cats = Object.keys(par).sort(function (a, b) {
     var ia = a === 'prives' ? 98 : MSG_ORDRE.indexOf(a), ib = b === 'prives' ? 98 : MSG_ORDRE.indexOf(b);
     return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib) || a.localeCompare(b);
@@ -2707,7 +2709,7 @@ function pageMessages() {
   }).join('') + '</div>';
   if (MSGF === 'annonces' && nonLus().length > 1) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
   h += items.length ? '<section class="card tight">' + items.map(function (i) { return i.h; }).join('') + '</section>'
-    : '<section class="card empty">' + (MSGF === 'annonces' ? 'Aucune annonce du club pour le moment. Les infos du club et des coachs arriveront ici, avec une notification.' : 'Rien pour le moment.') + '</section>';
+    : '<section class="card empty">' + (({ annonces: 'Aucune annonce du club pour le moment. Les infos du club et des coachs arriveront ici, avec une notification.', club: 'Rien pour le moment. Les discussions CLOC\'ARENA et Next Gen dont tu fais partie arriveront ici.', Interclub: 'Rien pour le moment. Les discussions de ton équipe d\'interclub arriveront ici.', prives: 'Aucune conversation. Touche « Envoyer un message » sous une petite annonce pour en démarrer une.' })[MSGF] || 'Rien pour le moment.') + '</section>';
   h += '</main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-msgf]'), function (b) { b.onclick = function () { MSGF = b.dataset.msgf; render(); }; });
