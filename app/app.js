@@ -2616,8 +2616,9 @@ function pageMessages() {
   });
   if (cats.indexOf(MSGF) < 0) MSGF = 'annonces';
   var items = (par[MSGF] || []).sort(function (a, b) { return a.t < b.t ? 1 : -1; });
-  h += '<div class="chips" style="flex-wrap:wrap;overflow:visible">' + cats.map(function (c) {
-    return '<button class="chip ' + (MSGF === c ? 'on' : '') + '" data-msgf="' + esc(c) + '">' + esc(MSG_NOM[c] || c) + (nb[c] ? ' <span style="display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--ac);color:#fff;font-size:11px;font-weight:700;text-align:center;margin-left:2px;padding:0 4px">' + nb[c] + '</span>' : '') + '</button>';
+  // Une seule ligne, de gauche à droite (même style que les sous-onglets de Club)
+  h += '<div class="seg seg5">' + cats.map(function (c) {
+    return '<button class="' + (MSGF === c ? 'on' : '') + '" data-msgf="' + esc(c) + '">' + esc(MSG_NOM[c] || c) + (nb[c] ? ' <span style="display:inline-block;min-width:17px;height:17px;line-height:17px;border-radius:9px;background:var(--ac);color:#fff;font-size:11px;font-weight:700;text-align:center;margin-left:2px;padding:0 4px">' + nb[c] + '</span>' : '') + '</button>';
   }).join('') + '</div>';
   if (MSGF === 'annonces' && nonLus().length > 1) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
   h += items.length ? '<section class="card tight">' + items.map(function (i) { return i.h; }).join('') + '</section>'
