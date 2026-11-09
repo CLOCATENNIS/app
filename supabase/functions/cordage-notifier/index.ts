@@ -36,18 +36,18 @@ Deno.serve(async (req) => {
     const ids = ((comptes || []) as { user_id: string }[]).map((c) => c.user_id);
     if (!ids.length) return json({ envoyes: 0, appareils: 0, raison: "aucun compte" });
 
+    const titre = "Raquette prête 🎾";
+    const texte = `La raquette de ${p?.prenom || d.nom} est cordée. Elle t'attend au club house` + (d.prix != null ? ` (${euros(d.prix)}).` : ".");
+    // Cloche de l'appli (gardée même sans notifications activées sur le téléphone)
+    await admin.rpc("notif_ajouter", { users: ids, p_titre: titre, p_texte: texte, p_url: "/app/#/cordage/pretes", p_cle: "cordage:" + d.id });
+
     const { data: abos } = await admin.from("push_abonnements").select("id, endpoint, p256dh, auth").in("user_id", ids);
     if (!abos?.length) return json({ envoyes: 0, appareils: 0, raison: "notifications non activées" });
 
     // 3. Envoi
     const cle = async (c: string) => (await admin.rpc("reglage_prive", { c })).data as string;
     webpush.setVapidDetails(await cle("vapid_sujet"), await cle("vapid_public"), await cle("vapid_prive"));
-    const message = JSON.stringify({
-      title: "Raquette prête 🎾",
-      body: `La raquette de ${p?.prenom || d.nom} est cordée. Elle t'attend au club house` + (d.prix != null ? ` (${euros(d.prix)}).` : "."),
-      url: "/app/#/cordage/pretes",
-      tag: "cordage-" + d.id,
-    });
+    const message = JSON.stringify({ title: titre, body: texte, url: "/app/#/cordage/pretes", tag: "cordage-" + d.id });
     let envoyes = 0;
     for (const a of abos) {
       try {

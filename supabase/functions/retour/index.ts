@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
     try {
       const ids = ((await admin.from("responsabilites").select("user_id").eq("role", "direction").is("groupe_id", null)).data || []).map((x) => x.user_id as string);
       if (ids.length) {
+        await admin.rpc("notif_ajouter", { users: ids, p_titre: genre + " · " + r.categorie, p_texte: qui + " : " + String(r.texte).replace(/\s+/g, " "), p_url: "/app/gestion/#/retours" });
         const { data: abos } = await admin.from("push_abonnements").select("id, endpoint, p256dh, auth").in("user_id", ids);
         if (abos?.length) {
           const cle = async (c: string) => (await admin.rpc("reglage_prive", { c })).data as string;

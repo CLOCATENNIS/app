@@ -127,6 +127,10 @@ Deno.serve(async (req) => {
     }
     if (!users.length) return json({ envoyes: 0, appareils: 0 });
 
+    // Cloche de l'appli : la notification est gardée pour chaque compte, même sans notifications activées sur le téléphone
+    const cleNotif = b.mode === "message" ? "msg:" + b.message_id : (b.mode === "questionnaire" || b.mode === "questionnaire_rappel") ? "q:" + b.questionnaire_id : null;
+    await admin.rpc("notif_ajouter", { users: [...new Set(users)], p_titre: titre, p_texte: texte, p_url: url, p_cle: cleNotif, perso });
+
     const abos: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string }[] = [];
     for (let i = 0; i < users.length; i += 200) {
       const { data } = await admin.from("push_abonnements").select("id, user_id, endpoint, p256dh, auth").in("user_id", users.slice(i, i + 200));

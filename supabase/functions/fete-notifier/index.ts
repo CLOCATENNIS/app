@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
 
     const users = ((await admin.from("responsabilites").select("user_id").eq("role", "direction").is("groupe_id", null)).data || []).map((x) => x.user_id as string);
     if (!users.length) return json({ envoyes: 0 });
+    await admin.rpc("notif_ajouter", { users, p_titre: titre, p_texte: texte, p_url: "/app/gestion/#/fetes" });
     const { data: abos } = await admin.from("push_abonnements").select("id, endpoint, p256dh, auth").in("user_id", users);
     if (!abos?.length) return json({ envoyes: 0, appareils: 0 });
     const cle = async (c: string) => (await admin.rpc("reglage_prive", { c })).data as string;

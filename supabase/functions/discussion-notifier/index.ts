@@ -36,6 +36,9 @@ Deno.serve(async (req) => {
     const users = ((await q).data || []).map((r) => r.user_id as string);
     if (!users.length) return json({ envoyes: 0, appareils: 0 });
 
+    // Cloche de l'appli : une seule ligne par fil et par compte, le compteur monte jusqu'à ce que le fil soit ouvert
+    await admin.rpc("notif_ajouter", { users, p_titre: String(d.nom), p_texte: (m.auteur + " : " + String(m.texte).replace(/\s+/g, " ")), p_url: "/app/#/discussion/" + d.id, p_cle: "disc:" + d.id });
+
     const abos: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string }[] = [];
     for (let i = 0; i < users.length; i += 200) {
       const { data } = await admin.from("push_abonnements").select("id, user_id, endpoint, p256dh, auth").in("user_id", users.slice(i, i + 200));
