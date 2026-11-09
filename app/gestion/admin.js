@@ -976,13 +976,13 @@ function vueGroupes(m) {
 // ---------- Petites annonces ----------
 var ANG = { tab: 'valider', form: null };
 function vueAnnonces(m) {
-  m.innerHTML = entete('Petites annonces', 'Rien n\'est publié sans validation. Les numéros ne sont jamais affichés aux adhérents.') +
+  m.innerHTML = entete('Petites annonces', 'Rien n\'est publié sans validation. Tu peux modifier toute annonce : texte, moyens de contact, durée, statut.') +
     '<div class="chips" style="margin-bottom:14px">' + [['valider', 'À valider et en ligne'], ['creer', 'Créer une annonce'], ['historique', 'Historique']].map(function (t) { return '<button class="chip' + (ANG.tab === t[0] ? ' on' : '') + '" data-angt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="an-l"><div class="skel"></div></div>';
   all('[data-angt]').forEach(function (b) { b.onclick = function () { ANG.tab = b.dataset.angt; vueAnnonces(m); }; });
   if (ANG.tab === 'creer') return annonceForm($('an-l'), m);
   var hist = ANG.tab === 'historique';
   var charger = function () {
-    var req = sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le').order('created_at', { ascending: false });
+    var req = sb.from('annonces').select('id, num, type, created_at, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le, contact_appli, contact_tel, contact_wa').order('created_at', { ascending: false });
     req = hist ? req.or('statut.in.(refusee,close),expire_le.lt.' + isoJour(new Date())).limit(300) : req.in('statut', ['attente', 'publiee']).gte('expire_le', isoJour(new Date()));
     q(req).then(function (l) {
       var bloc = function (titre, liste, mode) {
@@ -990,13 +990,15 @@ function vueAnnonces(m) {
           var etat = a.statut === 'refusee' ? 'Refusée' : a.statut === 'close' ? 'Retirée' : a.statut === 'publiee' ? 'Expirée le ' + fmtJour(new Date(a.expire_le + 'T12:00:00')) : 'Non validée, expirée';
           return '<tr><td style="width:46%"><b>' + esc(a.type === 'vente' ? a.titre : a.prenom + ' · ' + a.niveau) + '</b> ' + (a.prix ? '<span class="badge b-ac">' + esc(a.prix) + '</span>' : '') + '<div class="mut xs">' + esc(a.type === 'vente' ? 'Vente' : 'Partenaire : ' + a.dispo) + ' · n°' + a.num + ' · ' + esc(fmtJour(new Date(a.created_at))) + '</div>' + (a.description ? '<div class="small">' + esc(a.description) + '</div>' : '') +
             ((a.images && a.images.length ? a.images : a.image_path ? [a.image_path] : []).map(function (ph, i, ll) { return '<a class="xs" target="_blank" rel="noopener" href="' + SUPA_URL + '/storage/v1/object/public/annonces/' + esc(ph) + '" style="margin-right:8px">' + (ll.length > 1 ? 'Photo ' + (i + 1) : 'Voir la photo') + '</a>'; }).join('')) + '</td>' +
+            '<td class="small" style="width:18%"><span class="mut xs">On le contacte par</span><br>' + moyensBadges(a) + '</td>' +
             '<td class="small" data-anc="' + a.id + '"><button class="btn sm ghost" data-anv="' + a.id + '">Voir le contact</button></td><td class="act">' +
-            (mode === 'attente' ? '<button class="btn sm ko" data-ans="' + a.id + '|refusee">Refuser</button> <button class="btn sm ok" data-ans="' + a.id + '|publiee">Publier</button>'
-              : mode === 'ligne' ? '<span class="mut xs">jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) + '</span> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>'
-              : '<span class="badge">' + esc(etat) + '</span> <button class="btn sm line" data-ans="' + a.id + '|publiee">Remettre en ligne</button>') + '</td></tr>';
+            (mode === 'attente' ? '<button class="btn sm line" data-ane="' + a.id + '">Modifier</button> <button class="btn sm ko" data-ans="' + a.id + '|refusee">Refuser</button> <button class="btn sm ok" data-ans="' + a.id + '|publiee">Publier</button>'
+              : mode === 'ligne' ? '<span class="mut xs">jusqu\'au ' + esc(fmtJour(new Date(a.expire_le + 'T12:00:00'))) + '</span> <button class="btn sm line" data-ane="' + a.id + '">Modifier</button> <button class="btn sm line" data-ans="' + a.id + '|close">Retirer</button>'
+              : '<span class="badge">' + esc(etat) + '</span> <button class="btn sm line" data-ane="' + a.id + '">Modifier</button> <button class="btn sm line" data-ans="' + a.id + '|publiee">Remettre en ligne</button>') + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="card empty">' + (mode === 'attente' ? 'Rien à valider.' : mode === 'ligne' ? 'Aucune annonce en ligne.' : 'Aucune annonce terminée.') + '</div>');
       };
       $('an-l').innerHTML = hist ? bloc('Annonces terminées', l, 'histo') : bloc('À valider', l.filter(function (a) { return a.statut === 'attente'; }), 'attente') + bloc('En ligne', l.filter(function (a) { return a.statut === 'publiee'; }), 'ligne');
+      all('[data-ane]').forEach(function (b) { b.onclick = function () { annonceEdition(l.filter(function (a) { return a.id === b.dataset.ane; })[0], charger); }; });
       all('[data-ans]').forEach(function (b) { b.onclick = function () { var x = b.dataset.ans.split('|'); q(sb.from('annonces').update({ statut: x[1] }).eq('id', x[0])).then(function () { toast({ publiee: 'Annonce en ligne', refusee: 'Annonce refusée', close: 'Annonce retirée' }[x[1]]); charger(); }).catch(function () { toast('Action impossible'); }); }; });
       all('[data-anv]').forEach(function (b) {
         b.onclick = function () {
@@ -1011,6 +1013,63 @@ function vueAnnonces(m) {
   };
   charger();
 }
+// Moyens de contact choisis par l'auteur (messages dans l'appli, numéro affiché, WhatsApp) ; sinon le club fait le lien
+function moyensBadges(a) {
+  var m = [];
+  if (a.contact_appli) m.push('<span class="badge b-ac">Messages</span>'); if (a.contact_tel) m.push('<span class="badge b-ac">Numéro</span>'); if (a.contact_wa) m.push('<span class="badge b-ac">WhatsApp</span>');
+  return m.length ? m.join(' ') : '<span class="badge">Via le club</span>';
+}
+// Modifier une annonce (direction) : tous les champs, les moyens de contact, la durée et le statut.
+// Activer un moyen que l'auteur n'avait pas choisi demande de cocher « J'ai l'accord » ; décocher est toujours possible.
+function annonceEdition(a, recharger) {
+  if (!a) return;
+  var v = a.type === 'vente', qui = a.prenom || 'l\'auteur';
+  var E = { titre: a.titre, prix: a.prix, prenom: a.prenom, niveau: a.niveau, dispo: a.dispo, description: a.description, appli: !!a.contact_appli, tel: !!a.contact_tel, wa: !!a.contact_wa, contact: '', expire_le: a.expire_le, statut: a.statut, accord: false, prevenir: true };
+  var nouveau = function () { return (E.appli && !a.contact_appli) || (E.tel && !a.contact_tel) || (E.wa && !a.contact_wa); };
+  var champ = function (k, label, attrs, ta) { return '<label class="l">' + label + (ta ? '<textarea class="f" data-aef="' + k + '" rows="3" ' + (attrs || '') + '>' + esc(E[k] || '') + '</textarea>' : '<input class="f" data-aef="' + k + '" ' + (attrs || '') + ' value="' + esc(E[k] || '') + '">') + '</label>'; };
+  var cas = function (k, t, aide) { return '<label class="c"><input type="checkbox" data-aec="' + k + '"' + (E[k] ? ' checked' : '') + '><span><b>' + t + '</b>' + (aide ? ' <span class="mut xs">' + aide + '</span>' : '') + '</span></label>'; };
+  var dessin = function (c) {
+    c.innerHTML = '<div class="stack">' +
+      '<span class="mut xs">' + (v ? 'Vente' : 'Recherche de partenaire') + ' · déposée le ' + esc(fmtJour(new Date(a.created_at))) + '</span>' +
+      (v ? '<div class="row2">' + champ('titre', 'Quoi ?', 'maxlength="80"') + champ('prix', 'Prix', 'maxlength="30"') + '</div>' + champ('description', 'Description', 'maxlength="600"', true)
+        : '<div class="row2">' + champ('prenom', 'Prénom', 'maxlength="40"') + '<label class="l">Niveau<select class="f" data-aef="niveau">' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune', 'Adulte / autre'].map(function (n) { return '<option' + (E.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label></div>' +
+          champ('dispo', 'Disponibilités', 'maxlength="140"') + champ('description', 'Message', 'maxlength="600"', true)) +
+      '<div class="sect">Comment on contacte ' + esc(qui) + '</div>' +
+      cas('appli', 'Messages dans l\'appli', 'numéro caché') + cas('tel', 'Afficher son numéro', 'bouton Appeler') + cas('wa', 'Bouton WhatsApp', 'à partir de son numéro') +
+      (E.tel || E.wa ? champ('contact', 'Son numéro', 'type="tel" maxlength="40" placeholder="06 12 34 56 78"') : '') +
+      (!E.appli && !E.tel && !E.wa ? '<span class="mut xs">Rien de coché : bouton « Me mettre en relation », c\'est le club qui fait le lien.</span>' : '') +
+      (nouveau() ? '<div style="background:var(--soft);border-radius:10px;padding:10px 12px"><label class="c" style="margin:0"><input type="checkbox" id="ae-ok"' + (E.accord ? ' checked' : '') + '><span><b>J\'ai l\'accord de ' + esc(qui) + '</b> pour ces nouveaux moyens de contact (de vive voix, par message…).</span></label></div>' : '') +
+      '<div class="sect">Publication</div><div class="row2"><label class="l">Statut<select class="f" data-aef="statut">' + [['attente', 'À valider'], ['publiee', 'En ligne'], ['close', 'Retirée'], ['refusee', 'Refusée']].map(function (x) { return '<option value="' + x[0] + '"' + (E.statut === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
+      champ('expire_le', 'En ligne jusqu\'au', 'type="date"') + '</div>' +
+      '<label class="c"><input type="checkbox" id="ae-prev"' + (E.prevenir ? ' checked' : '') + '>Prévenir ' + esc(qui) + ' dans sa messagerie de l\'appli</label>' +
+      '<span class="mut xs">La modification est notée dans l\'Historique.</span>' +
+      '<div class="chips" style="justify-content:flex-end"><button class="btn line" id="ae-x">Annuler</button><button class="btn" id="ae-go">Enregistrer</button></div></div>';
+    all('[data-aef]', c).forEach(function (i) { i.oninput = i.onchange = function () { E[i.dataset.aef] = i.value; }; });
+    all('[data-aec]', c).forEach(function (i) { i.onchange = function () { E[i.dataset.aec] = i.checked; dessin(c); }; });
+    if ($('ae-ok')) $('ae-ok').onchange = function () { E.accord = this.checked; };
+    $('ae-prev').onchange = function () { E.prevenir = this.checked; };
+    $('ae-x').onclick = fermer;
+    $('ae-go').onclick = function () {
+      var t = function (k) { return String(E[k] || '').trim(); };
+      if (v && !t('titre')) return toast('Indique ce qui est vendu');
+      if (!v && (!t('prenom') || !t('dispo'))) return toast('Prénom et disponibilités sont nécessaires');
+      if ((E.tel || E.wa) && !telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
+      if (nouveau() && !E.accord) return toast('Coche « J\'ai l\'accord » avant d\'activer un nouveau moyen de contact');
+      var row = Object.assign(v ? { titre: t('titre'), prix: t('prix') || null, description: t('description') || null } : { prenom: t('prenom'), niveau: E.niveau, dispo: t('dispo'), description: t('description') || null },
+        { contact_appli: E.appli, contact_tel: E.tel, contact_wa: E.wa, expire_le: E.expire_le, statut: E.statut });
+      if (E.tel || E.wa) row.contact = t('contact');
+      var b = this; b.disabled = true;
+      q(sb.from('annonces').update(row).eq('id', a.id)).then(function () {
+        return E.prevenir ? q(sb.rpc('annonce_prevenir_auteur', { p_annonce: a.id })).catch(function () { }) : null;
+      }).then(function () { fermer(); toast('Annonce n°' + a.num + ' modifiée'); recharger(); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
+    };
+  };
+  panneau('Annonce n°' + a.num + ' · ' + (v ? a.titre : a.prenom), '<div class="skel"></div>', function (c) {
+    dessin(c);
+    // Numéro actuel de l'auteur (jamais affiché ailleurs que dans la gestion)
+    q(sb.rpc('annonce_contact', { a: a.id })).then(function (r) { if (r && r[0] && !E.contact) { E.contact = r[0].contact || ''; if (E.tel || E.wa) dessin(c); } }).catch(function () { });
+  });
+}
 // Création d'une annonce par le club : publiée tout de suite
 function annonceForm(box, m) {
   var F = ANG.form || (ANG.form = { type: 'vente' }), v = F.type === 'vente';
@@ -1020,18 +1079,25 @@ function annonceForm(box, m) {
       '<label class="l">Photos (facultatif, 6 max)<input class="f" type="file" accept="image/*" multiple id="ag-ph"></label>'
       : '<div class="row2">' + champ('prenom', 'Prénom', 'maxlength="40"') + '<label class="l">Niveau<select class="f" data-agf="niveau"><option value="">Choisir…</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune', 'Adulte / autre'].map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label></div>' +
         champ('dispo', 'Disponibilités', 'maxlength="140"') + champ('description', 'Message (facultatif)', 'maxlength="600"', true)) +
-    champ('contact', 'Téléphone ou WhatsApp du vendeur / joueur (jamais affiché)', 'type="tel" maxlength="40" placeholder="06 12 34 56 78"') +
+    '<div class="sect">Comment on contacte la personne</div>' +
+    ['appli|Messages dans l\'appli|ils arrivent sur le compte du club', 'tel|Afficher son numéro|bouton Appeler', 'wa|Bouton WhatsApp|à partir de son numéro'].map(function (x) { x = x.split('|'); return '<label class="c"><input type="checkbox" data-agc="' + x[0] + '"' + (F[x[0]] ? ' checked' : '') + '><span><b>' + x[1] + '</b> <span class="mut xs">' + x[2] + '</span></span></label>'; }).join('') +
+    champ('contact', 'Son numéro' + (F.tel || F.wa ? '' : ' (jamais affiché si ni « numéro » ni « WhatsApp »)'), 'type="tel" maxlength="40" placeholder="06 12 34 56 78"') +
+    (F.appli || F.tel || F.wa ? '<label class="c"><input type="checkbox" id="ag-ok"' + (F.ok ? ' checked' : '') + '><span><b>J\'ai l\'accord de la personne</b> pour ces moyens de contact.</span></label>' : '<span class="mut xs">Rien de coché : c\'est le club qui fait le lien.</span>') +
     '<span class="mut xs">Créée par le club, l\'annonce est publiée tout de suite et reste en ligne selon la durée fixée dans Réglages de l\'appli.</span>' +
     '<div class="chips" style="justify-content:flex-end"><button class="btn" id="ag-go">Publier l\'annonce</button></div></div>';
   all('[data-agt]', box).forEach(function (b) { b.onclick = function () { F.type = b.dataset.agt; annonceForm(box, m); }; });
   all('[data-agf]', box).forEach(function (i) { i.oninput = i.onchange = function () { F[i.dataset.agf] = i.value; }; });
+  all('[data-agc]', box).forEach(function (i) { i.onchange = function () { F[i.dataset.agc] = i.checked; annonceForm(box, m); }; });
+  if ($('ag-ok')) $('ag-ok').onchange = function () { F.ok = this.checked; };
   $('ag-go').onclick = function () {
     var t = function (k) { return String(F[k] || '').trim(); };
     if (v && !t('titre')) return toast('Indique ce qui est vendu');
     if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
     if (!telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
+    if ((F.appli || F.tel || F.wa) && !F.ok) return toast('Coche « J\'ai l\'accord de la personne »');
     var row = v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null, contact: t('contact') }
       : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, contact: t('contact') };
+    Object.assign(row, { contact_appli: !!F.appli, contact_tel: !!F.tel, contact_wa: !!F.wa });
     var b = this; b.disabled = true;
     var fichiers = v && $('ag-ph') ? Array.prototype.slice.call($('ag-ph').files || []).slice(0, 6) : [], chemins = [], base = Date.now();
     fichiers.reduce(function (pr, f, i) {
