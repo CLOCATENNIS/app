@@ -368,6 +368,52 @@ function accueilCfg() {
     faq: Array.isArray(c.faq) ? c.faq.filter(function (x) { return x && x.q; }) : d.faq
   };
 }
+// Accueil personnalisé (Profil → Mon accueil) : chaque compte choisit ses raccourcis et masque des blocs ; sinon, le réglage du club
+function accueilPerso(cfg) {
+  var m = S.monAccueil;
+  if (!m) return cfg;
+  if (Array.isArray(m.tuiles)) cfg.tuiles = m.tuiles.map(function (t) { return cfg.tuiles.filter(function (x) { return (x.type === 'lien' ? 'lien:' + x.titre : x.type) === t; })[0] || (ACC_TUILES[t] ? { type: t } : null); }).filter(Boolean);
+  (m.blocs_masques || []).forEach(function (k) { cfg.blocs.forEach(function (b) { if (b.k === k) b.on = false; }); });
+  return cfg;
+}
+function chargerMonAccueil() {
+  S.monAccueil = null;
+  if (!S.user || S.apercu) return Promise.resolve();
+  return q(sb.from('compte_accueil').select('tuiles, blocs_masques').eq('user_id', S.user.id).maybeSingle()).then(function (r) { S.monAccueil = r; }).catch(function () { });
+}
+var ACC_AIDE = { double: 'Poules, dispos, scores', inscriptions: 'Stages et événements', reserver: 'Ten\'Up', cordage: 'Déposer une raquette', arena: 'Classement, programme', agenda: 'Mon planning', annonces: 'Vendre, chercher un partenaire', club: 'Horaires, adresse', fete: 'Fête du club', aide: 'Installer, se connecter' };
+function pageMonAccueil() {
+  var club = accueilCfg(), base = S.monAccueil && Array.isArray(S.monAccueil.tuiles) ? S.monAccueil.tuiles : club.tuiles.map(function (x) { return x.type === 'lien' ? 'lien:' + x.titre : x.type; });
+  var E = S.monAccEd || (S.monAccEd = { tuiles: base.slice(), blocs: ((S.monAccueil && S.monAccueil.blocs_masques) || []).slice() });
+  var dispo = Object.keys(ACC_TUILES).filter(function (k) { return k !== 'fete' || (S.fetes || []).length; }).map(function (k) { return [k, ACC_TUILES[k][0], ACC_AIDE[k] || '', ACC_TUILES[k][1]]; })
+    .concat(club.tuiles.filter(function (x) { return x.type === 'lien'; }).map(function (x) { return ['lien:' + x.titre, x.titre, x.sous || 'Lien du club', IC[x.icone] ? x.icone : 'pin']; }));
+  // ordre : les choisis d'abord (dans l'ordre choisi), puis les autres
+  dispo.sort(function (a, b) { var ia = E.tuiles.indexOf(a[0]), ib = E.tuiles.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+  var blocs = [['arena', 'Mon CLOC\'ARENA', 'Classement et prochaine séance'], ['actu', 'Dernière actu', 'La dernière actu du club'], ['rdv', 'Prochain rendez-vous', 'Ma prochaine séance'], ['reseaux', 'Réseaux sociaux', 'Instagram et Facebook du club'], ['presence', 'Club house', 'Ouvert ou fermé']];
+  var h = '<div class="pagehead wrap">' + backLink('#/profil', 'Profil') + '<h1 style="font-size:26px">Mon accueil</h1><p class="mut small" style="margin:4px 0 0">Choisis ce que tu veux voir en ouvrant l\'appli.</p></div><main>' +
+    '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Mes raccourcis</span>' + dispo.map(function (d) {
+      var i = E.tuiles.indexOf(d[0]), on = i >= 0;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)"><label class="check" style="flex:1;min-height:0;padding:0;align-items:center"><input type="checkbox" data-mat="' + esc(d[0]) + '"' + (on ? ' checked' : '') + '>' +
+        '<span style="width:36px;height:36px;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex:none">' + ic(d[3], 20, on ? 'var(--ac)' : 'var(--mut)') + '</span><span class="stack" style="gap:0"><b class="small">' + esc(d[1]) + '</b><span class="xs mut">' + esc(d[2]) + '</span></span></label>' +
+        (on ? '<span style="display:flex;gap:4px;flex:none"><button class="chip" data-mam="' + i + '|-1" aria-label="Monter"' + (i ? '' : ' disabled style="opacity:.35"') + '>↑</button><button class="chip" data-mam="' + i + '|1" aria-label="Descendre"' + (i < E.tuiles.length - 1 ? '' : ' disabled style="opacity:.35"') + '>↓</button></span>' : '') + '</div>';
+    }).join('') + '</section>' +
+    '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Ce que j\'affiche</span>' + blocs.map(function (b) {
+      return '<label class="check" style="border-top:1px solid var(--bd);padding:10px 0"><input type="checkbox" data-mab="' + b[0] + '"' + (E.blocs.indexOf(b[0]) < 0 ? ' checked' : '') + '><span class="stack" style="gap:0"><b class="small">' + b[1] + '</b><span class="xs mut">' + b[2] + '</span></span></label>';
+    }).join('') + '<span class="xs mut" style="margin-top:6px">Les messages importants du club et les questionnaires à remplir restent toujours affichés.</span></section>' +
+    '<button class="btn" id="ma-go">Enregistrer</button><button class="btn line" id="ma-raz">Revenir à l\'accueil du club</button></main>';
+  setTimeout(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mat]'), function (c) { c.onchange = function () { var k = c.dataset.mat; if (c.checked) E.tuiles.push(k); else E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); render(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mam]'), function (b) { b.onclick = function () { var x = b.dataset.mam.split('|'), i = +x[0], j = i + +x[1], t = E.tuiles[i]; E.tuiles[i] = E.tuiles[j]; E.tuiles[j] = t; render(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mab]'), function (c) { c.onchange = function () { var k = c.dataset.mab; E.blocs = E.blocs.filter(function (x) { return x !== k; }); if (!c.checked) E.blocs.push(k); }; });
+    $('ma-go').onclick = function () {
+      q(sb.from('compte_accueil').upsert({ user_id: S.user.id, tuiles: E.tuiles, blocs_masques: E.blocs })).then(function () { S.monAccueil = { tuiles: E.tuiles.slice(), blocs_masques: E.blocs.slice() }; S.monAccEd = null; toast('Accueil enregistré'); go('#/accueil'); }).catch(function () { toast('Enregistrement impossible'); });
+    };
+    $('ma-raz').onclick = function () {
+      q(sb.from('compte_accueil').delete().eq('user_id', S.user.id)).then(function () { S.monAccueil = null; S.monAccEd = null; toast('Accueil du club rétabli'); go('#/accueil'); }).catch(function () { toast('Action impossible'); });
+    };
+  });
+  return h;
+}
 function lienSur(u) { u = String(u || '').trim(); return /^(https?:\/\/|#\/|mailto:|tel:)/i.test(u) ? u : (u && /^[\w.-]+\.[a-z]{2,}/i.test(u) ? 'https://' + u : ''); }
 function lienExterne(u) { return /^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''; }
 function motDuClub(cfg) {
@@ -423,7 +469,7 @@ function pageAccueil() {
     }).filter(Boolean);
     if (rangs.length) arenaTxt = rangs.join(' · ');
   }
-  var cfg = accueilCfg();
+  var cfg = accueilPerso(accueilCfg());
   P.arena = carteArenaAccueil();
   P.tiles = tuilesAccueil(cfg, { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' });
   P.mot = motDuClub(cfg);
@@ -1768,6 +1814,7 @@ function pageProfil() {
   if (S.compte && !S.compte.foyer_id && !S.compte.personne_id && !S.isStaff) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
   h += blocInstaller() + blocPush();
   h += '<a class="btn ghost" href="#/aide">' + ic('alert', 18) + ' Aide et guide pas à pas</a>';
+  h += '<a class="card stack" href="#/profil/accueil" style="gap:6px;text-decoration:none;color:inherit"><span class="eyebrow">Mon accueil</span><b>Choisir mes raccourcis</b><span class="mut small">CLOC\'ARENA, cordage, double interne… garde seulement ce qui t\'intéresse.</span></a>';
   h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Ton avis compte</span><span class="mut small">L\'appli est en version bêta : une idée, un souci ? Ton message part directement au club.</span>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn line" id="rt-idee">💡 Boîte à idées</button><button class="btn line" id="rt-bug">🐞 Signaler un bug</button></div></section>';
   h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
@@ -3495,7 +3542,7 @@ function render() {
   else if (p === 'fete' || p === 'noel') { html = pageFete(p === 'noel' ? 'noel' : arg); actif = 'accueil'; }
   else if (p === 'inscriptions') { html = pageInscriptions(); actif = 'accueil'; }
   else if (p === 'actu') { html = pageActu(arg); actif = 'club'; }
-  else if (p === 'profil') html = pageProfil();
+  else if (p === 'profil') html = arg === 'accueil' ? pageMonAccueil() : pageProfil();
   else if (p === 'gestion') html = pageEspaces();
   else if (p === 'saisie' || p === 'cordeur' || p === 'bureau') { location.replace('gestion/#/' + ({ saisie: 'arena', cordeur: 'cordage', bureau: 'accueil' })[p]); return; }
   else if (p === 'cordage') { html = arg === 'guide' ? pageGuideCordage() : pageCordage(arg); actif = 'accueil'; }
@@ -3527,7 +3574,7 @@ function demarrer() {
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions()]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions(), chargerMonAccueil()]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
