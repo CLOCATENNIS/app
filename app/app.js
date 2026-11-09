@@ -429,6 +429,7 @@ function tuilesAccueil(cfg, dyn) {
   var l = cfg.tuiles; if (!l.length) return '';
   return '<div class="grid2">' + l.map(function (t) {
     if (t.type === 'lien') { var u = lienSur(t.lien); if (!u) return ''; return '<a class="tile" href="' + esc(u) + '"' + lienExterne(u) + '>' + ic(IC[t.icone] ? t.icone : 'pin', 24) + '<b>' + esc(t.titre) + '</b><span class="mut small">' + esc(t.sous || '') + '</span></a>'; }
+    if (t.type === 'fete' && !feteConcerne(feteActive())) return '';
     var d = ACC_TUILES[t.type], href = t.type === 'reserver' ? ADOC_URL : d[2];
     var sous = t.sous || dyn[t.type] || '';
     return '<a class="tile" href="' + href + '"' + lienExterne(href) + '>' + ic(d[1], 24) + '<b>' + esc(t.titre || d[0]) + '</b><span class="mut small">' + sous + '</span></a>';
@@ -915,9 +916,9 @@ function carteActu(a, sur) {
 function aNePasManquer() {
   var now = new Date(), l = [];
   (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut) > now; }).forEach(function (f) {
-    l.push({ d: new Date(f.debut), lien: '#/noel', k: f.inscription_ouverte ? 'Réponse attendue' : 'Fête du club', t: f.titre + ' · ' + fmtJour(new Date(f.debut)).toLowerCase(),
+    if (feteConcerne(f)) l.push({ d: new Date(f.debut), lien: '#/noel', k: f.inscription_ouverte ? 'Réponse attendue' : 'Fête du club', t: f.titre + ' · ' + fmtJour(new Date(f.debut)).toLowerCase(),
       s: f.inscription_ouverte ? 'Dis-nous si tu viens' : 'Toutes les infos' });
-    if (f.tombola_ouverte) l.push({ d: new Date(f.debut), lien: '#/noel/tombola', k: 'Tombola', t: '🎟️ Tickets en vente jusqu\'au ' + fmtCourt(new Date(f.debut)), s: (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · tirage à la ' + f.titre });
+    if (f.tombola_ouverte) l.push({ d: new Date(f.debut), lien: '#/noel/tombola', k: 'Tombola', t: '🎟️ Tickets en vente jusqu\'au ' + fmtCourt(new Date(f.debut)), s: (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · lots remis même si tu n\'es pas là au tirage' });
   });
   (S.evts || []).filter(function (e) { return e.type !== 'seance' && inscOuverte(e); }).forEach(function (e) {
     l.push({ d: new Date(e.debut), lien: '#/evenement/' + e.id, k: 'Inscriptions ouvertes', t: e.titre, s: fmtJour(new Date(e.debut)) + (e.lieu ? ' · ' + e.lieu : '') });
@@ -961,11 +962,11 @@ function clubEvenements() {
   var it = [];
   (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut) >= now; }).forEach(function (f) {
     var d = new Date(f.debut);
-    it.push({ d: d, h: '<a class="ev" href="#/noel"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(f.titre) + '</b><span class="mut small">' + fmtH(d) + (f.fin ? ' – ' + fmtH(new Date(f.fin)) : '') + ' · au club</span>' +
+    if (feteConcerne(f)) it.push({ d: d, h: '<a class="ev" href="#/noel"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(f.titre) + '</b><span class="mut small">' + fmtH(d) + (f.fin ? ' – ' + fmtH(new Date(f.fin)) : '') + ' · au club</span>' +
       (f.inscription_ouverte ? '<span><span class="badge" style="background:var(--ok);color:#fff">Réponds dans l\'appli</span></span>' : '') + '</div></a>' });
     // La tombola a sa propre ligne : on peut prendre des tickets dès maintenant, jusqu'au tirage
     if (f.tombola_ouverte) it.push({ d: now, h: '<a class="ev" href="#/noel/tombola"><div class="datebox" style="background:var(--sun);color:#12304a"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b style="color:#12304a">' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>🎟️ Tombola · ' + esc(f.titre) + '</b>' +
-      '<span class="mut small">' + (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · tirage le ' + esc(fmtJour(d).toLowerCase()) + '</span><span><span class="badge" style="background:var(--ok);color:#fff">Tickets en vente jusqu\'au ' + d.getDate() + '</span></span></div></a>' });
+      '<span class="mut small">' + (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · tirage le ' + esc(fmtJour(d).toLowerCase()) + ', lots remis même aux absents</span><span><span class="badge" style="background:var(--ok);color:#fff">Tickets en vente jusqu\'au ' + d.getDate() + '</span></span></div></a>' });
   });
   (S.evts || []).filter(function (e) { return e.type !== 'seance' && e.statut !== 'annule' && new Date(e.fin || e.debut) >= now; }).forEach(function (e) {
     var d = new Date(e.debut);
@@ -3047,8 +3048,15 @@ function nomFamilleDefaut() {
 }
 
 // Carte d'accueil : visible par tous tant que la fête n'est pas passée
+// Une fête vise un public (école de tennis, adultes, tout le club) : on ne la montre qu'aux familles concernées.
+// Visiteur non connecté ou famille pas encore reconnue : on montre (la page publique sert aussi aux invitations).
+function feteConcerne(f) {
+  var c = f && f.public_cible || 'tous';
+  if (c === 'tous' || !S.user || !S.pers.length || S.isStaff) return true;
+  return S.pers.some(function (p) { return c === 'jeunes' ? p.profil === 'jeune' : p.profil !== 'jeune'; });
+}
 function carteFeteAccueil() {
-  var f = feteActive(); if (!f) return '';
+  var f = feteActive(); if (!f || !feteConcerne(f)) return '';
   var d = new Date(f.debut), fin = f.fin ? new Date(f.fin) : null;
   var rep = localStorageGet('cloca-fete-ok-' + f.edition);
   return '<a class="card fete-carte" href="#/fete/' + esc(f.edition) + '">' +
