@@ -916,7 +916,8 @@ function aNePasManquer() {
   var now = new Date(), l = [];
   (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut) > now; }).forEach(function (f) {
     l.push({ d: new Date(f.debut), lien: '#/noel', k: f.inscription_ouverte ? 'Réponse attendue' : 'Fête du club', t: f.titre + ' · ' + fmtJour(new Date(f.debut)).toLowerCase(),
-      s: (f.inscription_ouverte ? 'Dis-nous si tu viens' : 'Toutes les infos') + (f.tombola_ouverte ? ' · tombola ' + (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') : '') });
+      s: f.inscription_ouverte ? 'Dis-nous si tu viens' : 'Toutes les infos' });
+    if (f.tombola_ouverte) l.push({ d: new Date(f.debut), lien: '#/noel/tombola', k: 'Tombola', t: '🎟️ Tickets en vente jusqu\'au ' + fmtCourt(new Date(f.debut)), s: (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · tirage à la ' + f.titre });
   });
   (S.evts || []).filter(function (e) { return e.type !== 'seance' && inscOuverte(e); }).forEach(function (e) {
     l.push({ d: new Date(e.debut), lien: '#/evenement/' + e.id, k: 'Inscriptions ouvertes', t: e.titre, s: fmtJour(new Date(e.debut)) + (e.lieu ? ' · ' + e.lieu : '') });
@@ -961,7 +962,10 @@ function clubEvenements() {
   (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut) >= now; }).forEach(function (f) {
     var d = new Date(f.debut);
     it.push({ d: d, h: '<a class="ev" href="#/noel"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(f.titre) + '</b><span class="mut small">' + fmtH(d) + (f.fin ? ' – ' + fmtH(new Date(f.fin)) : '') + ' · au club</span>' +
-      '<span style="display:flex;gap:6px;flex-wrap:wrap">' + (f.inscription_ouverte ? '<span class="badge" style="background:var(--ok);color:#fff">Réponds dans l\'appli</span>' : '') + (f.tombola_ouverte ? '<span class="badge" style="background:var(--sun);color:#12304a">Tombola</span>' : '') + '</span></div></a>' });
+      (f.inscription_ouverte ? '<span><span class="badge" style="background:var(--ok);color:#fff">Réponds dans l\'appli</span></span>' : '') + '</div></a>' });
+    // La tombola a sa propre ligne : on peut prendre des tickets dès maintenant, jusqu'au tirage
+    if (f.tombola_ouverte) it.push({ d: now, h: '<a class="ev" href="#/noel/tombola"><div class="datebox" style="background:var(--sun);color:#12304a"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b style="color:#12304a">' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>🎟️ Tombola · ' + esc(f.titre) + '</b>' +
+      '<span class="mut small">' + (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · tirage le ' + esc(fmtJour(d).toLowerCase()) + '</span><span><span class="badge" style="background:var(--ok);color:#fff">Tickets en vente jusqu\'au ' + d.getDate() + '</span></span></div></a>' });
   });
   (S.evts || []).filter(function (e) { return e.type !== 'seance' && e.statut !== 'annule' && new Date(e.fin || e.debut) >= now; }).forEach(function (e) {
     var d = new Date(e.debut);
@@ -3586,7 +3590,10 @@ function render() {
   else if (p === 'fiche') { html = pageFiche(arg); actif = 'club'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
-  else if (p === 'fete' || p === 'noel') { html = pageFete(p === 'noel' ? 'noel' : arg); actif = 'accueil'; }
+  else if (p === 'fete' || p === 'noel') {
+    html = pageFete(p === 'noel' ? 'noel' : arg); actif = 'accueil';
+    if (p === 'noel' && arg === 'tombola') (function attendre(n) { var t = $('fete-tombola'); if (t) t.scrollIntoView({ block: 'start' }); else if (n) setTimeout(function () { attendre(n - 1); }, 200); })(20);
+  }
   else if (p === 'inscriptions') { html = pageInscriptions(); actif = 'accueil'; }
   else if (p === 'actu') { html = pageActu(arg); actif = 'club'; }
   else if (p === 'profil') html = arg === 'accueil' ? pageMonAccueil() : pageProfil();
