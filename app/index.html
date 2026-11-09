@@ -7,17 +7,17 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#102f4a">
+<meta name="theme-color" content="#0B3547">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="CLOCA Tennis">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#f5f2ec;--card:#ffffff;--bd:#e7e1d7;--line:#efe9df;--tx:#12304a;--mut:#5d6b78;
-  --navy:#102f4a;--navy2:#1b3f5f;--ac:#b4532a;--ac-d:#8f3f1e;--peach:#e9a37f;--ok:#1f6f4a;--ko:#9b2c24;
+  --navy:#0B3547;--navy2:#174a60;--clay:#CD6839;--balle:#DDF901;--ac:#b4532a;--ac-d:#8f3f1e;--peach:#e9a37f;--ok:#1f6f4a;--ko:#9b2c24;
   --sun:#fbe3d8;--soft:#f1ece3;
   --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--disp:'Barlow Condensed','Arial Narrow',sans-serif;
 }
@@ -309,6 +309,38 @@ main.wrap{max-width:640px;margin:0 auto}
 .dcompo button:disabled{opacity:.5}
 @media (min-width:768px){.dcompo{padding:10px 24px}.dmsg{max-width:70%}}
 @media (min-width:1024px){.dcompo{left:var(--side);bottom:0}.dfil{padding-bottom:110px}}
+
+/* ====== Look « affiche » (essai) : en-têtes terre battue, jaune balle, titres italiques ====== */
+.hero,.darkhead{position:relative;overflow:hidden;isolation:isolate}
+.hero,.darkhead:not([style*="background"]){background:
+  linear-gradient(0deg,transparent 12px,rgba(255,255,255,.16) 12px,rgba(255,255,255,.16) 14px,transparent 14px),
+  repeating-linear-gradient(22deg,rgba(0,0,0,.07) 0 1px,transparent 1px 4px),
+  linear-gradient(112deg,var(--navy) 0 74%,#fff 74% 74.6%,var(--clay) 74.6%)}
+.hero>*,.darkhead>*{position:relative;z-index:1}
+/* balle jaune avec traits de vitesse */
+.hero::after,.darkhead::after{content:"";position:absolute;right:20px;bottom:38px;width:20px;height:20px;border-radius:50%;z-index:0;
+  background:radial-gradient(circle at 35% 35%,#f4ff7a,var(--balle) 55%,#b9d000);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.hero::before,.darkhead::before{content:"";position:absolute;right:46px;bottom:38px;width:58px;height:20px;z-index:0;
+  background:linear-gradient(90deg,transparent,var(--balle)) 100% 3px/70% 3px no-repeat,
+             linear-gradient(90deg,transparent,var(--balle)) 100% 9px/100% 3px no-repeat,
+             linear-gradient(90deg,transparent,var(--balle)) 100% 15px/55% 3px no-repeat;border-radius:2px}
+/* titres comme sur les affiches */
+.hello-name,.pagehead h1,.darkhead h1{font-style:italic;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+.disp{font-style:italic;font-weight:800}
+.kicker{color:var(--balle)}
+.logo,nav.tabs .side-brand img{box-shadow:0 0 0 3px var(--clay)}
+/* jaune balle : uniquement sur fond marine */
+.hero .chip.on{background:var(--balle);border-color:var(--balle);color:var(--navy)}
+.cloche .nb{background:var(--balle);color:var(--navy);border-color:var(--navy)}
+.datebox b{color:var(--balle)}
+.datebox{box-shadow:inset 0 -4px 0 var(--clay)}
+@media (min-width:1024px){nav.tabs .in a.on{box-shadow:inset 4px 0 0 var(--balle)}
+  .hero::after,.darkhead::after{right:40px;width:24px;height:24px}
+  .hero::before,.darkhead::before{right:72px;width:80px}}
+/* signature */
+.partners::after{content:"VAMOS HR";display:table;margin:22px auto 0;padding:2px 16px;font-family:var(--disp);font-style:italic;font-weight:800;font-size:30px;letter-spacing:1px;color:#0B3547;background:var(--balle);border-radius:8px;transform:skewX(-8deg)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}}
+:root[data-theme="dark"] .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}
 </style>
 </head>
 <body>
