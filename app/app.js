@@ -1876,7 +1876,7 @@ function pageProfil() {
 }
 function apercu(foyer, nom) {
   S.apercu = foyer ? { foyer: foyer, nom: nom } : null; S.sel = 'all'; S.agTab = null; AG = null;
-  chargerUtilisateur().then(chargerAgenda).then(chargerMessages).then(function () { toast(foyer ? 'Aperçu : ' + nom : 'Retour à ton compte'); go('#/accueil'); render(); });
+  chargerUtilisateur().then(chargerAgenda).then(chargerMessages).then(chargerNotifs).then(function () { toast(foyer ? 'Aperçu : ' + nom : 'Retour à ton compte'); go('#/accueil'); render(); });
 }
 function lierApercu() {
   if (!$('ap-q')) return;
@@ -2553,6 +2553,90 @@ function infosAtelier() {
 
 
 // ---------- Messagerie : messages du club, des coachs, actus et séances ----------
+// ===== Cloche : notifications du compte (messages du club, fils, questionnaires, cordage, double…) =====
+// Chaque envoi est gardé par la base (table notifications) ; la pastille compte ce qui n'est pas encore ouvert.
+// Une notification passe en « lue » quand on la touche, ou quand on ouvre la page vers laquelle elle mène.
+function chargerNotifs() {
+  if (!S.user || S.apercu) { S.notifs = []; return Promise.resolve(); }
+  return q(sb.from('notifications').select('id, titre, texte, url, nb, lu_le, created_at').order('created_at', { ascending: false }).limit(80))
+    .then(function (l) { S.notifs = l || []; majCloche(); }).catch(function () { S.notifs = S.notifs || []; });
+}
+function notifsNonLues() { return (S.notifs || []).filter(function (n) { return !n.lu_le; }); }
+function pastilleCloche(n) { return n ? '<span class="nb">' + (n > 99 ? '99+' : n) + '</span>' : ''; }
+function majCloche() {
+  var n = notifsNonLues().length;
+  Array.prototype.forEach.call(document.querySelectorAll('.bell'), function (b) {
+    var p = b.querySelector('.nb'); if (p) p.remove();
+    if (n) b.insertAdjacentHTML('beforeend', pastilleCloche(n));
+    b.setAttribute('aria-label', 'Notifications' + (n ? ', ' + n + ' non lue' + (n > 1 ? 's' : '') : ''));
+    b.classList.toggle('sonne', n > 0);
+  });
+}
+// La cloche prend la place de la balle dans l'en-tête de la page (accueil et en-têtes marine)
+function poserCloche() {
+  if (!S.user || S.apercu) return;
+  var page = document.body.getAttribute('data-page');
+  var h = document.querySelector('#app .hero, #app .darkhead' + (page === 'discussion' || page === 'message' ? '' : ', #app .pagehead'));
+  if (!h || h.querySelector('.bell')) return;
+  h.classList.add('a-cloche');
+  h.insertAdjacentHTML('beforeend', '<a class="bell" href="#/notifs"><img src="cloche.png" alt="" width="44" height="46"></a>');
+  majCloche();
+}
+// Ouvrir une page = lire les notifications qui y mènent
+function notifsLuesPage() {
+  if (!S.user || S.apercu) return;
+  var ici = '/app/' + (location.hash || '#/accueil');
+  var ids = notifsNonLues().filter(function (n) { return n.url === ici; }).map(function (n) { return n.id; });
+  if (ids.length) notifsLire(ids);
+}
+function notifsLire(ids, tout) {
+  var t = new Date().toISOString();
+  (S.notifs || []).forEach(function (n) { if (!n.lu_le && (tout || ids.indexOf(n.id) >= 0)) n.lu_le = t; });
+  majCloche();
+  return q(sb.rpc('notifs_lues', tout ? { tout: true } : { ids: ids })).catch(function () { });
+}
+function iconeNotif(u) {
+  return /#\/discussion\//.test(u) ? 'chat' : /#\/message\//.test(u) ? 'mail' : /#\/questionnaire\//.test(u) ? 'check' : /cordage/.test(u) ? 'racket' : /double/.test(u) ? 'trophy' : /\/gestion\//.test(u) ? 'tool' : 'bell';
+}
+function quandNotif(d) {
+  var j = new Date(d), min = Math.round((Date.now() - j) / 60000);
+  if (min < 1) return 'À l\'instant';
+  if (min < 60) return 'Il y a ' + min + ' min';
+  return quandMsg(d);
+}
+function ligneNotif(n) {
+  var nl = !n.lu_le, txt = n.texte;
+  if (n.nb > 1 && /#\/discussion\//.test(n.url)) txt = n.nb + ' nouveaux messages · ' + txt;
+  return '<button class="row notif' + (nl ? ' nl' : '') + '" data-notif="' + esc(n.id) + '">' +
+    '<span class="notif-ic">' + ic(iconeNotif(n.url), 20, '#fff') + '</span>' +
+    '<span class="stack" style="flex:1;gap:2px;min-width:0;text-align:left"><span style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b class="notif-t">' + esc(n.titre) + '</b><span class="xs notif-q">' + esc(quandNotif(n.created_at)) + '</span></span>' +
+    '<span class="small notif-x">' + esc(txt) + '</span></span>' + (nl ? '<span class="notif-pt" aria-label="Non lue"></span>' : '') + '</button>';
+}
+function pageNotifs() {
+  var h = '<div class="darkhead"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) + '<div class="kicker" style="margin-top:8px">MON COMPTE</div><h1>Notifications</h1></div></div><main>';
+  if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes notifications.</section></main>';
+  var l = S.notifs || [], nl = l.filter(function (n) { return !n.lu_le; }), lu = l.filter(function (n) { return n.lu_le; });
+  if (!l.length) return h + '<section class="card empty">Rien pour le moment. Messages du club, discussions, questionnaires, raquette prête… tout ce qui concerne ton compte arrivera ici.</section></main>';
+  if (nl.length) h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="sect" style="margin:0">Nouvelles · ' + nl.length + '</div><button class="btn ghost" id="notifs-tout" style="width:auto;padding:6px 12px">Tout marquer comme lu</button></div>' +
+    '<section class="card list notifs">' + nl.map(ligneNotif).join('') + '</section>';
+  if (lu.length) h += '<div class="sect">Déjà vues</div><section class="card list notifs">' + lu.map(ligneNotif).join('') + '</section>';
+  return h + '<p class="mut xs" style="text-align:center">Les notifications sont gardées 3 mois.</p></main>';
+}
+function lierNotifs() {
+  var t = $('notifs-tout');
+  if (t) t.onclick = function () { notifsLire([], true); render(); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-notif]'), function (b) {
+    b.onclick = function () {
+      var n = (S.notifs || []).filter(function (x) { return x.id === b.dataset.notif; })[0];
+      if (!n) return;
+      if (!n.lu_le) notifsLire([n.id]);
+      var u = n.url || '/app/';
+      if (u.indexOf('/app/#') === 0) go(u.slice(5));
+      else location.href = u;
+    };
+  });
+}
+
 function chargerMessages() {
   S.msgs = [];
   if (!S.user) return Promise.resolve();
@@ -3595,6 +3679,7 @@ function dessinerFil(d, enBas) {
 }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState !== 'visible' || !S.user) return;
+  chargerNotifs().then(function () { if (document.body.getAttribute('data-page') === 'notifs') render(); });
   var d = DISC.id && (S.discs || []).filter(function (x) { return x.id === DISC.id; })[0];
   if (d) discMarquerLu(d); else chargerDiscussions().then(function () { if (document.body.getAttribute('data-page') === 'accueil' || document.body.getAttribute('data-page') === 'discussions') render(); });
 });
@@ -3628,11 +3713,14 @@ function render() {
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
   else if (p === 'message') { html = pageMessage(arg); actif = 'messages'; }
   else if (p === 'questionnaire') { html = pageQuestionnaire(arg); actif = 'accueil'; }
+  else if (p === 'notifs') { html = pageNotifs(); actif = 'accueil'; setTimeout(lierNotifs); }
   else { p = 'accueil'; html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   document.body.setAttribute('data-page', p);
   document.body.setAttribute('data-sub', arg || '');
   $('app').innerHTML = html;
+  poserCloche();
+  notifsLuesPage();
   if ($('apercu-x')) $('apercu-x').onclick = function () { apercu(null); };
   tabs(actif);
   window.scrollTo(0, 0);
@@ -3642,17 +3730,19 @@ if (window.MutationObserver && $('app')) new MutationObserver(function () { if (
 // Passage téléphone ↔ écran large (rotation, fenêtre redimensionnée) : l'accueil se réorganise
 if (MQ_LARGE) { var surLarge = function () { if (document.body.getAttribute('data-page') === 'accueil') render(); }; if (MQ_LARGE.addEventListener) MQ_LARGE.addEventListener('change', surLarge); else if (MQ_LARGE.addListener) MQ_LARGE.addListener(surLarge); }
 
+// La pastille de la cloche se met à jour toute seule pendant que l'appli est ouverte
+setInterval(function () { if (S.user && document.visibilityState === 'visible') chargerNotifs(); }, 60000);
 function demarrer() {
   if (!sb) { $('app').innerHTML = '<main><section class="card empty">Connexion au club impossible pour le moment. Vérifie ta connexion internet.</section></main>'; return; }
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions(), chargerMonAccueil()]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions(), chargerMonAccueil(), chargerNotifs()]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
       S.user = session.user;
-      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
+      chargerUtilisateur().then(chargerAgenda).then(function () { return Promise.all([chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions(), chargerNotifs()]); }).then(function () { go(location.hash.indexOf('profil') >= 0 ? '#/accueil' : location.hash || '#/accueil'); });
     }
   });
 }
