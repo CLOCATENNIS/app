@@ -151,7 +151,7 @@ function chargerGroupes(force) {
 }
 function chargerPers(force) {
   if (A.pers && !force) return Promise.resolve(A.pers);
-  return q(sb.from('personnes').select('id, prenom, nom, profil, sexe, date_naissance, cours, cotisation_a_jour, foyer_id, actif, niveau_arena, niveau_club, classement_fft, meilleur_classement_fft, adoc_id, email, arena_id, groupe_membres(groupe_id)').order('nom').order('prenom'))
+  return q(sb.from('personnes').select('id, prenom, nom, profil, sexe, date_naissance, cours, cotisation_a_jour, foyer_id, actif, niveau_arena, niveau_club, classement_fft, meilleur_classement_fft, photo_path, adoc_id, email, arena_id, groupe_membres(groupe_id)').order('nom').order('prenom'))
     .then(function (l) { A.pers = l || []; return A.pers; });
 }
 function nomGroupe(id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g ? g.nom : '?'; }
@@ -659,6 +659,7 @@ function vueAdherents(m, arg) {
         '<label class="l">Niveau CLOC\'ARENA' + (aRole('direction') ? '' : ' (modifiable par la direction sportive)') + '<select class="f" id="f-n"' + (aRole('direction') ? '' : ' disabled') + '><option value="">Aucun</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<option' + (p.niveau_arena === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
         '<div class="sect">Fiche joueur</div><div class="row3"><label class="l">Niveau club' + selectBareme('f-nc', p.niveau_club, !aRole('direction')) + '</label><label class="l">Classement FFT<input class="f" id="f-fft" maxlength="8" placeholder="Ex. 30/2" value="' + esc(p.classement_fft || '') + '"' + (aRole('direction') ? '' : ' disabled') + '></label><label class="l">Meilleur classement<input class="f" id="f-fftm" maxlength="8" placeholder="Ex. 30/1" value="' + esc(p.meilleur_classement_fft || '') + '"' + (aRole('direction') ? '' : ' disabled') + '></label></div>' +
         '<span class="mut xs">Visible sur la fiche joueur par les adhérents connectés (« Prénom N. », âge, niveau club, classement FFT, CLOC\'ARENA).</span>' +
+        (p.photo_path && aRole('direction') ? '<div class="toolbar"><span class="small">Photo de profil ajoutée par la famille</span><button class="btn sm ko" id="f-phx">Retirer la photo</button></div>' : '') +
         '<div class="sect">Groupes</div><span class="mut xs">Le groupe CLOC\'ARENA suit automatiquement le niveau choisi au-dessus.</span>' + choixGroupes(gsel, 'fg', 'niveau') + '<button class="btn" id="f-ok">Enregistrer</button>' +
         '<div class="sect">Famille</div><div class="card list">' + r[0].map(function (x) { return '<div class="it"><span>' + esc(x.prenom + ' ' + x.nom) + '</span><span class="mut xs">' + age(x.date_naissance) + ' ans</span></div>'; }).join('') + '</div>' +
         '<div class="sect">Adresses qui ouvrent l\'espace famille</div><div class="card list">' + (r[1].length ? r[1].map(function (a) {
@@ -680,6 +681,7 @@ function vueAdherents(m, arg) {
             return retrait.length ? q(sb.from('groupe_membres').delete().eq('personne_id', p.id).in('groupe_id', retrait)) : null;
           }).then(function () { toast('Fiche enregistrée'); return chargerPers(true); }).then(function () { fermer(); dessiner(); }).catch(function () { toast('Enregistrement impossible'); $('f-ok').disabled = false; });
         };
+        if ($('f-phx')) $('f-phx').onclick = function () { if (confirm('Retirer la photo de profil ? La famille pourra en mettre une autre.')) q(sb.rpc('photo_definir', { p: p.id, chemin: null })).then(function () { toast('Photo retirée'); return chargerPers(true); }).then(function () { fiche(id); }).catch(function () { toast('Action impossible'); }); };
         all('[data-fdel]').forEach(function (b) { b.onclick = function () { if (confirm('Cette adresse ne pourra plus ouvrir l\'espace famille. Continuer ?')) q(sb.from('acces_emails').delete().eq('email', b.dataset.fdel)).then(function () { toast('Adresse retirée'); fiche(id); }); }; });
         $('f-add').onclick = function () {
           var mail = $('f-mail').value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) return toast('Adresse invalide');

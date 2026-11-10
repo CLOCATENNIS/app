@@ -75,6 +75,7 @@ var IC = {
   people: '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M15 20a4.5 4.5 0 0 1 6-4.2"/>',
   phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
   wa: '<path d="M3 21l1.7-4.6A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1.2-1.6-2-1-.9.9a4.5 4.5 0 0 1-2.6-2.6l.9-.9-1-2L9 8.5z"/>',
+  cam: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
   flag: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>'
 };
 function ic(n, size, color) {
@@ -873,12 +874,11 @@ function nivClubCouleur(n) {
   if (n.indexOf('Adultes') === 0) return { bg: '#1f5a85', fg: '#fff' };
   return { bg: '#667068', fg: '#fff' };
 }
-// Mascotte balle selon le niveau : Galaxie = couleur de la balle ; Ados et adultes = balle jaune (balle orange ou verte pour Adultes 1 et 2)
-function balleNiveau(n) {
-  n = n || '';
-  var g = { 'Galaxie Blanc': 'blanc', 'Galaxie Violet': 'violet', 'Galaxie Rouge': 'rouge', 'Galaxie Orange': 'orange', 'Galaxie Vert': 'vert', 'Adultes 1': 'orange', 'Adultes 2': 'vert' }[n];
-  if (g) return g;
-  return n.indexOf('Ados') === 0 || n.indexOf('Adultes') === 0 ? 'jaune' : '';
+// Mascotte balle du niveau : seulement pour les jeunes (17 ans et moins) jusqu'à la balle jaune.
+// Ados compétition et adultes n'en ont pas.
+function balleNiveau(n, age) {
+  if (age != null && age > 17) return '';
+  return { 'Galaxie Blanc': 'blanc', 'Galaxie Violet': 'violet', 'Galaxie Rouge': 'rouge', 'Galaxie Orange': 'orange', 'Galaxie Vert': 'vert', 'Ados balle jaune': 'jaune' }[n || ''] || '';
 }
 function nivClubBadge(n) { var c = nivClubCouleur(n); return '<span class="badge" style="background:' + c.bg + ';color:' + c.fg + '">' + esc(n || 'À définir') + '</span>'; }
 function nomCourt(f) { return f.prenom + (f.initiale ? ' ' + f.initiale + '.' : ''); }
@@ -914,9 +914,10 @@ function pageJoueur(id) {
     q(sb.rpc('profil_joueur', { p: id })).then(function (f) {
       if (!f) throw new Error('vide');
       var c = nivClubCouleur(f.niveau_club), clair = c.fg === '#fff';
-      var balle = balleNiveau(f.niveau_club);
-      var h = '<div class="darkhead jhead" style="--c:' + c.bg + ';--fg:' + c.fg + '">' + (balle ? '<img class="jball" src="balles/' + balle + '.webp" alt="">' : '') + '<div class="wrap">' + retour.replace(/#fff/g, clair ? '#fff' : c.fg) +
-        '<div class="hero-row" style="margin-top:6px"><div class="datebox" style="background:#fff;color:' + c.bg + ';border-radius:50%"><b style="font-size:24px;color:' + (clair ? c.bg : '#3a2f00') + '">' + esc(f.prenom.charAt(0) + (f.initiale || '')) + '</b></div>' +
+      var balle = balleNiveau(f.niveau_club, f.age);
+      var h = '<div class="darkhead jhead' + (balle ? ' avecballe' : '') + '" style="--c:' + c.bg + ';--fg:' + c.fg + '">' + (balle ? '<img class="jball" src="balles/' + balle + '.webp" alt="">' : '') + '<div class="wrap">' + retour.replace(/#fff/g, clair ? '#fff' : c.fg) +
+        '<div class="hero-row" style="margin-top:6px">' + (f.famille ? '<button type="button" class="javatar" id="jr-photo" aria-label="Changer la photo de profil">' : '<span class="javatar">') +
+          '<b style="color:' + (clair ? c.bg : '#3a2f00') + '">' + esc(f.prenom.charAt(0) + (f.initiale || '')) + '</b><img id="jr-img" alt="" hidden>' + (f.famille ? '<span class="jcam">' + ic('cam', 14, '#fff') + '</span></button>' : '</span>') +
         '<div><h1 style="font-size:26px;line-height:1.1">' + esc(nomCourt(f)) + '</h1><div class="small" style="opacity:.92">' + [ageTxt(f.age), f.niveau_club || 'Niveau à définir'].filter(Boolean).map(esc).join(' · ') + '</div></div></div></div></div><main>';
       // Niveau club + classement FFT
       var fft = f.classement_fft || f.meilleur_classement_fft;
@@ -935,11 +936,60 @@ function pageJoueur(id) {
       $('app').innerHTML = h;
       var r = document.querySelector('[data-retour]'); if (r && history.length > 1) r.onclick = function (e) { e.preventDefault(); history.back(); };
       if ($('jr-dem')) $('jr-dem').onclick = function () { demanderNiveau(f); };
+      if ($('jr-photo')) $('jr-photo').onclick = function () { changerPhoto(f); };
+      afficherPhoto(f.photo_path, $('jr-img'));
     }).catch(function () {
       $('app').innerHTML = '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card empty">Fiche introuvable.</section></main>';
     });
   });
   return '<div style="padding:40px 16px"><div class="skel"></div></div>';
+}
+// Photo de profil : rangée dans un espace privé de la base, lue avec un lien temporaire (adhérents connectés seulement)
+var PHOTOS = {};
+function afficherPhoto(chemin, img) {
+  if (!chemin || !img) return;
+  var poser = function (u) { if (!u) return; img.src = u; img.hidden = false; };
+  if (PHOTOS[chemin]) return poser(PHOTOS[chemin]);
+  sb.storage.from('photos').createSignedUrl(chemin, 3600).then(function (r) { if (r && r.data) { PHOTOS[chemin] = r.data.signedUrl; poser(PHOTOS[chemin]); } }).catch(function () { });
+}
+function photoCarree(fichier) {
+  return new Promise(function (ok, ko) {
+    var img = new Image(), url = URL.createObjectURL(fichier);
+    img.onload = function () {
+      var t = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = 480;
+      c.getContext('2d').drawImage(img, (img.width - t) / 2, (img.height - t) / 2, t, t, 0, 0, 480, 480); URL.revokeObjectURL(url);
+      c.toBlob(function (b) { b ? ok(b) : ko(new Error('photo')); }, 'image/jpeg', 0.85);
+    };
+    img.onerror = function () { ko(new Error('photo')); };
+    img.src = url;
+  });
+}
+function changerPhoto(f) {
+  var blob = null;
+  modale('<div class="stack" style="gap:12px"><b style="font-size:18px">Photo de ' + esc(f.prenom) + '</b>' +
+    '<div style="display:flex;justify-content:center"><span class="javatar grand"><b>' + esc(f.prenom.charAt(0) + (f.initiale || '')) + '</b><img id="ph-ap" alt="" hidden></span></div>' +
+    '<label class="btn line">Choisir une photo<input type="file" accept="image/*" id="ph-f" hidden></label>' +
+    '<label class="check"><input type="checkbox" id="ph-ok"><span class="small">' + (f.age != null && f.age < 18 ? 'Je suis son parent et j\'accepte' : 'J\'accepte') + ' que cette photo soit visible des adhérents connectés à l\'appli. Je peux la retirer quand je veux.</span></label>' +
+    '<button class="btn" id="ph-go" disabled>Enregistrer la photo</button>' + (f.photo_path ? '<button class="btn line" id="ph-del">Retirer la photo</button>' : '') +
+    '<span class="mut xs">Une photo de visage, cadrée au centre. Le club peut retirer une photo qui ne convient pas.</span></div>', function () {
+      afficherPhoto(f.photo_path, $('ph-ap'));
+      var maj = function () { $('ph-go').disabled = !(blob && $('ph-ok').checked); };
+      $('ph-ok').onchange = maj;
+      $('ph-f').onchange = function () {
+        var fi = this.files && this.files[0]; if (!fi) return;
+        photoCarree(fi).then(function (b) { blob = b; $('ph-ap').src = URL.createObjectURL(b); $('ph-ap').hidden = false; maj(); }).catch(function () { toast('Photo illisible'); });
+      };
+      $('ph-go').onclick = function () {
+        this.disabled = true;
+        var chemin = f.id + '/' + Date.now() + '.jpg';
+        sb.storage.from('photos').upload(chemin, blob, { contentType: 'image/jpeg' }).then(function (r) { if (r.error) throw r.error; return q(sb.rpc('photo_definir', { p: f.id, chemin: chemin })); })
+          .then(function () { fermerModale(); toast('Photo enregistrée'); render(); }).catch(function () { toast('Envoi impossible, réessaie'); $('ph-go').disabled = false; });
+      };
+      if ($('ph-del')) $('ph-del').onclick = function () {
+        if (!confirm('Retirer la photo de ' + f.prenom + ' ?')) return;
+        q(sb.rpc('photo_definir', { p: f.id, chemin: null })).then(function () { fermerModale(); toast('Photo retirée'); render(); }).catch(function () { toast('Action impossible'); });
+      };
+    });
 }
 // Demande de changement de niveau : la famille propose, l'équipe (coach ou direction) accepte ou refuse dans la gestion
 function demanderNiveau(f) {

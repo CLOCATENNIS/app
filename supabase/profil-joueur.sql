@@ -7,7 +7,8 @@
 -- ---------- 1. Colonnes ----------
 alter table public.personnes add column if not exists niveau_club text,
   add column if not exists classement_fft text,
-  add column if not exists meilleur_classement_fft text;
+  add column if not exists meilleur_classement_fft text,
+  add column if not exists photo_path text;
 alter table public.personnes drop constraint if exists personnes_niveau_club_chk;
 alter table public.personnes add constraint personnes_niveau_club_chk check (niveau_club is null or niveau_club in (
   'Galaxie Blanc', 'Galaxie Violet', 'Galaxie Rouge', 'Galaxie Orange', 'Galaxie Vert', 'Ados balle jaune', 'Ados compétition',
@@ -56,7 +57,7 @@ begin
                 when pe.annee_naissance is not null then extract(year from now())::int - pe.annee_naissance end,
     'niveau_club', pe.niveau_club, 'niveau_arena', pe.niveau_arena,
     'classement_fft', pe.classement_fft, 'meilleur_classement_fft', pe.meilleur_classement_fft,
-    'famille', fam,
+    'photo_path', pe.photo_path, 'famille', fam,
     'demande', case when fam then (select jsonb_build_object('niveau_demande', d.niveau_demande, 'statut', d.statut, 'reponse', d.reponse, 'created_at', d.created_at)
                                    from public.niveau_demandes d where d.personne_id = p order by d.created_at desc limit 1) end,
     -- Circuits CLOC'ARENA : aujourd'hui seul Tweener a des données ; Masters et Versus s'ajouteront ici quand leurs matchs seront saisis
@@ -133,3 +134,31 @@ begin
 end $$;
 revoke all on function public.niveau_traiter(uuid, boolean, text) from public, anon;
 grant execute on function public.niveau_traiter(uuid, boolean, text) to authenticated;
+
+-- ---------- 4. Photo de profil ----------
+-- Espace privé « photos » : un dossier par personne (<personne_id>/<horodatage>.jpg).
+-- Lecture : adhérents connectés (lien temporaire) ; dépôt : la famille de la personne ou la direction.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('photos', 'photos', false, 2097152, array['image/jpeg'])
+on conflict (id) do nothing;
+
+drop policy if exists photos_lire on storage.objects;
+create policy photos_lire on storage.objects for select to authenticated
+  using (bucket_id = 'photos' and (prive.est_equipe() or exists (select 1 from public.comptes c where c.user_id = auth.uid() and (c.foyer_id is not null or c.personne_id is not null))));
+drop policy if exists photos_deposer on storage.objects;
+create policy photos_deposer on storage.objects for insert to authenticated
+  with check (bucket_id = 'photos' and (prive.est_direction() or (storage.foldername(name))[1] in (select x::text from prive.mes_personnes() x)));
+drop policy if exists photos_effacer on storage.objects;
+create policy photos_effacer on storage.objects for delete to authenticated
+  using (bucket_id = 'photos' and (prive.est_direction() or (storage.foldername(name))[1] in (select x::text from prive.mes_personnes() x)));
+
+-- Enregistre (ou retire, chemin null) la photo d'une personne : sa famille ou la direction
+create or replace function public.photo_definir(p uuid, chemin text)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not (prive.est_direction() or p in (select prive.mes_personnes())) then raise exception 'acces refuse'; end if;
+  if chemin is not null and split_part(chemin, '/', 1) <> p::text then raise exception 'chemin invalide'; end if;
+  update public.personnes set photo_path = chemin where id = p;
+end $$;
+revoke all on function public.photo_definir(uuid, text) from public, anon;
+grant execute on function public.photo_definir(uuid, text) to authenticated;
