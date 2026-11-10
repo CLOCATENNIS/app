@@ -339,6 +339,26 @@ main.wrap{max-width:640px;margin:0 auto}
 @media (min-width:1024px){nav.tabs .in a.on{box-shadow:inset 4px 0 0 var(--balle)}
   .hero::after,.darkhead::after{right:30px;bottom:20px;width:56px;height:56px}
   .hero::before,.darkhead::before{right:70px;bottom:38px;width:80px}}
+/* ====== Fiche joueur : en-tête en relief aux couleurs du niveau + mascotte balle du niveau ====== */
+.darkhead.jhead{background:
+  radial-gradient(90% 120% at 88% 10%,rgba(255,255,255,.34),transparent 58%),
+  radial-gradient(70% 90% at 0% 110%,rgba(0,0,0,.28),transparent 60%),
+  linear-gradient(155deg,color-mix(in srgb,var(--c) 72%,#fff) 0%,var(--c) 42%,color-mix(in srgb,var(--c) 68%,#000) 100%);
+  background-color:var(--c);color:var(--fg);min-height:208px;padding-bottom:26px;
+  box-shadow:inset 0 -14px 28px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.35)}
+.darkhead.jhead::after{display:none}
+/* lignes de court en diagonale, comme sur les affiches */
+.darkhead.jhead::before{content:"";position:absolute;inset:0;right:0;bottom:0;width:auto;height:auto;border-radius:0;z-index:0;opacity:.5;
+  background:linear-gradient(112deg,transparent 0 58%,rgba(255,255,255,.55) 58% 58.6%,transparent 58.6% 66%,rgba(255,255,255,.35) 66% 66.4%,transparent 66.4%),
+    repeating-linear-gradient(22deg,rgba(0,0,0,.06) 0 1px,transparent 1px 4px)}
+.jhead .hero-row{padding-right:132px}
+.jhead .datebox{box-shadow:0 6px 14px rgba(0,0,0,.25),inset 0 -4px 0 rgba(0,0,0,.12)}
+.jhead h1{text-shadow:0 2px 0 rgba(0,0,0,.18)}
+.jball{position:absolute;right:-4px;bottom:-10px;width:156px;height:156px;object-fit:contain;z-index:1;pointer-events:none;
+  filter:drop-shadow(0 10px 14px rgba(0,0,0,.4));animation:jflot 4.5s ease-in-out infinite}
+@keyframes jflot{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(2deg)}}
+@media (prefers-reduced-motion:reduce){.jball{animation:none}}
+@media (min-width:1024px){.darkhead.jhead{min-height:240px}.jball{width:210px;height:210px;right:28px;bottom:-16px}.jhead .hero-row{padding-right:220px}}
 /* cloche des notifications (à la place de la balle, pour les comptes connectés) */
 .a-cloche::after,.a-cloche::before{display:none}
 .bell{position:absolute;right:12px;bottom:14px;width:44px;height:46px;z-index:2;display:block;-webkit-tap-highlight-color:transparent;filter:drop-shadow(0 4px 5px rgba(60,20,0,.45))}

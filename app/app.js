@@ -873,6 +873,13 @@ function nivClubCouleur(n) {
   if (n.indexOf('Adultes') === 0) return { bg: '#1f5a85', fg: '#fff' };
   return { bg: '#667068', fg: '#fff' };
 }
+// Mascotte balle selon le niveau : Galaxie = couleur de la balle ; Ados et adultes = balle jaune (balle orange ou verte pour Adultes 1 et 2)
+function balleNiveau(n) {
+  n = n || '';
+  var g = { 'Galaxie Blanc': 'blanc', 'Galaxie Violet': 'violet', 'Galaxie Rouge': 'rouge', 'Galaxie Orange': 'orange', 'Galaxie Vert': 'vert', 'Adultes 1': 'orange', 'Adultes 2': 'vert' }[n];
+  if (g) return g;
+  return n.indexOf('Ados') === 0 || n.indexOf('Adultes') === 0 ? 'jaune' : '';
+}
 function nivClubBadge(n) { var c = nivClubCouleur(n); return '<span class="badge" style="background:' + c.bg + ';color:' + c.fg + '">' + esc(n || 'À définir') + '</span>'; }
 function nomCourt(f) { return f.prenom + (f.initiale ? ' ' + f.initiale + '.' : ''); }
 function ageTxt(a) { return a == null ? '' : a + ' an' + (a > 1 ? 's' : ''); }
@@ -898,12 +905,17 @@ function blocCircuit(ci) {
 }
 function pageJoueur(id) {
   var retour = '<a class="back" href="#/club/competitions" data-retour style="color:#fff">' + ic('back', 20, '#fff') + 'Retour</a>';
-  if (!S.user) return '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card stack" style="gap:10px"><b>Fiche réservée aux adhérents</b><span class="mut small">Connecte-toi pour voir la fiche des joueurs du club.</span><a class="btn" href="#/profil">Me connecter</a></section></main>';
+  // Fiches réservées aux adhérents : visiteur non connecté, ou compte connecté mais pas rattaché à un adhérent (la base refuse aussi)
+  var adherent = S.isStaff || S.pers.length || (S.compte && (S.compte.foyer_id || S.compte.personne_id));
+  if (!S.user || !adherent) return '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card stack" style="gap:10px">' + ic('lock', 22) + '<b>Fiche réservée aux adhérents du club</b><span class="mut small">' +
+    (S.user ? 'Ton adresse n\'est rattachée à aucun adhérent. Si tu es adhérent, écris au club pour qu\'il l\'ajoute : <a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a>.' : 'Connecte-toi avec l\'adresse mail donnée au club pour voir la fiche des joueurs.') + '</span>' +
+    (S.user ? '' : '<a class="btn" href="#/profil">Me connecter</a>') + '</section></main>';
   setTimeout(function () {
     q(sb.rpc('profil_joueur', { p: id })).then(function (f) {
       if (!f) throw new Error('vide');
       var c = nivClubCouleur(f.niveau_club), clair = c.fg === '#fff';
-      var h = '<div class="darkhead" style="background:' + c.bg + ';color:' + c.fg + '"><div class="wrap">' + retour.replace(/#fff/g, clair ? '#fff' : c.fg) +
+      var balle = balleNiveau(f.niveau_club);
+      var h = '<div class="darkhead jhead" style="--c:' + c.bg + ';--fg:' + c.fg + '">' + (balle ? '<img class="jball" src="balles/' + balle + '.webp" alt="">' : '') + '<div class="wrap">' + retour.replace(/#fff/g, clair ? '#fff' : c.fg) +
         '<div class="hero-row" style="margin-top:6px"><div class="datebox" style="background:#fff;color:' + c.bg + ';border-radius:50%"><b style="font-size:24px;color:' + (clair ? c.bg : '#3a2f00') + '">' + esc(f.prenom.charAt(0) + (f.initiale || '')) + '</b></div>' +
         '<div><h1 style="font-size:26px;line-height:1.1">' + esc(nomCourt(f)) + '</h1><div class="small" style="opacity:.92">' + [ageTxt(f.age), f.niveau_club || 'Niveau à définir'].filter(Boolean).map(esc).join(' · ') + '</div></div></div></div></div><main>';
       // Niveau club + classement FFT
