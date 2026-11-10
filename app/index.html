@@ -393,12 +393,12 @@ button.javatar{cursor:pointer}
 .notif-x{color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .notif.nl .notif-x{color:var(--tx)}
 .notif-pt{width:10px;height:10px;border-radius:50%;background:#e5322d;flex:none;align-self:center}
-/* signature « Vamos HR! » en bas de l'accueil (visuel du club ; posé sur une pastille blanche en mode sombre) */
-.signature{display:flex;justify-content:center;margin:22px auto 6px;padding:0 16px}
-.signature img{display:block;width:min(240px,64vw);height:auto}
-@media (min-width:768px){.signature img{width:260px}}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .signature img{background:#fff;border-radius:18px;padding:10px 16px}}
-:root[data-theme="dark"] .signature img{background:#fff;border-radius:18px;padding:10px 16px}
+/* signature « VAMOS HR! » en bas de l'accueil : texte du club + coup de pinceau terre battue (s'adapte au mode sombre) */
+.signature{display:flex;flex-direction:column;align-items:center;margin:24px auto 10px;padding:0 16px}
+.sig-w{font-family:var(--disp);font-style:italic;font-weight:800;font-size:46px;line-height:1;letter-spacing:.5px;color:var(--tx);white-space:nowrap}
+.sig-w span{color:var(--clay)}
+.signature svg{display:block;width:190px;height:16px;margin-top:-1px;fill:var(--clay)}
+@media (min-width:768px){.sig-w{font-size:52px}.signature svg{width:215px;height:18px}}
 /* accueil : rangée Club house (25 %) + Prochain rendez-vous (75 %) */
 .acc-row{display:grid;grid-template-columns:minmax(86px,1fr) minmax(0,3.3fr);gap:10px;align-items:stretch}
 .acc-row.solo{grid-template-columns:minmax(0,1fr)}
@@ -442,6 +442,6 @@ button.javatar{cursor:pointer}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611110900"></script>
+<script src="app.js?v=202611102320"></script>
 </body>
 </html>

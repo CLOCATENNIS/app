@@ -16,7 +16,7 @@
 <meta name="theme-color" content="#102f4a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f5f2ec;--card:#fff;--bd:#e7e1d7;--tx:#12304a;--mut:#5d6b78;--navy:#102f4a;--navy2:#1b3f5f;--ac:#b4532a;--peach:#e9a37f;--soft:#f1ece3;
   --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--disp:'Barlow Condensed','Arial Narrow',sans-serif}
@@ -46,7 +46,10 @@ nav.m a:hover{color:#fff}
 .kick{font-size:13px;font-weight:700;letter-spacing:1.4px;color:var(--peach);text-transform:uppercase}
 .hero h1{font-size:clamp(46px,8vw,86px);margin:10px 0 14px;font-weight:800}
 .hero h1 span{color:var(--peach)}
-.hero h1 .vamos{display:block;width:clamp(170px,24vw,250px);height:auto;margin-top:16px;background:#fff;border-radius:18px;padding:8px 14px;box-shadow:0 8px 24px rgba(0,0,0,.22)}
+.hero h1 .vamos{display:flex;flex-direction:column;align-items:flex-start;width:max-content;margin-top:4px;color:#fff}
+.hero h1 .vamos b{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-style:italic;font-weight:800;font-size:.86em;line-height:1;letter-spacing:.5px}
+.hero h1 .vamos i{font-style:italic;color:var(--peach)}
+.hero h1 .vamos svg{display:block;width:78%;height:.2em;margin-top:.02em;fill:var(--peach)}
 .hero p{font-size:18px;color:#c9d6e2;max-width:560px;margin:0 0 26px}
 .cta{display:flex;gap:12px;flex-wrap:wrap}
 .live{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:8px 16px;margin-top:28px;font-size:14px;color:#fff;text-decoration:none}
@@ -138,7 +141,7 @@ dialog.lb button{min-height:44px;min-width:44px;border-radius:999px;border:1px s
 
 <div class="hero"><div class="w hero-g"><div>
   <div class="kick">Club de tennis d'Achères · Yvelines</div>
-  <h1>CLOCA Tennis<img class="vamos" src="app/vamos-hr.png" alt="Vamos HR!" width="900" height="635"></h1>
+  <h1>CLOCA Tennis<span class="vamos"><b>VAMOS <i>HR!</i></b><svg viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M4 13 C 60 4, 130 2, 196 6 C 150 7, 80 11, 8 17 Z"/></svg></span></h1>
   <p>Du baby tennis à la compétition, près de 300 adhérents jouent chez nous. Cours enfants et adultes, tournoi des jeunes, stages pendant les vacances et vie de club toute l'année.</p>
   <div class="cta"><a class="btn" href="app/">Ouvrir l'appli du club</a><a class="btn ghost" href="https://tenup.fft.fr/club/57780019/reservations" target="_blank" rel="noopener">Réserver un court sur Ten'Up</a></div>
   <a class="live" href="#infos" id="live"><span class="dot" style="background:#7d8b97"></span><span>Qui est au club en ce moment…</span></a>

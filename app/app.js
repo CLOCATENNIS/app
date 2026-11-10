@@ -590,7 +590,7 @@ function pageAccueil() {
   if (actu) P.actu = carteActu(actu, 'Dernière actu');
   // (l'espace coach est dans l'onglet Gestion)
   P.partners = cfg.partenaires.length ? '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div>' + cfg.partenaires.map(function (x) { var u = lienSur(x.lien); return u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(x.nom) + '</a>' : '<span>' + esc(x.nom) + '</span>'; }).join('') + '</div>' : '';
-  var signature = '<div class="signature"><img src="vamos-hr.png" alt="Vamos HR!" width="900" height="635" loading="lazy"></div>';
+  var signature = '<div class="signature" role="img" aria-label="Vamos HR!"><span class="sig-w">VAMOS <span>HR!</span></span><svg viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M4 13 C 60 4, 130 2, 196 6 C 150 7, 80 11, 8 17 Z"/></svg></div>';
   // Blocs masqués dans la gestion
   cfg.blocs.forEach(function (b) { if (!b.on) P[b.k] = ''; });
   // Rangée du haut : Club house (25 %) + Prochain rendez-vous (75 %) ; si l'un des deux est masqué par le club, l'autre prend toute la largeur
