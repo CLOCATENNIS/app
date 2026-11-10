@@ -760,7 +760,21 @@ function pageArenaAccueil() {
     '<a href="#/arena/masters" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#102f4a,#2f5b7d);border:0;padding:22px">' +
       '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">ADULTES</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Masters</span>' +
       '<span class="small" style="opacity:.9">Le circuit des adultes du club : matchs, défis et classement.</span>' +
+      '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span><span class="small" style="font-weight:700">Découvrir →</span></a>' +
+    '<a href="#/arena/versus" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:' + VERSUS_FOND + ';border:0;padding:22px">' +
+      '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">DÉFIS · MATCHS LIBRES FFT</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Versus</span>' +
+      '<span class="small" style="opacity:.9">Défie un joueur de ta catégorie et grimpe au classement de la saison.</span>' +
       '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span><span class="small" style="font-weight:700">Découvrir →</span></a></main>';
+}
+// CLOC'ARENA Versus : circuit des défis (matchs libres FFT). En préparation : page d'info seulement, aucun défi possible.
+var VERSUS_FOND = 'linear-gradient(135deg,#0f3d2e,#2f7a4f)';
+function pageVersus() {
+  return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
+    '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des défis arrive bientôt</b>' +
+    '<span class="mut small">Tu défies un joueur de ta catégorie, vous choisissez ensemble le créneau et le format, et vous jouez votre match au club. Chaque match compte pour le classement Versus de la saison et, selon les conditions, comme match libre pour ton classement FFT.</span></section>' +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Pour qui ?</span>' +
+    '<span class="small">Les joueurs qui ont accès aux matchs libres FFT : Galaxie Orange, Galaxie Vert, balle jaune et adultes de NC à 30/1.</span>' +
+    '<span class="mut small">Les infos seront publiées ici et dans les actus du club.</span></section></main>';
 }
 function pageMasters() {
   return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
@@ -1034,12 +1048,13 @@ function pageClub(sous) {
   });
   return h;
 }
-// Compétitions du club : CLOC'ARENA Tweener, CLOC'ARENA Masters, double interne
+// Compétitions du club : CLOC'ARENA Tweener, CLOC'ARENA Masters, CLOC'ARENA Versus, double interne
 function clubCompetitions() {
   var carte = function (lien, fond, kicker, titre, texte, extra) { return '<a href="' + lien + '" class="card stack" style="gap:6px;text-decoration:none;color:#fff;background:' + fond + ';border:0;padding:18px"><span class="xs" style="letter-spacing:1.3px;font-weight:700;opacity:.85">' + kicker + '</span><span class="disp" style="font-size:26px;line-height:1.05">' + titre + '</span><span class="small" style="opacity:.9">' + texte + '</span>' + (extra || '') + '<span class="small" style="font-weight:700">Entrer →</span></a>'; };
   var niv = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<span style="width:18px;height:6px;border-radius:3px;background:' + NIV[n].bg + '"></span>'; }).join('');
   return carte('#/arena/tweener', 'linear-gradient(135deg,#5b3a86,#c62f2f)', 'JEUNES · JUSQU\'À 17 ANS', 'CLOC\'ARENA Tweener', 'Classement, programme et résultats de la saison, du Blanc au Jaune.', '<span style="display:flex;gap:4px">' + niv + '</span>') +
     carte('#/arena/masters', 'linear-gradient(135deg,#102f4a,#2f5b7d)', 'ADULTES', 'CLOC\'ARENA Masters', 'Le circuit des adultes : matchs, défis et classement.', '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>') +
+    carte('#/arena/versus', VERSUS_FOND, 'DÉFIS · MATCHS LIBRES FFT', 'CLOC\'ARENA Versus', 'Défie un joueur de ta catégorie et grimpe au classement de la saison.', '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>') +
     carte('#/double', 'linear-gradient(135deg,#8a3b1c,#c9693a)', 'TOUS LES ADHÉRENTS', 'Tournoi interne de double', 'Poules, disponibilités, réservations de terrain et scores.');
 }
 function imgActu(a) { var img = safeUrl(a.image_url); return img && !/drive\.google\.com\/file/.test(img) ? img : ''; }
@@ -3885,7 +3900,7 @@ function render() {
   var p = parts[0] || 'accueil', arg = parts[1];
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
-  else if (p === 'arena') actif = 'club', html = arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : pageArenaAccueil();
+  else if (p === 'arena') actif = 'club', html = arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : arg === 'versus' ? pageVersus() : pageArenaAccueil();
   else if (p === 'fiche' || p === 'joueur') { html = pageJoueur(arg); actif = 'club'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
