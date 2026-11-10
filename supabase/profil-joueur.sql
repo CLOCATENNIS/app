@@ -269,3 +269,4 @@ grant execute on function public.photo_definir(uuid, text) to authenticated;
 -- ---------- 5. Droits de colonne (annonces : seules certaines colonnes sont ouvertes) ----------
 grant select (personne_id) on public.annonces to anon, authenticated;
 grant insert (personne_id) on public.annonces to authenticated;
+grant select on public.niveau_demandes to authenticated; -- oubli corrigé le 10/11 : la gestion ne voyait pas les demandes
