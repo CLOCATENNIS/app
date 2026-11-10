@@ -219,7 +219,7 @@ begin
   where id = d and statut = 'attente' returning * into dem;
   if dem.id is null then raise exception 'demande introuvable'; end if;
   if accepter then update public.personnes set niveau_club = dem.niveau_demande where id = dem.personne_id; end if;
-  perform public.notif_ajouter(array(select prive.comptes_voyant(array[dem.personne_id])),
+  perform public.notif_ajouter(array(select distinct v.user_id from prive.comptes_voyant(array[dem.personne_id]) v),
     case when accepter then 'Niveau mis à jour' else 'Demande de niveau' end,
     (select prenom from public.personnes where id = dem.personne_id) || case when accepter then ' passe en ' || dem.niveau_demande else ' : demande non retenue' end
       || coalesce(' — ' || dem.reponse, ''),
