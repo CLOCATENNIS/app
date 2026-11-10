@@ -393,8 +393,38 @@ button.javatar{cursor:pointer}
 .notif-x{color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .notif.nl .notif-x{color:var(--tx)}
 .notif-pt{width:10px;height:10px;border-radius:50%;background:#e5322d;flex:none;align-self:center}
-/* signature */
-.partners::after{content:"VAMOS HR";display:table;margin:22px auto 0;padding:2px 16px;font-family:var(--disp);font-style:italic;font-weight:800;font-size:30px;letter-spacing:1px;color:#0B3547;background:var(--balle);border-radius:8px;transform:skewX(-8deg)}
+/* signature « Vamos HR! » en bas de l'accueil (visuel du club ; posé sur une pastille blanche en mode sombre) */
+.signature{display:flex;justify-content:center;margin:22px auto 6px;padding:0 16px}
+.signature img{display:block;width:min(240px,64vw);height:auto}
+@media (min-width:768px){.signature img{width:260px}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .signature img{background:#fff;border-radius:18px;padding:10px 16px}}
+:root[data-theme="dark"] .signature img{background:#fff;border-radius:18px;padding:10px 16px}
+/* accueil : rangée Club house (25 %) + Prochain rendez-vous (75 %) */
+.acc-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,3fr);gap:10px;align-items:stretch}
+.acc-row.solo{grid-template-columns:minmax(0,1fr)}
+.acc-ch{display:flex;min-width:0}.acc-ch:empty{background:var(--card);border:1px solid var(--bd);border-radius:16px}
+.acc-ch>.tile{flex:1;width:100%}
+.acc-ch-t{font:inherit;padding:12px 10px;gap:6px;justify-content:flex-start;min-width:0}
+.acc-ch-t b{font-size:17px;line-height:1.1}
+.acc-ch-t .xs{line-height:1.25;overflow-wrap:anywhere}
+.acc-lab{font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;line-height:1.2}
+.acc-rdv{padding:12px 14px;gap:8px;border-left:4px solid var(--g,var(--ac));min-width:0}
+.acc-rdv-c{display:flex;gap:10px;align-items:center;min-width:0}
+.datebox.sm{width:46px;height:50px;border-radius:12px;font-size:11px}
+.datebox.sm b{font-size:22px}
+.acc-rdv-t{font-family:var(--disp);font-weight:700;font-size:20px;line-height:1.05;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.acc-rdv .xs{overflow-wrap:anywhere}
+/* accueil : mes raccourcis + mode modification (crayon) */
+.acc-rac-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 2px 8px}
+.acc-crayon{all:unset;box-sizing:border-box;cursor:pointer;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--mut);border:1px solid var(--bd);background:var(--card)}
+.acc-crayon:hover,.acc-crayon:focus-visible{color:var(--ac);border-color:var(--ac)}
+.acc-vide{width:100%;font:inherit;border-style:dashed;align-items:flex-start}
+.acc-edit{border:2px solid var(--ac)}
+.acc-t{position:relative;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;border-style:dashed;background:var(--soft)}
+.acc-t.drag{z-index:5;cursor:grabbing;box-shadow:0 12px 28px rgba(11,53,71,.22);border-style:solid;border-color:var(--ac);background:var(--card)}
+.acc-x{position:absolute;top:-9px;right:-9px;width:28px;height:28px;border-radius:50%;border:2px solid var(--card);background:var(--ko);color:#fff;font-size:20px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.acc-ajout{display:flex;flex-wrap:wrap;gap:8px}
+.acc-ajout .chip svg{color:var(--ac)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}}
 :root[data-theme="dark"] .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}
 </style>
@@ -403,6 +433,6 @@ button.javatar{cursor:pointer}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611102200"></script>
+<script src="app.js?v=202611110900"></script>
 </body>
 </html>

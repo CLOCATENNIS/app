@@ -56,6 +56,8 @@ window.CT = { go: go };
 var IC = {
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
   home: '<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10z"/>',
   cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
@@ -330,7 +332,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '10/11 19h15';
+var VERSION_APPLI = '11/11 accueil';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -369,12 +371,24 @@ function accueilCfg() {
     faq: Array.isArray(c.faq) ? c.faq.filter(function (x) { return x && x.q; }) : d.faq
   };
 }
-// Accueil personnalisé (Profil → Mon accueil) : chaque compte choisit ses raccourcis et masque des blocs ; sinon, le réglage du club
+// Accueil personnalisé : chaque compte choisit ses raccourcis, directement sur l'accueil (crayon ✏️) ou dans Profil → Mon accueil.
+// Les deux écrans lisent et écrivent la même ligne compte_accueil (une par compte, protégée par la base).
+// Blocs fixes (club house, prochain RDV, fête, dernière actu, réseaux, partenaires) : jamais réglables par l'adhérent.
+var ACC_PERSO = ['double', 'inscriptions', 'reserver', 'cordage', 'arena', 'annonces'];
+var ACC_BLOCS_PERSO = ['arena']; // seul bloc que l'adhérent peut masquer (carte Mon CLOC'ARENA)
+function cleTuile(x) { return x.type === 'lien' ? 'lien:' + x.titre : x.type; }
+// Raccourcis proposés : les 6 du club + ceux ajoutés par le club dans la gestion (sauf la fête, qui a son propre bloc)
+function catalogueTuiles(club) {
+  var l = ACC_PERSO.map(function (k) { return { type: k }; });
+  club.tuiles.forEach(function (t) { if (t.type !== 'fete' && !l.some(function (x) { return cleTuile(x) === cleTuile(t); })) l.push(t); });
+  return l;
+}
 function accueilPerso(cfg) {
   var m = S.monAccueil;
   if (!m) return cfg;
-  if (Array.isArray(m.tuiles)) cfg.tuiles = m.tuiles.map(function (t) { return cfg.tuiles.filter(function (x) { return (x.type === 'lien' ? 'lien:' + x.titre : x.type) === t; })[0] || (ACC_TUILES[t] ? { type: t } : null); }).filter(Boolean);
-  (m.blocs_masques || []).forEach(function (k) { cfg.blocs.forEach(function (b) { if (b.k === k) b.on = false; }); });
+  var cat = catalogueTuiles(cfg);
+  if (Array.isArray(m.tuiles)) cfg.tuiles = m.tuiles.map(function (k) { return cat.filter(function (x) { return cleTuile(x) === k; })[0]; }).filter(Boolean);
+  (m.blocs_masques || []).forEach(function (k) { if (ACC_BLOCS_PERSO.indexOf(k) >= 0) cfg.blocs.forEach(function (b) { if (b.k === k) b.on = false; }); });
   return cfg;
 }
 function chargerMonAccueil() {
@@ -382,38 +396,129 @@ function chargerMonAccueil() {
   if (!S.user || S.apercu) return Promise.resolve();
   return q(sb.from('compte_accueil').select('tuiles, blocs_masques').eq('user_id', S.user.id).maybeSingle()).then(function (r) { S.monAccueil = r; }).catch(function () { });
 }
-var ACC_AIDE = { double: 'Poules, dispos, scores', inscriptions: 'Stages et événements', reserver: 'Ten\'Up', cordage: 'Déposer une raquette', arena: 'Classement, programme', agenda: 'Mon planning', annonces: 'Vendre, chercher un partenaire', club: 'Horaires, adresse', fete: 'Fête du club', aide: 'Installer, se connecter' };
+// Choix actuel du compte (ou, à défaut, les raccourcis réglés par le club), prêt à modifier
+function monAccueilBrouillon() {
+  var club = accueilCfg(), cat = catalogueTuiles(club), cles = cat.map(cleTuile);
+  var base = S.monAccueil && Array.isArray(S.monAccueil.tuiles) ? S.monAccueil.tuiles : club.tuiles.map(cleTuile);
+  return { tuiles: base.filter(function (k) { return cles.indexOf(k) >= 0; }), arenaMasque: ((S.monAccueil && S.monAccueil.blocs_masques) || []).indexOf('arena') >= 0 };
+}
+function enregistrerMonAccueil(E, ok) {
+  var blocs = E.arenaMasque ? ['arena'] : [];
+  return q(sb.from('compte_accueil').upsert({ user_id: S.user.id, tuiles: E.tuiles, blocs_masques: blocs, maj_le: new Date().toISOString() })).then(function () { S.monAccueil = { tuiles: E.tuiles.slice(), blocs_masques: blocs }; ok(); }).catch(function () { toast('Enregistrement impossible, réessaie'); });
+}
+function retablirAccueilClub(ok) {
+  q(sb.from('compte_accueil').delete().eq('user_id', S.user.id)).then(function () { S.monAccueil = null; ok(); }).catch(function () { toast('Action impossible'); });
+}
+function infoTuile(t) {
+  if (t.type === 'lien') return { titre: t.titre, icone: IC[t.icone] ? t.icone : 'pin', aide: t.sous || 'Lien du club' };
+  var d = ACC_TUILES[t.type]; return { titre: t.titre || d[0], icone: d[1], aide: ACC_AIDE[t.type] || '' };
+}
+var ACC_AIDE = { double: 'Poules, dispos, scores', inscriptions: 'Stages et événements', reserver: 'Ten\'Up', cordage: 'Déposer une raquette', arena: 'Tweener, Masters, Versus', agenda: 'Mon planning', annonces: 'Vendre, chercher un partenaire', club: 'Horaires, adresse', fete: 'Fête du club', aide: 'Installer, se connecter' };
 function pageMonAccueil() {
-  var club = accueilCfg(), base = S.monAccueil && Array.isArray(S.monAccueil.tuiles) ? S.monAccueil.tuiles : club.tuiles.map(function (x) { return x.type === 'lien' ? 'lien:' + x.titre : x.type; });
-  var E = S.monAccEd || (S.monAccEd = { tuiles: base.slice(), blocs: ((S.monAccueil && S.monAccueil.blocs_masques) || []).slice() });
-  var dispo = Object.keys(ACC_TUILES).filter(function (k) { return k !== 'fete' || (S.fetes || []).length; }).map(function (k) { return [k, ACC_TUILES[k][0], ACC_AIDE[k] || '', ACC_TUILES[k][1]]; })
-    .concat(club.tuiles.filter(function (x) { return x.type === 'lien'; }).map(function (x) { return ['lien:' + x.titre, x.titre, x.sous || 'Lien du club', IC[x.icone] ? x.icone : 'pin']; }));
-  // ordre : les choisis d'abord (dans l'ordre choisi), puis les autres
-  dispo.sort(function (a, b) { var ia = E.tuiles.indexOf(a[0]), ib = E.tuiles.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-  var blocs = [['arena', 'Mon CLOC\'ARENA', 'Classement et prochaine séance'], ['actu', 'Dernière actu', 'La dernière actu du club'], ['rdv', 'Prochain rendez-vous', 'Ma prochaine séance'], ['reseaux', 'Réseaux sociaux', 'Instagram et Facebook du club'], ['presence', 'Club house', 'Ouvert ou fermé']];
-  var h = '<div class="pagehead wrap">' + backLink('#/profil', 'Profil') + '<h1 style="font-size:26px">Mon accueil</h1><p class="mut small" style="margin:4px 0 0">Choisis ce que tu veux voir en ouvrant l\'appli.</p></div><main>' +
-    '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Mes raccourcis</span>' + dispo.map(function (d) {
-      var i = E.tuiles.indexOf(d[0]), on = i >= 0;
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)"><label class="check" style="flex:1;min-height:0;padding:0;align-items:center"><input type="checkbox" data-mat="' + esc(d[0]) + '"' + (on ? ' checked' : '') + '>' +
-        '<span style="width:36px;height:36px;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex:none">' + ic(d[3], 20, on ? 'var(--ac)' : 'var(--mut)') + '</span><span class="stack" style="gap:0"><b class="small">' + esc(d[1]) + '</b><span class="xs mut">' + esc(d[2]) + '</span></span></label>' +
+  var club = accueilCfg(), cat = catalogueTuiles(club);
+  var E = S.monAccEd || (S.monAccEd = monAccueilBrouillon());
+  var dispo = cat.slice().sort(function (a, b) { var ia = E.tuiles.indexOf(cleTuile(a)), ib = E.tuiles.indexOf(cleTuile(b)); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+  var aArena = S.user && S.pers.some(function (p) { return p.niveau_arena; });
+  var h = '<div class="pagehead wrap">' + backLink('#/profil', 'Profil') + '<h1 style="font-size:26px">Mon accueil</h1><p class="mut small" style="margin:4px 0 0">Choisis tes raccourcis. Astuce : tu peux aussi le faire directement sur l\'accueil avec le crayon ✏️.</p></div><main>' +
+    '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Mes raccourcis</span>' + dispo.map(function (t) {
+      var k = cleTuile(t), d = infoTuile(t), i = E.tuiles.indexOf(k), on = i >= 0;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)"><label class="check" style="flex:1;min-height:0;padding:0;align-items:center"><input type="checkbox" data-mat="' + esc(k) + '"' + (on ? ' checked' : '') + '>' +
+        '<span style="width:36px;height:36px;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex:none">' + ic(d.icone, 20, on ? 'var(--ac)' : 'var(--mut)') + '</span><span class="stack" style="gap:0"><b class="small">' + esc(d.titre) + '</b><span class="xs mut">' + esc(d.aide) + '</span></span></label>' +
         (on ? '<span style="display:flex;gap:4px;flex:none"><button class="chip" data-mam="' + i + '|-1" aria-label="Monter"' + (i ? '' : ' disabled style="opacity:.35"') + '>↑</button><button class="chip" data-mam="' + i + '|1" aria-label="Descendre"' + (i < E.tuiles.length - 1 ? '' : ' disabled style="opacity:.35"') + '>↓</button></span>' : '') + '</div>';
     }).join('') + '</section>' +
-    '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Ce que j\'affiche</span>' + blocs.map(function (b) {
-      return '<label class="check" style="border-top:1px solid var(--bd);padding:10px 0"><input type="checkbox" data-mab="' + b[0] + '"' + (E.blocs.indexOf(b[0]) < 0 ? ' checked' : '') + '><span class="stack" style="gap:0"><b class="small">' + b[1] + '</b><span class="xs mut">' + b[2] + '</span></span></label>';
-    }).join('') + '<span class="xs mut" style="margin-top:6px">Les messages importants du club et les questionnaires à remplir restent toujours affichés.</span></section>' +
-    '<button class="btn" id="ma-go">Enregistrer</button><button class="btn line" id="ma-raz">Revenir à l\'accueil du club</button></main>';
+    (aArena ? '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Ce que j\'affiche</span><label class="check" style="border-top:1px solid var(--bd);padding:10px 0"><input type="checkbox" id="ma-arena"' + (E.arenaMasque ? '' : ' checked') + '><span class="stack" style="gap:0"><b class="small">Mon CLOC\'ARENA</b><span class="xs mut">Classement et prochaine séance</span></span></label></section>' : '') +
+    '<span class="xs mut" style="padding:0 4px">Le club house, le prochain rendez-vous, la dernière actu, les réseaux, les partenaires et les messages importants restent toujours affichés.</span>' +
+    '<button class="btn" id="ma-go">Enregistrer</button><button class="btn line" id="ma-raz">Revenir aux raccourcis du club</button></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-mat]'), function (c) { c.onchange = function () { var k = c.dataset.mat; if (c.checked) E.tuiles.push(k); else E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); render(); }; });
     Array.prototype.forEach.call(document.querySelectorAll('[data-mam]'), function (b) { b.onclick = function () { var x = b.dataset.mam.split('|'), i = +x[0], j = i + +x[1], t = E.tuiles[i]; E.tuiles[i] = E.tuiles[j]; E.tuiles[j] = t; render(); }; });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-mab]'), function (c) { c.onchange = function () { var k = c.dataset.mab; E.blocs = E.blocs.filter(function (x) { return x !== k; }); if (!c.checked) E.blocs.push(k); }; });
-    $('ma-go').onclick = function () {
-      q(sb.from('compte_accueil').upsert({ user_id: S.user.id, tuiles: E.tuiles, blocs_masques: E.blocs })).then(function () { S.monAccueil = { tuiles: E.tuiles.slice(), blocs_masques: E.blocs.slice() }; S.monAccEd = null; toast('Accueil enregistré'); go('#/accueil'); }).catch(function () { toast('Enregistrement impossible'); });
-    };
-    $('ma-raz').onclick = function () {
-      q(sb.from('compte_accueil').delete().eq('user_id', S.user.id)).then(function () { S.monAccueil = null; S.monAccEd = null; toast('Accueil du club rétabli'); go('#/accueil'); }).catch(function () { toast('Action impossible'); });
-    };
+    if ($('ma-arena')) $('ma-arena').onchange = function () { E.arenaMasque = !this.checked; };
+    $('ma-go').onclick = function () { enregistrerMonAccueil(E, function () { S.monAccEd = null; toast('Accueil enregistré'); go('#/accueil'); }); };
+    $('ma-raz').onclick = function () { retablirAccueilClub(function () { S.monAccEd = null; toast('Raccourcis du club rétablis'); go('#/accueil'); }); };
   });
   return h;
+}
+// Zone « Mes raccourcis » de l'accueil : affichage normal, ou mode modification (crayon) pour déplacer, retirer, réajouter
+function zoneRaccourcis(cfg, dyn) {
+  var peut = S.user && !S.apercu, E = peut && S.accEd;
+  if (!E) {
+    var grille = tuilesAccueil(cfg, dyn);
+    if (!peut) return grille;
+    return '<div class="acc-rac" id="acc-rac"><div class="acc-rac-h"><span class="eyebrow">Mes raccourcis</span><button class="acc-crayon" id="acc-ed" aria-label="Modifier mes raccourcis" title="Modifier mes raccourcis">' + ic('edit', 17) + '</button></div>' +
+      (grille || '<button class="tile acc-vide" id="acc-ed2">' + ic('plus', 22) + '<b>Ajouter des raccourcis</b><span class="mut small">Cordage, CLOC\'ARENA, annonces…</span></button>') + '</div>';
+  }
+  var cat = catalogueTuiles(accueilCfg());
+  var parCle = function (k) { return cat.filter(function (x) { return cleTuile(x) === k; })[0]; };
+  var vis = E.tuiles.map(parCle).filter(Boolean), caches = cat.filter(function (t) { return E.tuiles.indexOf(cleTuile(t)) < 0; });
+  var aArena = S.pers.some(function (p) { return p.niveau_arena; });
+  return '<section class="card stack acc-edit" id="acc-rac" style="gap:12px"><div class="acc-rac-h" style="margin:0"><span class="eyebrow">Mes raccourcis</span><span class="xs mut">Modification</span></div>' +
+    '<span class="small mut" style="margin-top:-6px">Fais glisser une case pour la déplacer, touche <b>−</b> pour la retirer.</span>' +
+    (vis.length ? '<div class="grid2 acc-grille" id="acc-grille">' + vis.map(function (t) {
+      var d = infoTuile(t), k = cleTuile(t);
+      return '<div class="tile acc-t" data-k="' + esc(k) + '">' + '<button class="acc-x" data-acx="' + esc(k) + '" aria-label="Retirer ' + esc(d.titre) + '">−</button>' + ic(d.icone, 24) + '<b>' + esc(d.titre) + '</b><span class="mut xs">' + esc(d.aide) + '</span></div>';
+    }).join('') + '</div>' : '<span class="small mut">Aucun raccourci affiché. Ajoute ceux que tu veux ci-dessous.</span>') +
+    (caches.length ? '<div class="stack" style="gap:8px"><span class="eyebrow">Ajouter</span><div class="acc-ajout">' + caches.map(function (t) {
+      var d = infoTuile(t); return '<button class="chip" data-aca="' + esc(cleTuile(t)) + '">' + ic('plus', 15) + esc(d.titre) + '</button>';
+    }).join('') + '</div></div>' : '') +
+    (aArena ? '<label class="check" style="border-top:1px solid var(--bd);padding-top:10px;min-height:0"><input type="checkbox" id="acc-arena"' + (E.arenaMasque ? '' : ' checked') + '><span class="small">Afficher la carte <b>Mon CLOC\'ARENA</b></span></label>' : '') +
+    '<div class="grid2"><button class="btn line" id="acc-annul">Annuler</button><button class="btn" id="acc-ok">Terminer</button></div>' +
+    '<button class="btn ghost" id="acc-raz" style="min-height:36px">Revenir aux raccourcis du club</button></section>';
+}
+function lierRaccourcis() {
+  var ouvrir = function () { S.accEd = monAccueilBrouillon(); render(); setTimeout(function () { var z = $('acc-rac'); if (z && z.scrollIntoView) z.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50); };
+  if ($('acc-ed')) $('acc-ed').onclick = ouvrir;
+  if ($('acc-ed2')) $('acc-ed2').onclick = ouvrir;
+  var E = S.accEd; if (!E || !$('acc-rac')) return;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-acx]'), function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.acx; E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-aca]'), function (b) { b.onclick = function () { E.tuiles.push(b.dataset.aca); render(); }; });
+  if ($('acc-arena')) $('acc-arena').onchange = function () { E.arenaMasque = !this.checked; };
+  $('acc-annul').onclick = function () { S.accEd = null; render(); };
+  $('acc-ok').onclick = function () { var b = this; b.disabled = true; enregistrerMonAccueil(E, function () { S.accEd = null; toast('Raccourcis enregistrés'); render(); }); setTimeout(function () { b.disabled = false; }, 3000); };
+  $('acc-raz').onclick = function () { retablirAccueilClub(function () { S.accEd = null; toast('Raccourcis du club rétablis'); render(); }); };
+  // Glisser-déposer (doigt ou souris) : la case suit le doigt et prend la place de celle survolée
+  var g = $('acc-grille'); if (!g) return;
+  var drag = null;
+  Array.prototype.forEach.call(g.querySelectorAll('.acc-t'), function (el) {
+    el.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.acc-x') || (e.button && e.button !== 0)) return;
+      drag = { el: el, x: e.clientX, y: e.clientY, on: false }; try { el.setPointerCapture(e.pointerId); } catch (x) { }
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!drag || drag.el !== el) return;
+      if (!drag.on) { if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 6) return; drag.on = true; el.classList.add('drag'); }
+      e.preventDefault();
+      var cible = document.elementsFromPoint(e.clientX, e.clientY).filter(function (x) { return x !== el && x.classList && x.classList.contains('acc-t'); })[0];
+      if (cible) {
+        var l0 = el.offsetLeft, t0 = el.offsetTop, liste = Array.prototype.slice.call(g.children);
+        g.insertBefore(el, liste.indexOf(cible) > liste.indexOf(el) ? cible.nextSibling : cible);
+        drag.x += el.offsetLeft - l0; drag.y += el.offsetTop - t0;
+      }
+      el.style.transform = 'translate(' + (e.clientX - drag.x) + 'px,' + (e.clientY - drag.y) + 'px)';
+    });
+    var fin = function () {
+      if (!drag || drag.el !== el) return;
+      el.style.transform = ''; el.classList.remove('drag');
+      if (drag.on) E.tuiles = Array.prototype.map.call(g.querySelectorAll('.acc-t'), function (x) { return x.dataset.k; });
+      drag = null;
+    };
+    el.addEventListener('pointerup', fin); el.addEventListener('pointercancel', fin);
+  });
+}
+// Rangée du haut : Club house (petite case, 25 %) + Prochain rendez-vous (75 %)
+function quandCourt(d) {
+  var n = Math.round((debutJour(d) - debutJour(new Date())) / 864e5);
+  return (n === 0 ? '' : n === 1 ? 'demain ' : d.toLocaleDateString('fr-FR', { weekday: 'short' }) + ' ') + fmtH(d);
+}
+function caseRdv(prochain) {
+  var lien = '#/' + (S.user ? 'agenda' : 'arena');
+  if (!prochain) return '<a class="tile acc-rdv" href="' + lien + '"><span class="acc-lab mut">Prochain rendez-vous</span><b style="font-size:17px">Rien de prévu pour l\'instant</b><span class="mut xs">' + (S.user ? 'Voir mon agenda →' : 'Voir la programmation →') + '</span></a>';
+  var g = prochain.gs && prochain.gs[0], coul = g && /^#[0-9a-f]{3,8}$/i.test(g.couleur || '') ? g.couleur : '';
+  return '<a class="tile acc-rdv" href="' + lien + '"' + (coul ? ' style="--g:' + coul + '"' : '') + '><span class="acc-lab mut">Prochain rendez-vous</span>' +
+    '<span class="acc-rdv-c"><span class="datebox sm"><span>' + esc(prochain.d.toLocaleDateString('fr-FR', { weekday: 'short' })) + '</span><b>' + prochain.d.getDate() + '</b></span>' +
+    '<span class="stack" style="gap:2px;min-width:0"><b class="acc-rdv-t">' + esc(prochain.titre) + '</b>' +
+    '<span class="mut xs">' + fmtH(prochain.d) + (prochain.f ? ' – ' + fmtH(prochain.f) : '') + (prochain.lieu ? ' · ' + esc(prochain.lieu) : '') + '</span>' +
+    (prochain.qui.length ? '<span class="xs">' + prochain.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + (prochain.enc ? '<span class="mut"> · avec ' + esc(prochain.enc) + '</span>' : '') + '</span>' : (prochain.enc ? '<span class="mut xs">Avec ' + esc(prochain.enc) + '</span>' : '')) +
+    '</span></span></a>';
 }
 function lienSur(u) { u = String(u || '').trim(); return /^(https?:\/\/|#\/|mailto:|tel:)/i.test(u) ? u : (u && /^[\w.-]+\.[a-z]{2,}/i.test(u) ? 'https://' + u : ''); }
 function lienExterne(u) { return /^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''; }
@@ -443,7 +548,7 @@ function pageAccueil() {
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
   var tDisc = ''; // les discussions sont dans l'onglet Messages
-  var top = h, P = { presence: '<div class="grid2 top2"><div id="presence"' + (tDisc ? '' : ' style="grid-column:1/-1"') + '></div>' + tDisc + '</div><div id="presence-det"></div>', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
+  var top = h, P = { presence: '', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -453,14 +558,9 @@ function pageAccueil() {
   var prochain = null;
   if (S.user && S.pers.length) prochain = mesItems(new Date(now.getTime() - 3600e3), fin).filter(function (i) { return (i.f || i.d) > now; })[0];
   else prochain = (S.evts || []).filter(function (e) { return e.public && new Date(e.fin || e.debut) > now && e.statut !== 'annule'; }).map(function (e) { return { d: new Date(e.debut), f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, gs: evGroupes(e).gs, qui: [], id: e.id }; })[0];
-  if (prochain) {
-    P.rdv = '<section class="card stack" style="gap:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Prochain rendez-vous</span><span>' + prochain.gs.map(groupeBadge).join(' ') + '</span></div>' +
-      '<div class="rdv"><div class="datebox"><span>' + esc(prochain.d.toLocaleDateString('fr-FR', { weekday: 'short' })) + '</span><b>' + prochain.d.getDate() + '</b></div>' +
-      '<div class="stack"><span class="disp" style="font-size:22px;line-height:1.1">' + esc(prochain.titre) + '</span>' +
-      '<span class="mut small">' + fmtH(prochain.d) + (prochain.f ? ' – ' + fmtH(prochain.f) : '') + (prochain.lieu ? ' · ' + esc(prochain.lieu) : '') + '</span>' +
-      (prochain.enc || prochain.qui.length ? '<span class="mut small">' + (prochain.enc ? 'Avec ' + esc(prochain.enc) : '') + (prochain.enc && prochain.qui.length ? ' · ' : '') + prochain.qui.map(function (p) { return '<b style="color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>'; }).join(', ') + '</span>' : '') +
-      '</div></div>' + (prochain.id ? boutonsPart((S.evts || []).filter(function (x) { return x.id === prochain.id; })[0] || {}, prochain.qui) : '') + '<a class="btn ghost" href="#/' + (S.user ? 'agenda' : 'arena') + '">' + (S.user ? 'Voir tout mon agenda' : 'Voir la programmation') + '</a></section>';
-  }
+  P.rdv = caseRdv(prochain);
+  var rep = prochain && prochain.id ? boutonsPart((S.evts || []).filter(function (x) { return x.id === prochain.id; })[0] || {}, prochain.qui) : '';
+  P.repRdv = rep ? '<section class="card stack" style="gap:6px;padding:12px 14px"><span class="small">Tu viens à <b>' + esc(prochain.titre) + '</b> ?</span>' + rep + '</section>' : '';
 
   // Raccourcis
   var ouverts = (S.evts || []).filter(function (e) { return inscOuverte(e) && (!S.user || !S.pers.length || eligibles(e).length); }).length;
@@ -473,7 +573,7 @@ function pageAccueil() {
   }
   var cfg = accueilPerso(accueilCfg());
   P.arena = carteArenaAccueil();
-  P.tiles = tuilesAccueil(cfg, { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' });
+  P.tiles = zoneRaccourcis(cfg, { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' });
   P.mot = motDuClub(cfg);
   if (!S.user) P.login = '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
     '<ol class="small" style="margin:0;padding-left:20px;line-height:1.7"><li>Tape l\'adresse mail donnée au club</li><li>Ouvre le mail : tu reçois un code</li><li>Tape le code : c\'est fait !</li></ol>' +
@@ -485,26 +585,29 @@ function pageAccueil() {
   if (actu) P.actu = carteActu(actu, 'Dernière actu');
   // (l'espace coach est dans l'onglet Gestion)
   P.partners = cfg.partenaires.length ? '<div class="partners"><div class="eyebrow" style="margin-bottom:6px">Nos partenaires</div>' + cfg.partenaires.map(function (x) { var u = lienSur(x.lien); return u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(x.nom) + '</a>' : '<span>' + esc(x.nom) + '</span>'; }).join('') + '</div>' : '';
+  var signature = '<div class="signature"><img src="vamos-hr.png" alt="Vamos HR!" width="900" height="635" loading="lazy"></div>';
   // Blocs masqués dans la gestion
   cfg.blocs.forEach(function (b) { if (!b.on) P[b.k] = ''; });
+  // Rangée du haut : Club house (25 %) + Prochain rendez-vous (75 %) ; si l'un des deux est masqué par le club, l'autre prend toute la largeur
+  var avecCh = cfg.blocs.some(function (b) { return b.k === 'presence' && b.on; }), avecRdv = !!P.rdv;
+  P.presence = avecCh || avecRdv ? '<div class="acc-row' + (avecCh && avecRdv ? '' : ' solo') + '">' + (avecCh ? '<div id="presence" class="acc-ch"></div>' : '') + P.rdv + '</div>' + (avecCh ? '<div id="presence-det"></div>' : '') + (avecRdv ? P.repRdv || '' : '') : '';
+  P.rdv = '';
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
   // Ordre réglable : messages, questionnaires et alertes restent juste après la présence (ou en haut si elle est masquée)
-  var auto = P.msg + P.disc + P.qst + P.urgent, ordre = cfg.blocs.filter(function (b) { return b.on; }).map(function (b) { return b.k; });
+  var auto = P.msg + P.disc + P.qst + P.urgent, ordre = cfg.blocs.filter(function (b) { return b.on && b.k !== 'presence' && b.k !== 'rdv' && b.k !== 'partners'; }).map(function (b) { return b.k; });
   if (vueLarge()) {
-    var col1 = ['rdv', 'fete', 'actu'], c1 = '', c2 = '';
-    ordre.forEach(function (k) { if (k === 'partners') return; if (col1.indexOf(k) >= 0) c1 += P[k]; else c2 += P[k]; });
+    var col1 = ['fete', 'actu'], c1 = P.presence, c2 = '';
+    ordre.forEach(function (k) { if (col1.indexOf(k) >= 0) c1 += P[k]; else c2 += P[k]; });
     return top + P.mot + '<div class="dk-home">' + (auto ? '<div class="dk-top">' + P.urgent + P.msg + P.disc + P.qst + '</div>' : '') +
-      '<div class="dk-col">' + c1 + P.login + P.install + '</div><div class="dk-col">' + c2 + '</div></div>' + P.partners + '</main>';
+      '<div class="dk-col">' + c1 + P.login + P.install + '</div><div class="dk-col">' + c2 + '</div></div>' + P.partners + signature + '</main>';
   }
-  var corps = '', autoPlace = ordre.indexOf('presence') < 0;
-  if (autoPlace) corps += auto;
+  var corps = P.presence + auto;
   ordre.forEach(function (k) {
     corps += P[k];
-    if (k === 'presence') corps += auto;
     if (k === 'tiles') corps += P.login + P.install;
   });
   if (ordre.indexOf('tiles') < 0) corps += P.login + P.install;
-  return top + P.mot + corps + '</main>';
+  return top + P.mot + corps + P.partners + signature + '</main>';
 }
 
 // Carte « Mon CLOC'ARENA » : seulement pour les familles dont un joueur a un niveau CLOC'ARENA
@@ -2686,10 +2789,20 @@ function remplirPresence() {
     if (det) {
       var court = { ouvert: 'Ouvert', coach: 'Coach au club', ferme: 'Fermé' }[A.etat];
       var sous = A.pause ? esc(A.pause.libelle) : A.fin ? 'jusqu\'à ' + fmtH(A.fin) : A.etat === 'ferme' && A.prochain ? 'Ouvre ' + esc(quandTexte(A.prochain)) : '';
+      if (box.classList.contains('acc-ch')) {
+        // Accueil : petite case (25 % de la rangée), même esprit que les raccourcis ; un appui ouvre le détail
+        var mot = { ouvert: 'Ouvert', coach: 'Coach', ferme: 'Fermé' }[A.etat];
+        var bas = A.pause ? esc(A.pause.libelle) : A.fin ? 'jusqu\'à ' + fmtH(A.fin) : A.etat === 'ferme' && A.prochain ? 'Ouvre ' + esc(quandCourt(A.prochain)) : '';
+        box.innerHTML = '<button class="tile acc-ch-t" id="pres-tile" aria-expanded="' + (S.presDet ? 'true' : 'false') + '" aria-label="Club house : ' + E.t + '"><span class="acc-lab mut">Club house</span>' +
+          '<span style="display:flex;align-items:center;gap:8px"><span class="dot" style="width:10px;height:10px;flex:none;background:' + E.c + ';box-shadow:0 0 0 3px ' + E.c + '33"></span><b style="color:' + E.c + '">' + mot + '</b></span>' + (bas ? '<span class="mut xs">' + bas + '</span>' : '') + '</button>';
+        det.innerHTML = S.presDet ? h + '</section>' : '';
+        $('pres-tile').onclick = function () { S.presDet = !S.presDet; remplirPresence(); };
+      } else {
       box.innerHTML = '<button class="tile tile-top" id="pres-tile" aria-expanded="' + (S.presDet ? 'true' : 'false') + '"><span style="display:flex;align-items:center;gap:8px"><span class="dot" style="width:12px;height:12px;flex:none;background:' + E.c + ';box-shadow:0 0 0 4px ' + E.c + '33"></span><span class="xs mut" style="text-transform:uppercase;letter-spacing:.6px;font-weight:600">Club house</span></span>' +
         '<b style="font-size:19px;color:' + E.c + '">' + court + '</b><span class="mut small">' + (sous || (estEquipe() ? 'Appuie pour mettre à jour' : 'Appuie pour le détail')) + '</span></button>';
       det.innerHTML = S.presDet ? h + '</section>' : '';
       $('pres-tile').onclick = function () { S.presDet = !S.presDet; remplirPresence(); };
+      }
     } else box.innerHTML = h + '</section>';
     var maj = function (row, msg) { q(sb.from('club_presence').update(row).eq('id', 1)).then(function () { toast(msg); return chargerPresence(true); }).then(remplirPresence).catch(function () { toast('Mise à jour impossible'); }); };
     if ($('pres-ouvrir')) $('pres-ouvrir').onclick = function () { if (!ch) finCh.setMinutes(Math.ceil(finCh.getMinutes() / 15) * 15, 0, 0); maj({ etat: 'ouvert', jusqua: finCh.toISOString(), message: null }, 'Club house ouvert'); };
@@ -3898,6 +4011,8 @@ function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
   if (parts[0] !== 'discussion') discFermerCanal();
   var p = parts[0] || 'accueil', arg = parts[1];
+  if (p !== 'accueil' && S.accEd) S.accEd = null; // quitter l'accueil annule une modification non terminée
+  if (!(p === 'profil' && arg === 'accueil')) S.monAccEd = null;
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
   else if (p === 'arena') actif = 'club', html = arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : arg === 'versus' ? pageVersus() : pageArenaAccueil();
@@ -3924,7 +4039,7 @@ function render() {
   else if (p === 'message') { html = pageMessage(arg); actif = 'messages'; }
   else if (p === 'questionnaire') { html = pageQuestionnaire(arg); actif = 'accueil'; }
   else if (p === 'notifs') { html = pageNotifs(); actif = 'accueil'; setTimeout(lierNotifs); }
-  else { p = 'accueil'; html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
+  else { p = 'accueil'; html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); lierRaccourcis(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   document.body.setAttribute('data-page', p);
   document.body.setAttribute('data-sub', arg || '');
