@@ -22,7 +22,7 @@ var MODULES = [
   ['adherents', 'Adhérents', ['direction', 'bureau', 'accueil']],
   ['adoc', 'Mise à jour ADOC', ['direction', 'bureau']],
   ['groupes', 'Groupes', ['direction', 'bureau']],
-  ['niveaux', 'Niveaux des joueurs', ['direction']],
+  ['niveaux', 'Niveaux des joueurs', ['direction', 'enseignant']],
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['boutique', 'Boutique et ardoise', ['direction', 'bureau', 'accueil']],
@@ -2697,7 +2697,7 @@ function selectBareme(id, val, off) {
 }
 var NVF = { tab: 'demandes', txt: '', niv: '' };
 function vueNiveaux(m) {
-  m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par l\'équipe pédagogique selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli. Le classement FFT est affiché à titre d\'info.') +
+  m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par la direction sportive ou les coachs selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli (accepté ou refusé par la direction ou un coach). Le classement FFT est affiché à titre d\'info.') +
     '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
   all('[data-nvt]').forEach(function (b) { b.onclick = function () { NVF.tab = b.dataset.nvt; vueNiveaux(m); }; });
   if (NVF.tab === 'joueurs') return nvJoueurs();
@@ -2736,7 +2736,7 @@ function nvJoueurs() {
       $('nv-n').textContent = r.length + ' joueur' + (r.length > 1 ? 's' : '') + (r.length > 150 ? ' (150 premiers affichés)' : '');
       all('[data-nvs]').forEach(function (b) { b.onclick = function () {
         var id = b.dataset.nvs, ch = { niveau_club: $('nvc-' + id).value || null, classement_fft: $('nvf-' + id).value.trim() || null, meilleur_classement_fft: $('nvm-' + id).value.trim() || null };
-        q(sb.from('personnes').update(ch).eq('id', id)).then(function () { var p = l.filter(function (x) { return x.id === id; })[0]; Object.assign(p, ch); toast('Enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
+        q(sb.rpc('niveau_fixer', { p: id, niveau: ch.niveau_club, fft: ch.classement_fft, meilleur: ch.meilleur_classement_fft })).then(function () { var p = l.filter(function (x) { return x.id === id; })[0]; Object.assign(p, ch); toast('Enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
       }; });
     };
     $('nv-l').innerHTML = '<div class="toolbar"><input class="f grow" id="nv-q" placeholder="Rechercher un joueur" value="' + esc(NVF.txt) + '"><select class="f" id="nv-niv"><option value="">Tous les niveaux</option><option value="-"' + (NVF.niv === '-' ? ' selected' : '') + '>Niveau à définir</option>' + BAREME.map(function (g) { return g[1].map(function (n) { return '<option' + (NVF.niv === n ? ' selected' : '') + '>' + n + '</option>'; }).join(''); }).join('') + '</select></div>' +

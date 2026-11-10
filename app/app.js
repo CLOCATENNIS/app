@@ -786,6 +786,7 @@ function chargerClassement() {
 }
 function arenaClassement() {
   var box = $('arena-main');
+  if (!estAdherent()) { box.innerHTML = carteReservee('Classement réservé aux adhérents du club'); return; }
   chargerClassement().then(function (all) {
     var filtres = ['Général', 'Filles', 'Garçons'].concat(NIVEAUX);
     var f = S.arenaFiltre;
@@ -842,6 +843,7 @@ function scorePour(score, equipe) {
 }
 function arenaResultats() {
   var box = $('arena-main');
+  if (!estAdherent()) { box.innerHTML = carteReservee('Résultats réservés aux adhérents du club'); return; }
   q(sb.rpc('arena_resultats', { nb: 80 })).then(function (l) {
     if (!l || !l.length) { box.innerHTML = '<section class="card empty">Pas encore de résultats.</section>'; return; }
     var parJour = {}, ordre = [];
@@ -855,6 +857,14 @@ function arenaResultats() {
   }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les résultats.</section>'; });
 }
 
+// Adhérent = compte rattaché à un adhérent (ou équipe du club). Les visiteurs et comptes non rattachés n'ont pas accès
+// aux fiches ni au classement / résultats CLOC'ARENA (la base le refuse aussi).
+function estAdherent() { return !!(S.user && (S.isStaff || S.pers.length || (S.compte && (S.compte.foyer_id || S.compte.personne_id)))); }
+function carteReservee(quoi) {
+  return '<section class="card stack" style="gap:10px">' + ic('lock', 22) + '<b>' + esc(quoi) + '</b><span class="mut small">' +
+    (S.user ? 'Ton adresse n\'est rattachée à aucun adhérent. Si tu es adhérent, écris au club pour qu\'il l\'ajoute : <a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a>.' : 'Connecte-toi avec l\'adresse mail donnée au club.') + '</span>' +
+    (S.user ? '' : '<a class="btn" href="#/profil">Me connecter</a>') + '</section>';
+}
 // ---------- Fiche joueur ----------
 // Une fiche par personne, visible de tous les adhérents connectés (règle appliquée par la base, fonction profil_joueur) :
 // « Prénom L. », âge, niveau club (barème du club, fixé par l'équipe), classement FFT actuel et meilleur,
@@ -885,6 +895,8 @@ function nomCourt(f) { return f.prenom + (f.initiale ? ' ' + f.initiale + '.' : 
 function ageTxt(a) { return a == null ? '' : a + ' an' + (a > 1 ? 's' : ''); }
 function lienJoueur(id, inner) { return '<a href="#/joueur/' + id + '">' + inner + '</a>'; }
 function blocCircuit(ci) {
+  if (ci.ouvert === false) return '<div class="dayhead">' + esc(ci.libelle) + '</div><section class="card" style="display:flex;gap:14px;align-items:center">' +
+    '<span class="sablier" aria-hidden="true">⏳</span><span class="stack" style="gap:2px"><b>Bientôt</b><span class="mut small">Le circuit n\'a pas encore commencé. Points, matchs et classement s\'afficheront ici dès l\'ouverture.</span></span></section>';
   var c = NIV[ci.niveau] || { bg: '#1f5a85', fg: '#fff' };
   var v = (ci.matchs || []).filter(function (m) { return m.gagne; }).length;
   var h = '<div class="dayhead" style="display:flex;justify-content:space-between;align-items:center">' + esc(ci.libelle) +
@@ -905,11 +917,7 @@ function blocCircuit(ci) {
 }
 function pageJoueur(id) {
   var retour = '<a class="back" href="#/club/competitions" data-retour style="color:#fff">' + ic('back', 20, '#fff') + 'Retour</a>';
-  // Fiches réservées aux adhérents : visiteur non connecté, ou compte connecté mais pas rattaché à un adhérent (la base refuse aussi)
-  var adherent = S.isStaff || S.pers.length || (S.compte && (S.compte.foyer_id || S.compte.personne_id));
-  if (!S.user || !adherent) return '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card stack" style="gap:10px">' + ic('lock', 22) + '<b>Fiche réservée aux adhérents du club</b><span class="mut small">' +
-    (S.user ? 'Ton adresse n\'est rattachée à aucun adhérent. Si tu es adhérent, écris au club pour qu\'il l\'ajoute : <a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a>.' : 'Connecte-toi avec l\'adresse mail donnée au club pour voir la fiche des joueurs.') + '</span>' +
-    (S.user ? '' : '<a class="btn" href="#/profil">Me connecter</a>') + '</section></main>';
+  if (!estAdherent()) return '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main>' + carteReservee('Fiche réservée aux adhérents du club') + '</main>';
   setTimeout(function () {
     q(sb.rpc('profil_joueur', { p: id })).then(function (f) {
       if (!f) throw new Error('vide');
