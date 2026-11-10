@@ -2811,6 +2811,7 @@ function nvImportFft() {
     }).catch(function () { $('ff-r').innerHTML = '<p class="small" style="color:var(--ko)">Lecture impossible. Vérifie ta connexion et réessaie.</p>'; });
   };
 }
+function petit(p) { return !!(p.date_naissance && age(p.date_naissance) <= 11); }
 function nvJoueurs() {
   chargerPers().then(function (l) {
     var filtre = function () {
@@ -2820,18 +2821,20 @@ function nvJoueurs() {
     var dessiner = function () {
       var r = filtre();
       $('nv-tb').innerHTML = r.slice(0, 150).map(function (p) {
-        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b><div class="mut xs">' + (p.date_naissance ? age(p.date_naissance) + ' ans' : '') + (p.niveau_arena ? ' · CLOC\'ARENA ' + esc(p.niveau_arena) : '') + (p.niveau_fft && p.date_naissance && age(p.date_naissance) <= 11 ? ' · niveau FFT ' + esc(p.niveau_fft) : '') + '</div></td>' +
-          '<td>' + selectBareme('nvc-' + p.id, p.niveau_club) + '</td><td><input class="f" style="max-width:90px" id="nvf-' + p.id + '" value="' + esc(p.classement_fft || '') + '" placeholder="—"></td><td><input class="f" style="max-width:90px" id="nvm-' + p.id + '" value="' + esc(p.meilleur_classement_fft || '') + '" placeholder="—"></td>' +
+        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b><div class="mut xs">' + (p.date_naissance ? age(p.date_naissance) + ' ans' : '') + (p.niveau_arena ? ' · CLOC\'ARENA ' + esc(p.niveau_arena) : '') + '</div></td>' +
+          '<td>' + selectBareme('nvc-' + p.id, p.niveau_club) + '</td><td>' + (petit(p) ? '<select class="f" id="nvn-' + p.id + '"><option value="">—</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<option' + (p.niveau_fft === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : '<span class="mut xs" title="Seulement pour les 11 ans et moins">—</span>') + '</td><td><input class="f" style="max-width:90px" id="nvf-' + p.id + '" value="' + esc(p.classement_fft || '') + '" placeholder="—"></td><td><input class="f" style="max-width:90px" id="nvm-' + p.id + '" value="' + esc(p.meilleur_classement_fft || '') + '" placeholder="—"></td>' +
           '<td><button class="btn sm line" data-nvs="' + p.id + '">Enregistrer</button></td></tr>';
-      }).join('') || '<tr><td colspan="5" class="mut">Personne ne correspond.</td></tr>';
+      }).join('') || '<tr><td colspan="6" class="mut">Personne ne correspond.</td></tr>';
       $('nv-n').textContent = r.length + ' joueur' + (r.length > 1 ? 's' : '') + (r.length > 150 ? ' (150 premiers affichés)' : '');
       all('[data-nvs]').forEach(function (b) { b.onclick = function () {
         var id = b.dataset.nvs, ch = { niveau_club: $('nvc-' + id).value || null, classement_fft: $('nvf-' + id).value.trim() || null, meilleur_classement_fft: $('nvm-' + id).value.trim() || null };
-        q(sb.rpc('niveau_fixer', { p: id, niveau: ch.niveau_club, fft: ch.classement_fft, meilleur: ch.meilleur_classement_fft })).then(function () { var p = l.filter(function (x) { return x.id === id; })[0]; Object.assign(p, ch); toast('Enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
+        if ($('nvn-' + id)) ch.niveau_fft = $('nvn-' + id).value || null;
+        var args = { p: id, niveau: ch.niveau_club, fft: ch.classement_fft, meilleur: ch.meilleur_classement_fft }; if ('niveau_fft' in ch) args.niv_fft = ch.niveau_fft || '';
+        q(sb.rpc('niveau_fixer', args)).then(function () { var p = l.filter(function (x) { return x.id === id; })[0]; Object.assign(p, ch); toast('Enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
       }; });
     };
     $('nv-l').innerHTML = '<div class="toolbar"><input class="f grow" id="nv-q" placeholder="Rechercher un joueur" value="' + esc(NVF.txt) + '"><select class="f" id="nv-niv"><option value="">Tous les niveaux</option><option value="-"' + (NVF.niv === '-' ? ' selected' : '') + '>Niveau à définir</option>' + BAREME.map(function (g) { return g[1].map(function (n) { return '<option' + (NVF.niv === n ? ' selected' : '') + '>' + n + '</option>'; }).join(''); }).join('') + '</select></div>' +
-      '<p class="mut xs" id="nv-n"></p><div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Niveau club</th><th>FFT</th><th>Meilleur</th><th></th></tr></thead><tbody id="nv-tb"></tbody></table></div>';
+      '<p class="mut xs" id="nv-n"></p><div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Niveau club</th><th>Niveau FFT <span class="mut" style="font-weight:400">(11 ans et –)</span></th><th>Classement FFT</th><th>Meilleur</th><th></th></tr></thead><tbody id="nv-tb"></tbody></table></div>';
     $('nv-q').oninput = function () { NVF.txt = this.value; dessiner(); };
     $('nv-niv').onchange = function () { NVF.niv = this.value; dessiner(); };
     dessiner();
