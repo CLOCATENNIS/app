@@ -3068,6 +3068,36 @@ function lierIdentite(apres) {
     }).catch(function () { toast('Enregistrement impossible'); $('id-ok').disabled = false; });
   };
 }
+// Pousser les notifications : à chaque ouverture de l'appli (une fois par session), tant qu'elles ne sont pas actives sur l'appareil.
+// Autorisation déjà donnée mais appareil pas enregistré pour ce compte : on l'enregistre sans rien demander.
+function popupNotifs() {
+  if (S.apercu || !S.user) return false;
+  var actif = pushPossible() && Notification.permission === 'granted' && localStorageGet('cloca-push') === S.user.id;
+  if (actif) return false;
+  if (pushPossible() && Notification.permission === 'granted') { activerPush().catch(function () { }); return false; }
+  var tete = '<div class="stack" style="gap:12px;text-align:center"><img src="cloche.png" alt="" style="width:88px;height:88px;margin:0 auto;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))">' +
+    '<h2 style="margin:0;font-size:22px">Ne loupe aucune info du club</h2>' +
+    '<span class="small">Cours annulé, message du coach, résultats CLOC\'ARENA, raquette prête, inscriptions qui ouvrent : sois prévenu tout de suite sur ton téléphone.</span>';
+  var plusTard = '<button class="btn line" id="pn-non">Plus tard</button></div>';
+  var non = function () { $('pn-non').onclick = fermerModale; };
+  var montrer = function (h, lier) { modale(h, lier); return true; };
+  if (estIos() && !estInstallee()) return montrer(tete +
+    '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px;text-align:left">Sur iPhone, les notifications marchent seulement avec l\'appli installée : dans <b>Safari</b>, bouton <b>Partager</b>, puis <b>« Sur l\'écran d\'accueil »</b>. Ouvre ensuite l\'appli depuis son icône.</div>' +
+    '<button class="btn" id="pn-guide">Me montrer comment</button>' + plusTard, function () { non(); $('pn-guide').onclick = function () { ouvrirGuide(0); }; });
+  if (!pushPossible()) return false;
+  if (Notification.permission === 'denied') return montrer(tete +
+    '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px;text-align:left">Les notifications sont <b>bloquées</b> sur ce téléphone. Pour les débloquer :<br>' +
+    (estIos() ? '<b>Réglages</b> → <b>Notifications</b> → <b>CLOCA Tennis</b> → <b>Autoriser les notifications</b>.' : 'dans Chrome, touche le <b>cadenas</b> (ou ⋮ → <b>Infos sur le site</b>) → <b>Notifications</b> → <b>Autoriser</b>. Si l\'appli est installée : appui long sur son icône → <b>Infos sur l\'appli</b> → <b>Notifications</b>.') + '</div>' +
+    '<button class="btn" id="pn-ok">C\'est fait</button>' + plusTard, function () { non(); $('pn-ok').onclick = function () { fermerModale(); if (Notification.permission === 'granted') activerPush().then(function () { toast('Notifications activées'); }).catch(function () { }); }; });
+  return montrer(tete + '<button class="btn" id="pn-go">' + ic('bell', 18, '#fff') + 'Activer les notifications</button>' + plusTard, function () {
+    non();
+    $('pn-go').onclick = function () {
+      var b = this; b.disabled = true;
+      activerPush().then(function () { fermerModale(); toast('Notifications activées 🎾'); })
+        .catch(function (e) { b.disabled = false; if (e && e.message === 'refus') { fermerModale(); toast('Notifications refusées : tu pourras les activer dans Profil'); } else toast('Activation impossible sur cet appareil'); });
+    };
+  });
+}
 // Ce qui s'ouvre tout seul, une fois, au bon moment
 function guidesAuto() {
   if (S.apercu || $('modale')) return;
@@ -3079,6 +3109,7 @@ function guidesAuto() {
     $('w-go').onclick = function () { ouvrirGuide(0); };
     $('w-non').onclick = function () { localStorageSet('cloca-guide-vu', '1'); fermerModale(); };
   });
+  if (S.user && !ss('cloca-notif-pop') && popupNotifs()) { ssSet('cloca-notif-pop'); return; }
   if (!S.user && estInstallee() && !ss('cloca-rappel-cnx')) { ssSet('cloca-rappel-cnx'); return modale('<div class="stack" style="gap:14px;text-align:center"><h2 style="margin:0;font-size:21px">Tu n\'es pas encore connecté</h2><span class="small">Connecte-toi avec l\'adresse mail donnée au club pour voir ton agenda, tes messages et tes inscriptions. Un code arrive par mail, sans mot de passe.</span>' + maquette('connexion') +
     '<button class="btn" id="r-go">Me connecter</button><button class="btn line" id="r-aide">Voir le guide</button></div>', function () { $('r-go').onclick = function () { fermerModale(); go('#/profil'); }; $('r-aide').onclick = function () { ouvrirGuide(0); }; }); }
 }
