@@ -2698,9 +2698,10 @@ function selectBareme(id, val, off) {
 var NVF = { tab: 'demandes', txt: '', niv: '' };
 function vueNiveaux(m) {
   m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par la direction sportive selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli (accepté ou refusé par la direction sportive). Le classement FFT est affiché à titre d\'info.') +
-    '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
+    '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs'], ['fft', 'Import classements FFT (ADOC)']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
   all('[data-nvt]').forEach(function (b) { b.onclick = function () { NVF.tab = b.dataset.nvt; vueNiveaux(m); }; });
   if (NVF.tab === 'joueurs') return nvJoueurs();
+  if (NVF.tab === 'fft') return nvImportFft();
   q(sb.from('niveau_demandes').select('id, personne_id, niveau_actuel, niveau_demande, message, statut, reponse, created_at, traite_le, personnes(prenom, nom, date_naissance, classement_fft)').order('created_at', { ascending: false }).limit(200)).then(function (l) {
     var att = l.filter(function (d) { return d.statut === 'attente'; }), faites = l.filter(function (d) { return d.statut !== 'attente'; });
     var carte = function (d) {
@@ -2719,6 +2720,69 @@ function vueNiveaux(m) {
       q(sb.rpc('niveau_traiter', { d: v[0], accepter: v[1] === '1', reponse: rep })).then(function () { toast(v[1] === '1' ? 'Niveau changé, famille prévenue' : 'Demande refusée, famille prévenue'); A.pers = null; vueNiveaux(m); }).catch(function () { toast('Action impossible'); b.disabled = false; });
     }; });
   }).catch(function () { $('nv-l').innerHTML = '<div class="card empty">Impossible de charger les demandes.</div>'; });
+}
+// ---------- Import des classements FFT depuis un export Excel d'ADOC ----------
+// Joueurs retrouvés par leur licence (sinon nom + prénom). Le meilleur classement n'est jamais dégradé :
+// on garde le meilleur entre l'ancien, celui de l'export et le classement actuel.
+var ECHELLE_FFT = ['NC', '40', '30/5', '30/4', '30/3', '30/2', '30/1', '30', '15/5', '15/4', '15/3', '15/2', '15/1', '15', '5/6', '4/6', '3/6', '2/6', '1/6', '0', '-2/6', '-4/6', '-15', '-30'];
+function fftPropre(v) {
+  if (v == null) return null;
+  var s = String(v).trim().toUpperCase().replace(/\s+/g, '').replace(/^N\.?C\.?$/, 'NC');
+  if (!s || s === '-' || s === '0.0') return null;
+  if (/^N°?\d+/.test(s) || /^T\d+/.test(s)) return s.replace(/^N(\d)/, 'N°$1'); // classés numérotés ou top
+  return ECHELLE_FFT.indexOf(s) >= 0 ? s : null;
+}
+function fftRang(c) { if (!c) return -1; if (/^(N°|T)/.test(c)) return 1000 - (parseInt(c.replace(/\D/g, ''), 10) || 999) / 1000; return ECHELLE_FFT.indexOf(c); }
+function fftMeilleur() { var l = Array.prototype.slice.call(arguments).filter(Boolean); return l.sort(function (a, b) { return fftRang(b) - fftRang(a); })[0] || null; }
+function lireFft(XLSX, buf) {
+  var wb = XLSX.read(buf, { type: 'array' });
+  var ws = wb.Sheets['Détaillé'] || wb.Sheets[wb.SheetNames.filter(function (n) { return /d.taill/i.test(n); })[0]] || wb.Sheets[wb.SheetNames[0]];
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: null });
+  var hi = -1; for (var i = 0; i < Math.min(rows.length, 8); i++) { if ((rows[i] || []).some(function (h) { return /licence/i.test(h || ''); })) { hi = i; break; } }
+  if (hi < 0) throw new Error('format');
+  var H = rows[hi].map(function (h) { return String(h || '').trim(); }), trouve = function (re, sauf) { for (var j = 0; j < H.length; j++) if (re.test(H[j]) && !(sauf && sauf.test(H[j]))) return j; return -1; };
+  var C = { lic: trouve(/licence/i), nom: trouve(/^nom$/i), pre: trouve(/^pr[ée]nom$/i), clt: trouve(/class|^clt/i, /meilleur|ancien|pr[ée]c/i), best: trouve(/meilleur/i) };
+  if (C.clt < 0 && C.best < 0) throw new Error('colonne');
+  return { colonnes: { clt: C.clt >= 0 ? H[C.clt] : null, best: C.best >= 0 ? H[C.best] : null }, lignes: rows.slice(hi + 1).filter(function (r) { return r && (r[C.lic] || r[C.nom]); }).map(function (r) {
+    return { licence: r[C.lic] ? String(r[C.lic]).trim() : null, nom: C.nom >= 0 ? String(r[C.nom] || '').trim() : '', prenom: C.pre >= 0 ? String(r[C.pre] || '').trim() : '', clt: C.clt >= 0 ? fftPropre(r[C.clt]) : null, best: C.best >= 0 ? fftPropre(r[C.best]) : null };
+  }) };
+}
+function nvImportFft() {
+  $('nv-l').innerHTML = '<div class="two"><div class="card stack"><b>1. Exporter depuis ADOC</b><span class="small">Le même export que pour la mise à jour des adhérents (<b>Adhérents → Gestion → Résultats</b>, bouton <b>Excel</b>), avec la colonne du <b>classement</b> (et, si ADOC la propose, le <b>meilleur classement</b>).</span>' +
+    '<b>2. Le déposer ici</b><input class="f" type="file" id="ff-f" accept=".xls,.xlsx,.csv"><div id="ff-r"></div></div>' +
+    '<div class="card stack"><b>Ce que fait l\'import</b><span class="small">• Retrouve chaque joueur par sa licence (sinon nom et prénom).<br>• Met à jour son classement FFT actuel.<br>• Garde toujours le <b>meilleur</b> classement connu : il ne baisse jamais.<br>• Tu vois tous les changements avant de valider.</span>' +
+    '<b>Ce qu\'il ne touche jamais</b><span class="small">Le niveau club, fixé par la direction sportive, et tout le reste de la fiche.</span></div></div>';
+  $('ff-f').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    $('ff-r').innerHTML = '<div class="skel"></div>';
+    Promise.all([chargerXlsx(), f.arrayBuffer(), chargerPers(true)]).then(function (r) {
+      var lu;
+      try { lu = lireFft(r[0], r[1]); } catch (e) { $('ff-r').innerHTML = '<p class="small" style="color:var(--ko)">' + (e.message === 'colonne' ? 'Pas de colonne « Classement » dans ce fichier : ajoute-la dans l\'export ADOC.' : 'Ce fichier ne ressemble pas à un export ADOC (il faut une colonne « Licence »).') + '</p>'; return; }
+      var parLic = {}, parNom = {}; A.pers.forEach(function (p) { if (p.adoc_id) parLic[p.adoc_id] = p; parNom[cle(p.nom) + '|' + cle(p.prenom)] = p; });
+      var changes = [], pareil = 0, inconnus = [], vides = 0;
+      lu.lignes.forEach(function (l) {
+        var p = (l.licence && parLic[l.licence]) || parNom[cle(l.nom) + '|' + cle(l.prenom)];
+        if (!p) { inconnus.push(l); return; }
+        if (!l.clt && !l.best) { vides++; return; }
+        var clt = l.clt || p.classement_fft || null, best = fftMeilleur(p.meilleur_classement_fft, l.best, clt);
+        if (clt === (p.classement_fft || null) && best === (p.meilleur_classement_fft || null)) { pareil++; return; }
+        changes.push({ p: p, clt: clt, best: best });
+      });
+      var liste = function (t, arr, fn) { return arr.length ? '<details' + (arr.length < 15 ? ' open' : '') + '><summary class="small"><b>' + t + ' (' + arr.length + ')</b></summary><div class="small mut" style="margin:6px 0 0 14px">' + arr.slice(0, 300).map(fn).join('<br>') + '</div></details>' : ''; };
+      $('ff-r').innerHTML = '<p class="xs mut">Colonnes lues : ' + esc([lu.colonnes.clt, lu.colonnes.best].filter(Boolean).join(' · ')) + '</p>' +
+        '<div class="kpis" style="margin:8px 0"><div class="kpi"><b>' + lu.lignes.length + '</b><span>dans le fichier</span></div><div class="kpi"><b>' + changes.length + '</b><span>à mettre à jour</span></div><div class="kpi"><b>' + pareil + '</b><span>déjà à jour</span></div><div class="kpi"><b>' + inconnus.length + '</b><span>introuvables</span></div></div>' +
+        liste('Changements', changes, function (x) { return '<b>' + esc(x.p.prenom + ' ' + x.p.nom) + '</b> : ' + esc((x.p.classement_fft || '—') + ' → ' + (x.clt || '—')) + (x.best !== (x.p.meilleur_classement_fft || null) ? ' · meilleur ' + esc(x.best || '—') : ''); }) +
+        liste('Introuvables dans l\'appli', inconnus, function (l) { return esc((l.prenom + ' ' + l.nom).trim() || l.licence); }) +
+        (vides ? '<p class="xs mut">' + vides + ' joueur' + (vides > 1 ? 's' : '') + ' sans classement dans le fichier : rien ne change pour eux.</p>' : '') +
+        (changes.length ? '<button class="btn" id="ff-go">Mettre à jour ' + changes.length + ' classement' + (changes.length > 1 ? 's' : '') + '</button>' : '<p class="small" style="color:var(--ok)">Tout est déjà à jour.</p>');
+      if ($('ff-go')) $('ff-go').onclick = function () {
+        var b = this; b.disabled = true; b.textContent = 'Mise à jour…';
+        q(sb.rpc('fft_importer', { lignes: changes.map(function (x) { return { id: x.p.id, clt: x.clt, best: x.best }; }) })).then(function (n) {
+          toast((n || changes.length) + ' classements mis à jour'); A.pers = null; NVF.tab = 'joueurs'; router();
+        }).catch(function () { toast('Mise à jour impossible'); b.disabled = false; b.textContent = 'Réessayer'; });
+      };
+    }).catch(function () { $('ff-r').innerHTML = '<p class="small" style="color:var(--ko)">Lecture impossible. Vérifie ta connexion et réessaie.</p>'; });
+  };
 }
 function nvJoueurs() {
   chargerPers().then(function (l) {
