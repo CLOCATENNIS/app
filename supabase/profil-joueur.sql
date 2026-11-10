@@ -270,3 +270,17 @@ grant execute on function public.photo_definir(uuid, text) to authenticated;
 grant select (personne_id) on public.annonces to anon, authenticated;
 grant insert (personne_id) on public.annonces to authenticated;
 grant select on public.niveau_demandes to authenticated; -- oubli corrigé le 10/11 : la gestion ne voyait pas les demandes
+
+-- Import des classements FFT (gestion → Niveaux des joueurs → Import ADOC), direction uniquement
+create or replace function public.fft_importer(lignes jsonb)
+returns integer language plpgsql security definer set search_path = '' as $$
+declare n int;
+begin
+  if not prive.est_direction() then raise exception 'acces refuse'; end if;
+  update public.personnes p set classement_fft = nullif(x->>'clt', ''), meilleur_classement_fft = nullif(x->>'best', '')
+  from jsonb_array_elements(lignes) x where p.id = (x->>'id')::uuid;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke all on function public.fft_importer(jsonb) from public, anon;
+grant execute on function public.fft_importer(jsonb) to authenticated;
