@@ -22,7 +22,7 @@ var MODULES = [
   ['adherents', 'Adhérents', ['direction', 'bureau', 'accueil']],
   ['adoc', 'Mise à jour ADOC', ['direction', 'bureau']],
   ['groupes', 'Groupes', ['direction', 'bureau']],
-  ['niveaux', 'Niveaux des joueurs', ['direction', 'enseignant']],
+  ['niveaux', 'Niveaux des joueurs', ['direction']],
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['boutique', 'Boutique et ardoise', ['direction', 'bureau', 'accueil']],
@@ -2697,7 +2697,7 @@ function selectBareme(id, val, off) {
 }
 var NVF = { tab: 'demandes', txt: '', niv: '' };
 function vueNiveaux(m) {
-  m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par la direction sportive ou les coachs selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli (accepté ou refusé par la direction ou un coach). Le classement FFT est affiché à titre d\'info.') +
+  m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par la direction sportive selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli (accepté ou refusé par la direction sportive). Le classement FFT est affiché à titre d\'info.') +
     '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
   all('[data-nvt]').forEach(function (b) { b.onclick = function () { NVF.tab = b.dataset.nvt; vueNiveaux(m); }; });
   if (NVF.tab === 'joueurs') return nvJoueurs();

@@ -330,7 +330,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '10/11 17h15';
+var VERSION_APPLI = '10/11 17h40';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -931,9 +931,9 @@ function pageJoueur(id) {
       var fft = f.classement_fft || f.meilleur_classement_fft;
       h += '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Niveau au club</span>' + nivClubBadge(f.niveau_club) + '</div>' +
         (nivClubDetail(f.niveau_club) ? '<span class="small">' + esc(nivClubDetail(f.niveau_club)) + '</span>' : '') +
-        '<span class="mut xs">Fixé par l\'équipe pédagogique du club, selon le barème du club.</span>';
+        '<span class="mut xs">Fixé par la direction sportive, selon le barème du club.</span>';
       if (f.famille) {
-        if (f.demande && f.demande.statut === 'attente') h += '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px">' + ic('cal', 16) + ' Demande envoyée le ' + esc(fmtCourt(new Date(f.demande.created_at))) + ' : passer en <b>' + esc(f.demande.niveau_demande) + '</b>. En attente de réponse de l\'équipe.</div>';
+        if (f.demande && f.demande.statut === 'attente') h += '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px">' + ic('cal', 16) + ' Demande envoyée le ' + esc(fmtCourt(new Date(f.demande.created_at))) + ' : passer en <b>' + esc(f.demande.niveau_demande) + '</b>. En attente de réponse de la direction sportive.</div>';
         else h += '<button class="btn line" id="jr-dem">Demander un changement de niveau</button>' + (f.demande && f.demande.statut === 'refusee' ? '<span class="mut xs">Dernière demande non retenue' + (f.demande.reponse ? ' : ' + esc(f.demande.reponse) : '') + '.</span>' : '');
       }
       h += '</section>';
@@ -999,18 +999,18 @@ function changerPhoto(f) {
       };
     });
 }
-// Demande de changement de niveau : la famille propose, l'équipe (coach ou direction) accepte ou refuse dans la gestion
+// Demande de changement de niveau : la famille propose, la direction sportive accepte ou refuse dans la gestion
 function demanderNiveau(f) {
   var opts = BAREME.map(function (g) { return '<optgroup label="' + g[0] + '">' + g[1].map(function (n) { return '<option' + (n === f.niveau_club ? ' disabled' : '') + ' value="' + n + '">' + n + (nivClubDetail(n) ? ' · ' + nivClubDetail(n) : '') + (n === f.niveau_club ? ' (actuel)' : '') + '</option>'; }).join('') + '</optgroup>'; }).join('');
   modale('<div class="stack" style="gap:12px"><b style="font-size:18px">Changer le niveau de ' + esc(f.prenom) + '</b>' +
-    '<span class="mut small">Niveau actuel : <b>' + esc(f.niveau_club || 'à définir') + '</b>. L\'équipe pédagogique étudie la demande et te répond dans l\'appli.</span>' +
+    '<span class="mut small">Niveau actuel : <b>' + esc(f.niveau_club || 'à définir') + '</b>. La direction sportive étudie la demande et te répond dans l\'appli.</span>' +
     '<label class="f">Niveau demandé<select class="f" id="jd-n"><option value="">Choisir…</option>' + opts + '</select></label>' +
     '<label class="f">Pourquoi ? <span class="mut" style="font-weight:400">(facultatif)</span><textarea class="f" id="jd-m" maxlength="400" placeholder="Ex. résultats en tournoi, nouveau classement FFT…"></textarea></label>' +
     '<button class="btn" id="jd-go">Envoyer la demande</button></div>', function () {
       $('jd-go').onclick = function () {
         var n = $('jd-n').value; if (!n) return toast('Choisis un niveau');
         this.disabled = true;
-        q(sb.rpc('niveau_demander', { p: f.id, niveau: n, message: $('jd-m').value.trim() || null })).then(function () { fermerModale(); toast('Demande envoyée à l\'équipe'); render(); })
+        q(sb.rpc('niveau_demander', { p: f.id, niveau: n, message: $('jd-m').value.trim() || null })).then(function () { fermerModale(); toast('Demande envoyée à la direction sportive'); render(); })
           .catch(function () { toast('Envoi impossible, réessaie'); $('jd-go').disabled = false; });
       };
     });

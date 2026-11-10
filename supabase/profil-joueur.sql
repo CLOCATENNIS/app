@@ -90,10 +90,10 @@ create table if not exists public.niveau_demandes (
 );
 create unique index if not exists niveau_demandes_une_en_attente on public.niveau_demandes(personne_id) where statut = 'attente';
 alter table public.niveau_demandes enable row level security;
--- Qui fixe et valide les niveaux : la direction sportive et les coachs (décision de Dorian du 10/11)
+-- Qui fixe et valide les niveaux : la direction sportive uniquement (décision de Dorian du 10/11, 17h32 ; plus les coachs)
 create or replace function prive.fixe_niveaux()
 returns boolean language sql stable security definer set search_path = '' as $$
-  select prive.est_direction() or prive.a_role(array['enseignant']);
+  select prive.est_direction();
 $$;
 -- Lecture : la famille voit les demandes de ses membres, la direction et les coachs voient tout. Écriture : par les fonctions ci-dessous.
 drop policy if exists niveau_demandes_lire on public.niveau_demandes;
@@ -191,7 +191,7 @@ end $$;
 drop trigger if exists annonce_personne_ok on public.annonces;
 create trigger annonce_personne_ok before insert or update of personne_id on public.annonces for each row execute function prive.annonce_personne_ok();
 
--- La famille demande un changement de niveau (une seule demande en attente par joueur) ; direction et coachs prévenus
+-- La famille demande un changement de niveau (une seule demande en attente par joueur) ; direction prévenue
 create or replace function public.niveau_demander(p uuid, niveau text, message text default null)
 returns uuid language plpgsql security definer set search_path = '' as $$
 declare nid uuid; actuel text; qui text;
@@ -201,14 +201,14 @@ begin
   if niveau is not distinct from actuel then raise exception 'meme niveau'; end if;
   insert into public.niveau_demandes(personne_id, niveau_actuel, niveau_demande, message)
   values (p, actuel, niveau, nullif(trim(message), '')) returning id into nid;
-  perform public.notif_ajouter(array(select distinct r.user_id from public.responsabilites r where r.role in ('direction', 'enseignant') and r.groupe_id is null),
+  perform public.notif_ajouter(array(select distinct r.user_id from public.responsabilites r where r.role = 'direction' and r.groupe_id is null),
     'Demande de niveau', qui || ' : ' || coalesce(actuel, 'à définir') || ' → ' || niveau, '/app/gestion/#/niveaux', 'niveau-demandes');
   return nid;
 end $$;
 revoke all on function public.niveau_demander(uuid, text, text) from public, anon;
 grant execute on function public.niveau_demander(uuid, text, text) to authenticated;
 
--- La direction ou un coach accepte (le niveau club change) ou refuse ; la famille est prévenue
+-- La direction accepte (le niveau club change) ou refuse ; la famille est prévenue
 create or replace function public.niveau_traiter(d uuid, accepter boolean, reponse text default null)
 returns void language plpgsql security definer set search_path = '' as $$
 declare dem public.niveau_demandes;
@@ -228,7 +228,7 @@ end $$;
 revoke all on function public.niveau_traiter(uuid, boolean, text) from public, anon;
 grant execute on function public.niveau_traiter(uuid, boolean, text) to authenticated;
 
--- La direction ou un coach fixe directement le niveau club et le classement FFT (gestion → Niveaux des joueurs)
+-- La direction fixe directement le niveau club et le classement FFT (gestion → Niveaux des joueurs)
 create or replace function public.niveau_fixer(p uuid, niveau text, fft text default null, meilleur text default null)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
