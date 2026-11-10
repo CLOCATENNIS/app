@@ -2738,9 +2738,11 @@ function lireFft(XLSX, buf) {
   var wb = XLSX.read(buf, { type: 'array' });
   var ws = wb.Sheets['Détaillé'] || wb.Sheets[wb.SheetNames.filter(function (n) { return /d.taill/i.test(n); })[0]] || wb.Sheets[wb.SheetNames[0]];
   var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: null });
-  var hi = -1; for (var i = 0; i < Math.min(rows.length, 8); i++) { if ((rows[i] || []).some(function (h) { return /licence/i.test(h || ''); })) { hi = i; break; } }
+  // Ligne d'en-têtes = celle qui a « Licence » ET une colonne de classement (l'export ADOC a une ligne de titre groupé au-dessus)
+  var aCol = function (r, re) { return (r || []).some(function (h) { return re.test(String(h || '')); }); };
+  var hi = -1; for (var i = 0; i < Math.min(rows.length, 8); i++) { if (aCol(rows[i], /licence/i) && aCol(rows[i], /class|^clt|meilleur/i)) { hi = i; break; } }
   if (hi < 0) throw new Error('format');
-  var H = rows[hi].map(function (h) { return String(h || '').trim(); }), trouve = function (re, sauf) { for (var j = 0; j < H.length; j++) if (re.test(H[j]) && !(sauf && sauf.test(H[j]))) return j; return -1; };
+  var H = rows[hi].map(function (h) { return String(h || '').replace(/\s+/g, ' ').trim(); }), trouve = function (re, sauf) { for (var j = 0; j < H.length; j++) if (re.test(H[j]) && !(sauf && sauf.test(H[j]))) return j; return -1; };
   var C = { lic: trouve(/licence/i), nom: trouve(/^nom$/i), pre: trouve(/^pr[ée]nom$/i), clt: trouve(/class|^clt/i, /meilleur|ancien|pr[ée]c/i), best: trouve(/meilleur/i) };
   if (C.clt < 0 && C.best < 0) throw new Error('colonne');
   return { colonnes: { clt: C.clt >= 0 ? H[C.clt] : null, best: C.best >= 0 ? H[C.best] : null }, lignes: rows.slice(hi + 1).filter(function (r) { return r && (r[C.lic] || r[C.nom]); }).map(function (r) {
@@ -2751,8 +2753,8 @@ function nvImportFft() {
   $('nv-l').innerHTML = '<div class="two"><div class="card stack"><b>1. Exporter depuis ADOC</b><span class="small">Le même export que pour la mise à jour des adhérents (<b>Adhérents → Gestion → Résultats</b>, bouton <b>Excel</b>), avec la colonne du <b>classement</b> (et, si ADOC la propose, le <b>meilleur classement</b>).</span>' +
     '<div class="stack" style="gap:6px;background:var(--soft);border-radius:12px;padding:10px 12px"><b class="small">Colonnes à mettre dans l\'Excel</b>' +
       '<table class="t" style="font-size:13px"><thead><tr><th>Colonne</th><th>Obligatoire</th><th>À quoi elle sert</th></tr></thead><tbody>' +
-      '<tr><td><b>Licence</b></td><td>Oui</td><td>Retrouver le joueur dans l\'appli</td></tr>' +
       '<tr><td><b>Nom</b> et <b>Prénom</b></td><td>Conseillé</td><td>Retrouver le joueur si sa licence n\'est pas dans l\'appli</td></tr>' +
+      '<tr><td><b>Licence</b></td><td>Oui</td><td>Retrouver le joueur dans l\'appli (ex. 9212937 L)</td></tr>' +
       '<tr><td><b>Classement</b></td><td>Oui</td><td>Classement FFT actuel</td></tr>' +
       '<tr><td><b>Meilleur classement</b></td><td>Non</td><td>Si absent, l\'appli le calcule au fil des imports</td></tr></tbody></table>' +
       '<span class="xs mut">Les autres colonnes de l\'export sont ignorées, l\'ordre n\'a pas d\'importance. Valeurs comme sur Ten\'Up : NC, 40, 30/5, 30/2, 30, 15/4, 15, 5/6, 0, -15… Case vide = on ne touche pas. Évite une 2e colonne « Ancien classement ». Feuille « Détaillé » (export ADOC) ou la première feuille ; en-têtes dans les 8 premières lignes.</span>' +
@@ -2762,8 +2764,8 @@ function nvImportFft() {
     '<b>Ce qu\'il ne touche jamais</b><span class="small">Le niveau club, fixé par la direction sportive, et tout le reste de la fiche.</span></div></div>';
   $('ff-modele').onclick = function () {
     chargerXlsx().then(function (X) {
-      var ws = X.utils.aoa_to_sheet([['Licence', 'Nom', 'Prénom', 'Classement', 'Meilleur classement'], ['1234567A', 'MARTIN', 'Léa', '30/2', '30/1']]);
-      ws['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 20 }];
+      var ws = X.utils.aoa_to_sheet([['Nom', 'Prénom', 'Licence', 'Classement', 'Meilleur classement'], ['MARTIN', 'Léa', '1234567 A', '30/2', '30/1']]);
+      ws['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 20 }];
       var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Détaillé'); X.writeFile(wb, 'modele-classements-fft.xlsx');
     }).catch(function () { toast('Téléchargement impossible'); });
   };
@@ -2773,10 +2775,11 @@ function nvImportFft() {
     Promise.all([chargerXlsx(), f.arrayBuffer(), chargerPers(true)]).then(function (r) {
       var lu;
       try { lu = lireFft(r[0], r[1]); } catch (e) { $('ff-r').innerHTML = '<p class="small" style="color:var(--ko)">' + (e.message === 'colonne' ? 'Pas de colonne « Classement » dans ce fichier : ajoute-la dans l\'export ADOC.' : 'Ce fichier ne ressemble pas à un export ADOC (il faut une colonne « Licence »).') + '</p>'; return; }
-      var parLic = {}, parNom = {}; A.pers.forEach(function (p) { if (p.adoc_id) parLic[p.adoc_id] = p; parNom[cle(p.nom) + '|' + cle(p.prenom)] = p; });
+      var lic = function (v) { return String(v || '').replace(/\s+/g, '').toUpperCase(); };
+      var parLic = {}, parNom = {}; A.pers.forEach(function (p) { if (p.adoc_id) parLic[lic(p.adoc_id)] = p; parNom[cle(p.nom) + '|' + cle(p.prenom)] = p; });
       var changes = [], pareil = 0, inconnus = [], vides = 0;
       lu.lignes.forEach(function (l) {
-        var p = (l.licence && parLic[l.licence]) || parNom[cle(l.nom) + '|' + cle(l.prenom)];
+        var p = (l.licence && parLic[lic(l.licence)]) || parNom[cle(l.nom) + '|' + cle(l.prenom)];
         if (!p) { inconnus.push(l); return; }
         if (!l.clt && !l.best) { vides++; return; }
         var clt = l.clt || p.classement_fft || null, best = fftMeilleur(p.meilleur_classement_fft, l.best, clt);
