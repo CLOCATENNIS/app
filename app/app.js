@@ -1192,7 +1192,7 @@ function blocCompetitions() {
   return '<section class="cmp">' +
     '<div class="cmp-arena"><span class="cmp-lignes" aria-hidden="true"></span>' +
       '<a class="cmp-main" href="#/arena"><span class="cmp-k">LE CIRCUIT PHARE DU CLUB</span><span class="cmp-t">CLOC\'ARENA</span>' +
-      '<span class="cmp-x">' + (rangs ? 'Au classement : ' + rangs : 'Classements, défis et résultats toute la saison') + '</span><span class="cmp-go">Entrer dans l\'arène →</span></a>' +
+      '<span class="cmp-x">' + (rangs ? 'Au classement : ' + rangs : 'Classements, défis et résultats') + '</span><span class="cmp-go">Entrer dans l\'arène →</span></a>' +
       '<div class="cmp-cs">' + circuit('#/arena/tweener', 'Tweener', 'linear-gradient(135deg,#5b3a86,#c62f2f)', false) + circuit('#/arena/masters', 'Masters', 'linear-gradient(135deg,#1d4a6e,#3b6f96)', true) + circuit('#/arena/versus', 'Versus', VERSUS_FOND, true) + '</div></div>' +
     '<a class="cmp-double" href="#/double"><span class="cmp-di">' + ic('trophy', 24, '#fff') + '</span><span class="stack" style="gap:2px;flex:1;min-width:0"><b>Tournoi interne de double</b><span class="small" style="opacity:.9">Poules, dispos, réservations et scores</span></span><span aria-hidden="true" style="font-size:20px">→</span></a>' +
     '</section>';
