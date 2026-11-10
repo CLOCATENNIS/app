@@ -428,6 +428,23 @@ button.javatar{cursor:pointer}
 .acc-grille.en-cours{cursor:grabbing}
 .acc-x{position:absolute;top:-9px;right:-9px;width:28px;height:28px;border-radius:50%;border:2px solid var(--card);background:var(--ko);color:#fff;font-size:20px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .acc-ajout{display:flex;flex-wrap:wrap;gap:8px}
+.cmp{display:flex;flex-direction:column;gap:10px;margin:14px 0 4px}
+.cmp-arena{position:relative;overflow:hidden;border-radius:20px;background:linear-gradient(140deg,#0B3547 0%,#123f57 55%,#1b4e66 100%);color:#fff;box-shadow:0 10px 26px rgba(11,53,71,.25)}
+.cmp-arena::before{content:"";position:absolute;right:-40px;top:0;bottom:0;width:130px;background:var(--clay);transform:skewX(-20deg);opacity:.95}
+.cmp-lignes{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,255,255,.10) calc(50% - 1px),rgba(255,255,255,.10) calc(50% + 1px),transparent calc(50% + 1px)),linear-gradient(transparent 62%,rgba(255,255,255,.10) 62%,rgba(255,255,255,.10) calc(62% + 2px),transparent calc(62% + 2px))}
+.cmp-main{position:relative;display:flex;flex-direction:column;gap:6px;padding:20px 20px 14px;color:#fff;text-decoration:none}
+.cmp-k{font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:var(--peach)}
+.cmp-t{font-family:var(--disp);font-style:italic;font-weight:800;font-size:44px;line-height:.95;color:var(--balle);letter-spacing:.5px}
+.cmp-x{font-size:14px;color:#d8e3ec;max-width:78%}.cmp-x b{color:#fff}
+.cmp-go{font-size:14px;font-weight:700;margin-top:2px}
+.cmp-cs{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 14px 16px}
+.cmp-c{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.18)}
+.cmp-c b{font-family:var(--disp);font-style:italic;font-weight:800;font-size:19px;line-height:1}
+.cmp-c span{font-size:11px;opacity:.85}
+.cmp-double{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#8a3b1c,#c9693a);color:#fff;text-decoration:none}
+.cmp-di{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;flex:none}
+@media (min-width:768px){.cmp{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:stretch}.cmp-double{flex-direction:column;align-items:flex-start;justify-content:flex-end}.cmp-t{font-size:56px}}
+@media (min-width:1024px) and (hover:hover){.cmp-c:hover,.cmp-double:hover{filter:brightness(1.08)}}
 .pf-p{gap:8px;padding:12px 0;border-top:1px solid var(--line)}
 .pf-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pf-cr{gap:4px;padding-left:18px}.pf-cr>span{display:flex;gap:8px;align-items:center;font-size:14px}.pf-cr svg{color:var(--ac);flex:none}
@@ -452,6 +469,6 @@ button.javatar{cursor:pointer}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611110030"></script>
+<script src="app.js?v=202611110100"></script>
 </body>
 </html>

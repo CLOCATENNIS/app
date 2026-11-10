@@ -1062,8 +1062,8 @@ function blocCircuit(ci) {
   return h;
 }
 function pageJoueur(id) {
-  var retour = '<a class="back" href="#/club/competitions" data-retour style="color:#fff">' + ic('back', 20, '#fff') + 'Retour</a>';
-  if (!estAdherent()) return '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main>' + carteReservee('Fiche réservée aux adhérents du club') + '</main>';
+  var retour = '<a class="back" href="#/club" data-retour style="color:#fff">' + ic('back', 20, '#fff') + 'Retour</a>';
+  if (!estAdherent()) return '<div class="pagehead wrap">' + backLink('#/club', 'Retour') + '</div><main>' + carteReservee('Fiche réservée aux adhérents du club') + '</main>';
   setTimeout(function () {
     q(sb.rpc('profil_joueur', { p: id })).then(function (f) {
       if (!f) throw new Error('vide');
@@ -1093,7 +1093,7 @@ function pageJoueur(id) {
       if ($('jr-photo')) $('jr-photo').onclick = function () { changerPhoto(f); };
       afficherPhoto(f.photo_path, $('jr-img'));
     }).catch(function () {
-      $('app').innerHTML = '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card empty">Fiche introuvable.</section></main>';
+      $('app').innerHTML = '<div class="pagehead wrap">' + backLink('#/club', 'Retour') + '</div><main><section class="card empty">Fiche introuvable.</section></main>';
     });
   });
   return '<div style="padding:40px 16px"><div class="skel"></div></div>';
@@ -1165,29 +1165,37 @@ function demanderNiveau(f) {
 // ---------- Club ----------
 function pageClub(sous) {
   if (sous) S.clubTab = sous;
+  if (S.clubTab === 'competitions') S.clubTab = 'actus'; // l'ancien sous-onglet Compét. est remplacé par le bloc Compétitions, toujours visible
   var h = '<div class="pagehead wrap"><h1>Vie du club</h1></div><main>' +
-    '<div class="seg seg5">' + [['actus', 'Actus'], ['evenements', 'Événements'], ['competitions', 'Compét.'], ['annonces', 'Annonces'], ['infos', 'Infos']].map(function (t) {
+    '<div class="seg">' + [['actus', 'Actus'], ['evenements', 'Événements'], ['annonces', 'Annonces'], ['infos', 'Infos']].map(function (t) {
       return '<button data-ctab="' + t[0] + '" class="' + (S.clubTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>';
-    }).join('') + '</div><div id="club-main" style="display:flex;flex-direction:column;gap:12px"></div></main>';
+    }).join('') + '</div>' + blocCompetitions() + '<div id="club-main" style="display:flex;flex-direction:column;gap:12px"></div></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-ctab]'), function (b) { b.onclick = function () { go('#/club/' + b.dataset.ctab); }; });
     var box = $('club-main');
     if (S.clubTab === 'actus') box.innerHTML = clubActus();
     else if (S.clubTab === 'evenements') box.innerHTML = clubEvenements();
     else if (S.clubTab === 'infos') { box.innerHTML = clubInfos(); remplirPresence(); }
-    else if (S.clubTab === 'competitions') box.innerHTML = clubCompetitions();
     else clubAnnonces(box);
   });
   return h;
 }
-// Compétitions du club : CLOC'ARENA Tweener, CLOC'ARENA Masters, CLOC'ARENA Versus, double interne
-function clubCompetitions() {
-  var carte = function (lien, fond, kicker, titre, texte, extra) { return '<a href="' + lien + '" class="card stack" style="gap:6px;text-decoration:none;color:#fff;background:' + fond + ';border:0;padding:18px"><span class="xs" style="letter-spacing:1.3px;font-weight:700;opacity:.85">' + kicker + '</span><span class="disp" style="font-size:26px;line-height:1.05">' + titre + '</span><span class="small" style="opacity:.9">' + texte + '</span>' + (extra || '') + '<span class="small" style="font-weight:700">Entrer →</span></a>'; };
-  var niv = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<span style="width:18px;height:6px;border-radius:3px;background:' + NIV[n].bg + '"></span>'; }).join('');
-  return carte('#/arena/tweener', 'linear-gradient(135deg,#5b3a86,#c62f2f)', 'JEUNES · JUSQU\'À 17 ANS', 'CLOC\'ARENA Tweener', 'Classement, programme et résultats de la saison, du Blanc au Jaune.', '<span style="display:flex;gap:4px">' + niv + '</span>') +
-    carte('#/arena/masters', 'linear-gradient(135deg,#102f4a,#2f5b7d)', 'ADULTES', 'CLOC\'ARENA Masters', 'Le circuit des adultes : matchs, défis et classement.', '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>') +
-    carte('#/arena/versus', VERSUS_FOND, 'DÉFIS · MATCHS LIBRES FFT', 'CLOC\'ARENA Versus', 'Défie un joueur de ta catégorie et grimpe au classement de la saison.', '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>') +
-    carte('#/double', 'linear-gradient(135deg,#8a3b1c,#c9693a)', 'TOUS LES ADHÉRENTS', 'Tournoi interne de double', 'Poules, disponibilités, réservations de terrain et scores.');
+// Bloc Compétitions du Club (le phare du club) : grande case CLOC'ARENA vers la page des circuits, raccourcis Tweener / Masters / Versus,
+// puis le tournoi interne de double aligné dessous
+function blocCompetitions() {
+  var rangs = '';
+  if (S.user && S.pers.length && S.classement) {
+    var ids = S.classement.map(function (c) { return c.personne_id; });
+    rangs = S.pers.filter(function (p) { return p.niveau_arena; }).map(function (p) { var i = ids.indexOf(p.id); return i >= 0 ? esc(p.prenom) + ' <b>' + (i + 1) + (i ? 'e' : 'er') + '</b>' : null; }).filter(Boolean).join(' · ');
+  }
+  var circuit = function (lien, nom, fond, bientot) { return '<a class="cmp-c" href="' + lien + '" style="background:' + fond + '"><b>' + nom + '</b>' + (bientot ? '<span>Bientôt</span>' : '<span>En cours</span>') + '</a>'; };
+  return '<section class="cmp">' +
+    '<div class="cmp-arena"><span class="cmp-lignes" aria-hidden="true"></span>' +
+      '<a class="cmp-main" href="#/arena"><span class="cmp-k">LE CIRCUIT PHARE DU CLUB</span><span class="cmp-t">CLOC\'ARENA</span>' +
+      '<span class="cmp-x">' + (rangs ? 'Au classement : ' + rangs : 'Classements, défis et résultats toute la saison') + '</span><span class="cmp-go">Entrer dans l\'arène →</span></a>' +
+      '<div class="cmp-cs">' + circuit('#/arena/tweener', 'Tweener', 'linear-gradient(135deg,#5b3a86,#c62f2f)', false) + circuit('#/arena/masters', 'Masters', 'linear-gradient(135deg,#1d4a6e,#3b6f96)', true) + circuit('#/arena/versus', 'Versus', VERSUS_FOND, true) + '</div></div>' +
+    '<a class="cmp-double" href="#/double"><span class="cmp-di">' + ic('trophy', 24, '#fff') + '</span><span class="stack" style="gap:2px;flex:1;min-width:0"><b>Tournoi interne de double</b><span class="small" style="opacity:.9">Poules, dispos, réservations et scores</span></span><span aria-hidden="true" style="font-size:20px">→</span></a>' +
+    '</section>';
 }
 function imgActu(a) { var img = safeUrl(a.image_url); return img && !/drive\.google\.com\/file/.test(img) ? img : ''; }
 // Carte courte : titre, début du texte, et un appel à ouvrir l'actu en entier
