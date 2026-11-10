@@ -1121,10 +1121,10 @@ function annonceForm(box, m) {
 // ---------- Discussions (fils de groupe dans l'appli, à la place des groupes WhatsApp) ----------
 // Chaque fil a une source (tout le monde, des groupes, une poule du double, Next Gen, ou à la main).
 // Les membres se mettent à jour à partir de la source ; les ajouts et retraits manuels sont gardés.
-// Un fil « en test » n'est visible que par la direction : on l'ouvre aux membres quand il est prêt.
+// Un fil « hors ligne » n'apparaît dans l'appli pour personne (direction comprise) : on le met en ligne quand il est prêt.
 var SRC_DISC = { tous: 'Tous les comptes', groupe: 'Un ou plusieurs groupes', double: 'Une poule du double interne', nextgen: 'Les jeunes Next Gen', manuel: 'Choisis à la main' };
 function vueDiscussions(m) {
-  m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>en test</b> n\'est visible que par la direction ; ouvre-le aux membres quand il est prêt.', '<button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>hors ligne</b> n\'apparaît dans l\'appli pour personne, direction comprise (« Voir le fil » permet de le prévisualiser) ; mets-le en ligne quand il est prêt.', '<button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
   $('dg-new').onclick = function () { discForm(null, function () { vueDiscussions(m); }); };
   q(sb.rpc('discussions_synchroniser_tout')).catch(function () { }).then(function () {
     return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').neq('type', 'prive').order('categorie', { nullsFirst: false }).order('ordre').order('nom')), chargerGroupes(),
@@ -1138,14 +1138,14 @@ function vueDiscussions(m) {
       return SRC_DISC[d.source];
     };
     var ouverts = L.filter(function (d) { return d.ouvert && !d.archive; }).length;
-    $('dg-l').innerHTML = '<div class="kpis"><div class="kpi"><b>' + L.filter(function (d) { return !d.archive; }).length + '</b><span>fils</span></div><div class="kpi"><b>' + ouverts + '</b><span>ouverts aux membres</span></div><div class="kpi"><b>' + L.filter(function (d) { return !d.ouvert && !d.archive; }).length + '</b><span>en test</span></div></div>' +
+    $('dg-l').innerHTML = '<div class="kpis"><div class="kpi"><b>' + L.filter(function (d) { return !d.archive; }).length + '</b><span>fils</span></div><div class="kpi"><b>' + ouverts + '</b><span>en ligne</span></div><div class="kpi"><b>' + L.filter(function (d) { return !d.ouvert && !d.archive; }).length + '</b><span>hors ligne</span></div></div>' +
       (L.length ? '<div class="tw"><table class="t"><thead><tr><th>Fil</th><th>Qui est dedans</th><th>Membres</th><th>Écriture</th><th>État</th><th></th></tr></thead><tbody>' + L.map(function (d) {
         var n = (d.discussion_membres || []).filter(function (x) { return !x.exclu; }).length;
         return '<tr><td>' + (d.categorie ? '<span class="xs mut" style="text-transform:uppercase;letter-spacing:.5px">' + esc(d.categorie) + '</span><br>' : '') + '<b>' + esc(d.nom) + '</b>' + (der[d.id] ? '<div class="mut xs">Dernier message le ' + esc(fmtJ(new Date(der[d.id]))) + '</div>' : '<div class="mut xs">Pas encore de message</div>') + '</td>' +
           '<td class="small">' + esc(srcTxt(d)) + (d.jeunes ? '<div class="xs mut">Comptes jeunes acceptés</div>' : '') + '</td><td><button class="btn sm ghost" data-dgm="' + d.id + '">' + n + ' membre' + (n > 1 ? 's' : '') + '</button></td>' +
           '<td class="small">' + (d.ecriture === 'admins' ? 'L\'équipe du club seulement' : 'Tout le monde') + '</td>' +
-          '<td>' + (d.archive ? '<span class="badge">Archivé</span>' : d.ouvert ? '<span class="badge b-ok">Ouvert</span>' : '<span class="badge b-warn">En test</span>') + '</td>' +
-          '<td class="act">' + (!d.archive ? '<button class="btn sm ' + (d.ouvert ? 'line' : 'ok') + '" data-dgo="' + d.id + '">' + (d.ouvert ? 'Repasser en test' : 'Ouvrir aux membres') + '</button> ' : '') +
+          '<td>' + (d.archive ? '<span class="badge">Archivé</span>' : d.ouvert ? '<span class="badge b-ok">En ligne</span>' : '<span class="badge b-warn">Hors ligne</span>') + '</td>' +
+          '<td class="act">' + (!d.archive ? '<button class="btn sm ' + (d.ouvert ? 'line' : 'ok') + '" data-dgo="' + d.id + '">' + (d.ouvert ? 'Retirer de l\'appli' : 'Mettre en ligne') + '</button> ' : '') +
           '<a class="btn sm line" href="../#/discussion/' + d.id + '" target="_blank" rel="noopener">Voir le fil</a> <button class="btn sm line" data-dge="' + d.id + '">Modifier</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun fil pour le moment. Crée le premier avec « Nouveau fil ».</div>') +
       '<div class="card small mut" style="margin-top:14px">Les membres se mettent à jour tout seuls à partir de la source (groupes, poules, Next Gen) à chaque ouverture de cette page. Les comptes jeunes (mineurs avec leur propre compte) n\'entrent que dans les fils qui les acceptent ; les parents voient les fils des groupes de leurs enfants. Il n\'y a pas de messages privés : uniquement des fils de groupe, où la direction est toujours présente.</div>';
@@ -1155,8 +1155,9 @@ function vueDiscussions(m) {
     all('[data-dgo]').forEach(function (b) {
       b.onclick = function () {
         var d = get(b.dataset.dgo), n = (d.discussion_membres || []).filter(function (x) { return !x.exclu; }).length;
-        if (!d.ouvert && !confirm('Ouvrir « ' + d.nom + ' » à ses ' + n + ' membres ?\n\nIls verront le fil dans l\'appli (rubrique Discussions) et recevront les notifications des nouveaux messages.')) return;
-        q(sb.from('discussions').update({ ouvert: !d.ouvert }).eq('id', d.id)).then(function () { toast(d.ouvert ? 'Fil repassé en test' : 'Fil ouvert aux membres'); vueDiscussions(m); }).catch(function () { toast('Action impossible'); });
+        if (!d.ouvert && !confirm('Mettre « ' + d.nom + ' » en ligne pour ses ' + n + ' membres ?\n\nIls verront le fil dans l\'appli (onglet Messages) et recevront les notifications des nouveaux messages.')) return;
+        if (d.ouvert && !confirm('Retirer « ' + d.nom + ' » de l\'appli ?\n\nLe fil disparaît de l\'appli pour tout le monde, direction comprise. Les messages sont gardés : tu pourras le remettre en ligne.')) return;
+        q(sb.from('discussions').update({ ouvert: !d.ouvert }).eq('id', d.id)).then(function () { toast(d.ouvert ? 'Fil retiré de l\'appli' : 'Fil en ligne'); vueDiscussions(m); }).catch(function () { toast('Action impossible'); });
       };
     });
     etiqueterTableaux();
@@ -1185,7 +1186,7 @@ function discForm(d, apres) {
         (src === 'tous' ? '<span class="mut xs">Tous les comptes de l\'appli, y compris les nouveaux.</span>' : '') +
         '<label class="l">Qui peut écrire ?<select class="f" id="dgf-ecr"><option value="tous"' + (F.ecriture === 'tous' ? ' selected' : '') + '>Tout le monde dans le fil</option><option value="admins"' + (F.ecriture === 'admins' ? ' selected' : '') + '>L\'équipe du club seulement (fil d\'annonces)</option></select></label>' +
         '<label class="c"><input type="checkbox" id="dgf-jeunes"' + (F.jeunes ? ' checked' : '') + '>Accepter les comptes jeunes (mineurs avec leur propre compte)</label>' +
-        '<label class="c"><input type="checkbox" id="dgf-ouvert"' + (F.ouvert ? ' checked' : '') + '>Ouvert aux membres (sinon : en test, visible seulement par la direction)</label>' +
+        '<label class="c"><input type="checkbox" id="dgf-ouvert"' + (F.ouvert ? ' checked' : '') + '>En ligne dans l\'appli (sinon : hors ligne, invisible pour tout le monde, direction comprise)</label>' +
         (d ? '<label class="c"><input type="checkbox" id="dgf-arch"' + (F.archive ? ' checked' : '') + '>Archivé (plus personne ne peut écrire, le fil disparaît de cette liste de synchro)</label>' : '') +
         '<label class="l">Ordre d\'affichage (petit = en haut)<input class="f" id="dgf-ordre" type="number" min="0" max="999" value="' + esc(F.ordre) + '"></label>' +
         '<div class="chips" style="justify-content:space-between">' + (d ? '<button class="btn ko" id="dgf-sup">Supprimer le fil</button>' : '<span></span>') + '<button class="btn" id="dgf-ok">' + (d ? 'Enregistrer' : 'Créer le fil') + '</button></div></div>', function (root) {

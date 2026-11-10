@@ -332,7 +332,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '11/11 profil';
+var VERSION_APPLI = '11/11 00h30';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -441,6 +441,18 @@ function pageMonAccueil() {
   });
   return h;
 }
+// Sous-textes des raccourcis (inscriptions ouvertes, rang CLOC'ARENA, cordage…)
+function dynRaccourcis() {
+  var ouverts = (S.evts || []).filter(function (e) { return inscOuverte(e) && (!S.user || !S.pers.length || eligibles(e).length); }).length;
+  var arenaTxt = 'Classements et programme';
+  if (S.user && S.pers.length && S.classement) {
+    var rangs = S.pers.filter(function (p) { return p.niveau_arena; }).map(function (p) {
+      var i = S.classement.map(function (c) { return c.personne_id; }).indexOf(p.id); return i >= 0 ? esc(p.prenom) + ' ' + (i + 1) + (i ? 'e' : 'er') : null;
+    }).filter(Boolean);
+    if (rangs.length) arenaTxt = rangs.join(' · ');
+  }
+  return { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' };
+}
 // Zone « Mes raccourcis » de l'accueil : affichage normal, ou mode modification (crayon) pour déplacer, retirer, réajouter
 function zoneRaccourcis(cfg, dyn) {
   var peut = S.user && !S.apercu, E = peut && S.accEd;
@@ -467,46 +479,67 @@ function zoneRaccourcis(cfg, dyn) {
     '<div class="grid2"><button class="btn line" id="acc-annul">Annuler</button><button class="btn" id="acc-ok">Terminer</button></div>' +
     '<button class="btn ghost" id="acc-raz" style="min-height:36px">Revenir aux raccourcis du club</button></section>';
 }
+// Mode crayon : seule la zone des raccourcis est redessinée (l'écran ne bouge pas, rien d'autre ne se recharge)
+function majRaccourcis(montrer) {
+  var z = $('acc-rac'); if (!z) return render();
+  var haut = z.getBoundingClientRect().top, tmp = document.createElement('div');
+  tmp.innerHTML = zoneRaccourcis(accueilPerso(accueilCfg()), dynRaccourcis());
+  var neuf = tmp.firstElementChild; if (!neuf) return render();
+  z.replaceWith(neuf); window.scrollBy(0, neuf.getBoundingClientRect().top - haut); // la zone reste au même endroit à l'écran
+  if (montrer) { var t = neuf.getBoundingClientRect().top; if (t < 70) window.scrollBy(0, t - 80); } // après Terminer / Annuler : on voit ses raccourcis rangés
+  lierRaccourcis();
+}
 function lierRaccourcis() {
   var vu = function () { localStorageSet('cloca-crayon-vu', '1'); };
-  if ($('acc-bulle-ok')) $('acc-bulle-ok').onclick = function () { vu(); render(); };
+  if ($('acc-bulle-ok')) $('acc-bulle-ok').onclick = function () { vu(); majRaccourcis(); };
   if ($('acc-bulle-go')) $('acc-bulle-go').onclick = function () { ouvrir(); };
-  var ouvrir = function () { vu(); S.accEd = monAccueilBrouillon(); render(); setTimeout(function () { var z = $('acc-rac'); if (z && z.scrollIntoView) z.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50); };
+  var ouvrir = function () { vu(); S.accEd = monAccueilBrouillon(); majRaccourcis(); };
   if ($('acc-ed')) $('acc-ed').onclick = ouvrir;
   if ($('acc-ed2')) $('acc-ed2').onclick = ouvrir;
   var E = S.accEd; if (!E || !$('acc-rac')) return;
-  Array.prototype.forEach.call(document.querySelectorAll('[data-acx]'), function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.acx; E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); render(); }; });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-aca]'), function (b) { b.onclick = function () { E.tuiles.push(b.dataset.aca); render(); }; });
-  $('acc-annul').onclick = function () { S.accEd = null; render(); };
-  $('acc-ok').onclick = function () { var b = this; b.disabled = true; enregistrerMonAccueil(E, function () { S.accEd = null; toast('Raccourcis enregistrés'); render(); }); setTimeout(function () { b.disabled = false; }, 3000); };
-  $('acc-raz').onclick = function () { retablirAccueilClub(function () { S.accEd = null; toast('Raccourcis du club rétablis'); render(); }); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-acx]'), function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.acx; E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); majRaccourcis(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-aca]'), function (b) { b.onclick = function () { E.tuiles.push(b.dataset.aca); majRaccourcis(); }; });
+  $('acc-annul').onclick = function () { S.accEd = null; majRaccourcis(true); };
+  $('acc-ok').onclick = function () { var b = this; b.disabled = true; enregistrerMonAccueil(E, function () { S.accEd = null; toast('Raccourcis enregistrés'); majRaccourcis(true); }); setTimeout(function () { b.disabled = false; }, 3000); };
+  $('acc-raz').onclick = function () { retablirAccueilClub(function () { S.accEd = null; toast('Raccourcis du club rétablis'); majRaccourcis(true); }); };
   // Glisser-déposer (doigt ou souris) : la case suit le doigt et prend la place de celle survolée
   var g = $('acc-grille'); if (!g) return;
   var drag = null;
+  var bouger = function () {
+    if (!drag) return; drag.raf = 0;
+    var el = drag.el, x = drag.cx, y = drag.cy;
+    var cible = document.elementsFromPoint(x, y).filter(function (n) { return n !== el && n.classList && n.classList.contains('acc-t'); })[0];
+    if (cible) {
+      var l0 = el.offsetLeft, t0 = el.offsetTop, liste = Array.prototype.slice.call(g.children);
+      g.insertBefore(el, liste.indexOf(cible) > liste.indexOf(el) ? cible.nextSibling : cible);
+      drag.x += el.offsetLeft - l0; drag.y += el.offsetTop - t0;
+    }
+    el.style.transform = 'translate3d(' + (x - drag.x) + 'px,' + (y - drag.y) + 'px,0)';
+  };
+  // les mouvements sont suivis sur toute la fenêtre : la case change de place dans la grille sans « lâcher » le doigt
+  var bougerEv = function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.on) { if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 6) return; drag.on = true; drag.el.classList.add('drag'); g.classList.add('en-cours'); }
+    if (e.cancelable) e.preventDefault();
+    drag.cx = e.clientX; drag.cy = e.clientY;
+    if (!drag.raf) drag.raf = requestAnimationFrame(bouger);
+  };
+  var finEv = function (e) {
+    if (!drag || (e && e.pointerId !== drag.id)) return;
+    window.removeEventListener('pointermove', bougerEv); window.removeEventListener('pointerup', finEv); window.removeEventListener('pointercancel', finEv);
+    if (drag.raf) cancelAnimationFrame(drag.raf);
+    var el = drag.el; el.style.transform = ''; el.classList.remove('drag'); g.classList.remove('en-cours');
+    if (drag.on) E.tuiles = Array.prototype.map.call(g.querySelectorAll('.acc-t'), function (x) { return x.dataset.k; });
+    drag = null;
+  };
   Array.prototype.forEach.call(g.querySelectorAll('.acc-t'), function (el) {
     el.addEventListener('pointerdown', function (e) {
-      if (e.target.closest('.acc-x') || (e.button && e.button !== 0)) return;
-      drag = { el: el, x: e.clientX, y: e.clientY, on: false }; try { el.setPointerCapture(e.pointerId); } catch (x) { }
-    });
-    el.addEventListener('pointermove', function (e) {
-      if (!drag || drag.el !== el) return;
-      if (!drag.on) { if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 6) return; drag.on = true; el.classList.add('drag'); }
+      if (drag || e.target.closest('.acc-x') || (e.button && e.button !== 0)) return;
       e.preventDefault();
-      var cible = document.elementsFromPoint(e.clientX, e.clientY).filter(function (x) { return x !== el && x.classList && x.classList.contains('acc-t'); })[0];
-      if (cible) {
-        var l0 = el.offsetLeft, t0 = el.offsetTop, liste = Array.prototype.slice.call(g.children);
-        g.insertBefore(el, liste.indexOf(cible) > liste.indexOf(el) ? cible.nextSibling : cible);
-        drag.x += el.offsetLeft - l0; drag.y += el.offsetTop - t0;
-      }
-      el.style.transform = 'translate(' + (e.clientX - drag.x) + 'px,' + (e.clientY - drag.y) + 'px)';
+      drag = { el: el, id: e.pointerId, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, on: false, raf: 0 };
+      window.addEventListener('pointermove', bougerEv, { passive: false }); window.addEventListener('pointerup', finEv); window.addEventListener('pointercancel', finEv);
     });
-    var fin = function () {
-      if (!drag || drag.el !== el) return;
-      el.style.transform = ''; el.classList.remove('drag');
-      if (drag.on) E.tuiles = Array.prototype.map.call(g.querySelectorAll('.acc-t'), function (x) { return x.dataset.k; });
-      drag = null;
-    };
-    el.addEventListener('pointerup', fin); el.addEventListener('pointercancel', fin);
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
 }
 // Rangée du haut : Club house (petite case, 25 %) + Prochain rendez-vous (75 %)
@@ -567,18 +600,9 @@ function pageAccueil() {
   var rep = prochain && prochain.id ? boutonsPart((S.evts || []).filter(function (x) { return x.id === prochain.id; })[0] || {}, prochain.qui) : '';
   P.repRdv = rep ? '<section class="card stack" style="gap:6px;padding:12px 14px"><span class="small">Tu viens à <b>' + esc(prochain.titre) + '</b> ?</span>' + rep + '</section>' : '';
 
-  // Raccourcis
-  var ouverts = (S.evts || []).filter(function (e) { return inscOuverte(e) && (!S.user || !S.pers.length || eligibles(e).length); }).length;
-  var arenaTxt = 'Classements et programme';
-  if (S.user && S.pers.length && S.classement) {
-    var rangs = S.pers.filter(function (p) { return p.niveau_arena; }).map(function (p) {
-      var i = S.classement.map(function (c) { return c.personne_id; }).indexOf(p.id); return i >= 0 ? esc(p.prenom) + ' ' + (i + 1) + (i ? 'e' : 'er') : null;
-    }).filter(Boolean);
-    if (rangs.length) arenaTxt = rangs.join(' · ');
-  }
   var cfg = accueilPerso(accueilCfg());
   P.arena = carteArenaAccueil();
-  P.tiles = zoneRaccourcis(cfg, { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' });
+  P.tiles = zoneRaccourcis(cfg, dynRaccourcis());
   P.mot = motDuClub(cfg);
   if (!S.user) P.login = '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
     '<ol class="small" style="margin:0;padding-left:20px;line-height:1.7"><li>Tape l\'adresse mail donnée au club</li><li>Ouvre le mail : tu reçois un code</li><li>Tape le code : c\'est fait !</li></ol>' +
@@ -2182,7 +2206,7 @@ function pageProfil() {
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
   if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
-    (estCoach() ? '<a class="btn ghost" href="#/coach">Mon espace coach</a>' : '') +
+    (estCoach() && !S.isDir ? '<a class="btn ghost" href="#/coach">Mon espace coach</a>' : '') +
 '</section>';
   if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
     '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
@@ -3793,13 +3817,13 @@ function chargerQuestionnaire(id, choix) {
 
 // ---------- Routeur ----------
 // ---------- Discussions : un fil par groupe (remplace les groupes WhatsApp) ----------
-// Les droits (qui lit, qui écrit) sont appliqués par la base. Un fil « en test » n'est visible que par la direction.
+// Les droits (qui lit, qui écrit) sont appliqués par la base. Un fil « hors ligne » (réglé dans la gestion) n'apparaît dans l'appli pour personne, direction comprise.
 var DISC = { id: null, msgs: [], canal: null, tout: false, luT: null };
 function chargerDiscussions() {
-  S.discs = [];
+  S.discs = []; S.discsHors = [];
   if (!S.user || S.apercu) return Promise.resolve();
   // Fils archivés masqués (double interne, anciens fils…) ; une conversation privée bloquée reste visible de ses deux membres
-  return q(sb.rpc('mes_discussions')).then(function (l) { S.discs = (l || []).filter(function (d) { return !d.archive || d.type === 'prive'; }); }).catch(function () { S.discs = []; });
+  return q(sb.rpc('mes_discussions')).then(function (l) { l = l || []; S.discs = l.filter(function (d) { return d.type === 'prive' || (!d.archive && d.ouvert); }); S.discsHors = l.filter(function (d) { return d.type !== 'prive' && !d.archive && !d.ouvert; }); }).catch(function () { S.discs = []; });
 }
 function discNonLus() { return (S.discs || []).reduce(function (s, d) { return s + (d.muet ? 0 : d.non_lus || 0); }, 0); }
 function discCouleur(t) { var h = 0; String(t || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 360; }); return 'hsl(' + h + ',45%,42%)'; }
@@ -3901,11 +3925,13 @@ function pageDiscussions() {
   return h + '<div id="disc-l" class="stack" style="gap:12px">' + discListeHtml() + '</div></main>';
 }
 function pageDiscussion(id) {
-  var d = (S.discs || []).filter(function (x) { return x.id === id; })[0];
+  // un fil hors ligne n'est jamais listé, mais la direction peut l'ouvrir depuis la gestion (« Voir le fil ») pour le préparer
+  var trouve = function () { return (S.discs || []).concat(S.discsHors || []).filter(function (x) { return x.id === id; })[0]; };
+  var d = trouve();
   if (!S.user) return '<div class="pagehead wrap">' + backLink('#/messages', 'Messages') + '</div><main><section class="card empty">Connecte-toi pour voir cette discussion.</section></main>';
   if (!d) {
     // Arrivée directe (notification) : on recharge la liste avant d'afficher
-    setTimeout(function () { chargerDiscussions().then(function () { if ((S.discs || []).some(function (x) { return x.id === id; })) render(); else if ($('disc-fil')) $('disc-fil').innerHTML = '<section class="card empty">Cette discussion n\'existe plus ou ne te concerne pas.</section>'; }); });
+    setTimeout(function () { chargerDiscussions().then(function () { if (trouve()) render(); else if ($('disc-fil')) $('disc-fil').innerHTML = '<section class="card empty">Cette discussion n\'existe plus ou ne te concerne pas.</section>'; }); });
     return '<div class="pagehead wrap">' + backLink('#/messages', 'Messages') + '</div><main><div id="disc-fil"><div class="card empty">Chargement…</div></div></main>';
   }
   var prive = d.type === 'prive';
@@ -3918,7 +3944,7 @@ function pageDiscussion(id) {
   // Conversation privée liée à une petite annonce : rappel des règles et lien vers l'annonce
   if (prive) h += '<div class="card small stack" style="gap:6px;margin:10px 0 4px;background:var(--soft);border-color:var(--soft)"><span>' + ic('lock', 15) + ' Conversation privée avec <b>' + esc(d.nom) + '</b>, à propos de son annonce. Reste courtois : en cas de signalement, la direction du club peut lire cette conversation.</span>' +
     '<a href="#/club/annonces" style="color:var(--ac);font-weight:600">Voir l\'annonce n°' + d.annonce_num + (d.annonce_prix ? ' · ' + esc(d.annonce_prix) : '') + '</a></div>';
-  if (!d.ouvert) h += '<div class="card small" style="background:var(--sun);border-color:var(--peach);color:#5a2a14;margin-bottom:10px"><b>En test</b> : ce fil n\'est visible que par la direction. Ouvre-le aux membres depuis l\'espace gestion quand il est prêt.</div>';
+  if (!d.ouvert && d.type !== 'prive') h += '<div class="card small" style="background:var(--sun);border-color:var(--peach);color:#5a2a14;margin-bottom:10px"><b>Hors ligne</b> : ce fil n\'apparaît dans l\'appli pour personne. Tu le vois ici parce que tu l\'as ouvert depuis la gestion ; mets-le en ligne depuis Gestion → Discussions.</div>';
   if (d.description) h += '<p class="xs mut" style="text-align:center;margin:4px 0 8px">' + esc(d.description) + '</p>';
   h += '<div id="disc-fil" class="dfil"><div class="card empty">Chargement…</div></div></main>';
   if (d.peut_ecrire) h += '<form class="dcompo" id="disc-f"><textarea id="disc-t" rows="1" maxlength="2000" placeholder="Écrire un message" aria-label="Message"></textarea><button type="submit" aria-label="Envoyer">' + ic('send', 20, '#fff') + '</button></form>';
