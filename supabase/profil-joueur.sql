@@ -265,3 +265,7 @@ begin
 end $$;
 revoke all on function public.photo_definir(uuid, text) from public, anon;
 grant execute on function public.photo_definir(uuid, text) to authenticated;
+
+-- ---------- 5. Droits de colonne (annonces : seules certaines colonnes sont ouvertes) ----------
+grant select (personne_id) on public.annonces to anon, authenticated;
+grant insert (personne_id) on public.annonces to authenticated;
