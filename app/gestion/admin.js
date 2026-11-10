@@ -2749,9 +2749,24 @@ function lireFft(XLSX, buf) {
 }
 function nvImportFft() {
   $('nv-l').innerHTML = '<div class="two"><div class="card stack"><b>1. Exporter depuis ADOC</b><span class="small">Le même export que pour la mise à jour des adhérents (<b>Adhérents → Gestion → Résultats</b>, bouton <b>Excel</b>), avec la colonne du <b>classement</b> (et, si ADOC la propose, le <b>meilleur classement</b>).</span>' +
+    '<div class="stack" style="gap:6px;background:var(--soft);border-radius:12px;padding:10px 12px"><b class="small">Colonnes à mettre dans l\'Excel</b>' +
+      '<table class="t" style="font-size:13px"><thead><tr><th>Colonne</th><th>Obligatoire</th><th>À quoi elle sert</th></tr></thead><tbody>' +
+      '<tr><td><b>Licence</b></td><td>Oui</td><td>Retrouver le joueur dans l\'appli</td></tr>' +
+      '<tr><td><b>Nom</b> et <b>Prénom</b></td><td>Conseillé</td><td>Retrouver le joueur si sa licence n\'est pas dans l\'appli</td></tr>' +
+      '<tr><td><b>Classement</b></td><td>Oui</td><td>Classement FFT actuel</td></tr>' +
+      '<tr><td><b>Meilleur classement</b></td><td>Non</td><td>Si absent, l\'appli le calcule au fil des imports</td></tr></tbody></table>' +
+      '<span class="xs mut">Les autres colonnes de l\'export sont ignorées, l\'ordre n\'a pas d\'importance. Valeurs comme sur Ten\'Up : NC, 40, 30/5, 30/2, 30, 15/4, 15, 5/6, 0, -15… Case vide = on ne touche pas. Évite une 2e colonne « Ancien classement ». Feuille « Détaillé » (export ADOC) ou la première feuille ; en-têtes dans les 8 premières lignes.</span>' +
+      '<button class="btn sm line" id="ff-modele" style="align-self:flex-start">Télécharger un modèle Excel vide</button></div>' +
     '<b>2. Le déposer ici</b><input class="f" type="file" id="ff-f" accept=".xls,.xlsx,.csv"><div id="ff-r"></div></div>' +
     '<div class="card stack"><b>Ce que fait l\'import</b><span class="small">• Retrouve chaque joueur par sa licence (sinon nom et prénom).<br>• Met à jour son classement FFT actuel.<br>• Garde toujours le <b>meilleur</b> classement connu : il ne baisse jamais.<br>• Tu vois tous les changements avant de valider.</span>' +
     '<b>Ce qu\'il ne touche jamais</b><span class="small">Le niveau club, fixé par la direction sportive, et tout le reste de la fiche.</span></div></div>';
+  $('ff-modele').onclick = function () {
+    chargerXlsx().then(function (X) {
+      var ws = X.utils.aoa_to_sheet([['Licence', 'Nom', 'Prénom', 'Classement', 'Meilleur classement'], ['1234567A', 'MARTIN', 'Léa', '30/2', '30/1']]);
+      ws['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 20 }];
+      var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Détaillé'); X.writeFile(wb, 'modele-classements-fft.xlsx');
+    }).catch(function () { toast('Téléchargement impossible'); });
+  };
   $('ff-f').onchange = function () {
     var f = this.files[0]; if (!f) return;
     $('ff-r').innerHTML = '<div class="skel"></div>';
