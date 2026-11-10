@@ -330,7 +330,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '10/11 17h40';
+var VERSION_APPLI = '10/11 18h15';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -2015,7 +2015,7 @@ function pageProfil() {
     h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">' + (S.pers.length > 1 ? 'Ma famille' : 'Mon profil') + '</div>' + S.pers.map(function (p) {
       var gs = (p.groupe_membres || []).filter(function (g) { return g.groupes && g.groupes.type !== 'profil'; }).map(function (g) { return groupeBadge(g.groupes); }).join(' ');
       return '<div class="stack" style="gap:8px;padding:12px 0;border-top:1px solid var(--line)"><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b></span>' + (gs ? '<span style="display:flex;gap:6px;flex-wrap:wrap;padding-left:18px">' + gs + '</span>' : '') + '</div>' +
-        '<a href="#/joueur/' + p.id + '" class="small" style="display:flex;gap:8px;align-items:center;padding:0 0 10px 18px;font-weight:600">' + nivClubBadge(p.niveau_club) + ' Voir la fiche joueur →</a>';
+        '<a href="#/joueur/' + p.id + '" class="small" style="display:flex;gap:8px;align-items:center;padding:0 0 10px 18px;font-weight:600;text-decoration:none">' + nivClubBadge(p.niveau_club) + ' <span style="text-decoration:underline">Voir la fiche joueur →</span></a>';
     }).join('') + '</section>';
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
   if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
