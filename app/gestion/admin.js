@@ -22,6 +22,7 @@ var MODULES = [
   ['adherents', 'Adhérents', ['direction', 'bureau', 'accueil']],
   ['adoc', 'Mise à jour ADOC', ['direction', 'bureau']],
   ['groupes', 'Groupes', ['direction', 'bureau']],
+  ['niveaux', 'Niveaux des joueurs', ['direction']],
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['boutique', 'Boutique et ardoise', ['direction', 'bureau', 'accueil']],
@@ -42,13 +43,14 @@ var RUBRIQUES = [
   ['', ['accueil']],
   ['Communication', ['messages', 'discussions', 'questionnaires', 'actus', 'accueilapp', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, discussions de groupe, questionnaires, actus, réseaux sociaux et petites annonces.'],
   ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'CLOC\'ARENA, inscriptions, événements (fête de Noël, tombola, stages…), présence au club.'],
-  ['Adhérents', ['adherents', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, groupes et cours, mise à jour depuis ADOC.'],
+  ['Adhérents', ['adherents', 'niveaux', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, niveaux des joueurs, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
   ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
   ['Administration', ['reglages', 'equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
+  niveaux: 'Niveau club et classement FFT de chaque joueur, demandes de changement de niveau envoyées par les familles.',
   accueil: 'Ce qui demande ton attention aujourd\'hui.', discussions: 'Les fils de groupe de l\'appli (annonces, CLOC\'ARENA, poules, équipes…) qui remplacent les groupes WhatsApp.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
   reseaux: 'Mettre en avant des publications Instagram et Facebook.', accueilapp: 'Mot du club, ordre des blocs, raccourcis, partenaires et questions fréquentes de l\'appli.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Organiser les séances CLOC\'ARENA : dates, groupes, places.',
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël, tombola, stages, animations et tournois : chaque catégorie a sa page.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
@@ -149,7 +151,7 @@ function chargerGroupes(force) {
 }
 function chargerPers(force) {
   if (A.pers && !force) return Promise.resolve(A.pers);
-  return q(sb.from('personnes').select('id, prenom, nom, profil, sexe, date_naissance, cours, cotisation_a_jour, foyer_id, actif, niveau_arena, adoc_id, email, arena_id, groupe_membres(groupe_id)').order('nom').order('prenom'))
+  return q(sb.from('personnes').select('id, prenom, nom, profil, sexe, date_naissance, cours, cotisation_a_jour, foyer_id, actif, niveau_arena, niveau_club, classement_fft, meilleur_classement_fft, adoc_id, email, arena_id, groupe_membres(groupe_id)').order('nom').order('prenom'))
     .then(function (l) { A.pers = l || []; return A.pers; });
 }
 function nomGroupe(id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g ? g.nom : '?'; }
@@ -185,6 +187,7 @@ function compteurs() {
   if (peut('annonces')) p.push(nb(sb.from('annonces').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.annonces = n; }).catch(function () { }));
   if (peut('cordage')) p.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.cordage = n; }).catch(function () { }));
   if (peut('adherents')) p.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { c.adherents = (l || []).length; }).catch(function () { }));
+  if (peut('niveaux')) p.push(nb(sb.from('niveau_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.niveaux = n; }).catch(function () { }));
   if (peut('retours')) p.push(nb(sb.from('retours').select('id', { count: 'exact', head: true }).eq('statut', 'nouveau')).then(function (n) { c.retours = n; }).catch(function () { }));
   if (peut('double')) p.push(nb(sb.from('double_reservations').select('id', { count: 'exact', head: true }).eq('statut', 'demande')).then(function (n) { c.double = n; }).catch(function () { }));
   return Promise.all(p).then(function () { return c; });
@@ -654,6 +657,8 @@ function vueAdherents(m, arg) {
         '<div class="card small">' + (p.date_naissance ? 'Né(e) le ' + esc(fmtJour(new Date(p.date_naissance + 'T12:00:00'))) + ' · ' + age(p.date_naissance) + ' ans<br>' : '') + (p.adoc_id ? 'Licence ' + esc(p.adoc_id) + '<br>' : '') + (p.email ? 'Mail : ' + esc(p.email) + '<br>' : '') + (p.cours ? 'Cours ADOC : ' + esc(p.cours) : '') + '</div>' +
         '<label class="c"><input type="checkbox" id="f-c"' + (p.cotisation_a_jour ? ' checked' : '') + '>Cotisation à jour</label>' +
         '<label class="l">Niveau CLOC\'ARENA' + (aRole('direction') ? '' : ' (modifiable par la direction sportive)') + '<select class="f" id="f-n"' + (aRole('direction') ? '' : ' disabled') + '><option value="">Aucun</option>' + ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].map(function (n) { return '<option' + (p.niveau_arena === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+        '<div class="sect">Fiche joueur</div><div class="row3"><label class="l">Niveau club' + selectBareme('f-nc', p.niveau_club, !aRole('direction')) + '</label><label class="l">Classement FFT<input class="f" id="f-fft" maxlength="8" placeholder="Ex. 30/2" value="' + esc(p.classement_fft || '') + '"' + (aRole('direction') ? '' : ' disabled') + '></label><label class="l">Meilleur classement<input class="f" id="f-fftm" maxlength="8" placeholder="Ex. 30/1" value="' + esc(p.meilleur_classement_fft || '') + '"' + (aRole('direction') ? '' : ' disabled') + '></label></div>' +
+        '<span class="mut xs">Visible sur la fiche joueur par les adhérents connectés (« Prénom N. », âge, niveau club, classement FFT, CLOC\'ARENA).</span>' +
         '<div class="sect">Groupes</div><span class="mut xs">Le groupe CLOC\'ARENA suit automatiquement le niveau choisi au-dessus.</span>' + choixGroupes(gsel, 'fg', 'niveau') + '<button class="btn" id="f-ok">Enregistrer</button>' +
         '<div class="sect">Famille</div><div class="card list">' + r[0].map(function (x) { return '<div class="it"><span>' + esc(x.prenom + ' ' + x.nom) + '</span><span class="mut xs">' + age(x.date_naissance) + ' ans</span></div>'; }).join('') + '</div>' +
         '<div class="sect">Adresses qui ouvrent l\'espace famille</div><div class="card list">' + (r[1].length ? r[1].map(function (a) {
@@ -668,6 +673,7 @@ function vueAdherents(m, arg) {
           var ajout = gs.filter(function (g) { return avant.indexOf(g) < 0; }), retrait = avant.filter(function (g) { return gs.indexOf(g) < 0; });
           $('f-ok').disabled = true;
           var ch = { cotisation_a_jour: $('f-c').checked }; if (aRole('direction') && ($('f-n').value || null) !== (p.niveau_arena || null)) ch.niveau_arena = $('f-n').value || null;
+          if (aRole('direction')) { ch.niveau_club = $('f-nc').value || null; ch.classement_fft = $('f-fft').value.trim() || null; ch.meilleur_classement_fft = $('f-fftm').value.trim() || null; }
           q(sb.from('personnes').update(ch).eq('id', p.id)).then(function () {
             return ajout.length ? q(sb.from('groupe_membres').insert(ajout.map(function (g) { return { groupe_id: g, personne_id: p.id }; }))) : null;
           }).then(function () {
@@ -2602,6 +2608,7 @@ var HIF = { periode: 7, cat: '', txt: '' };
 var JCAT = {
   double_reservations: ['Double interne', 'réservation de terrain', 'réservations de terrain'],
   retours: ['Idées et bugs', 'retour d\'adhérent', 'retours d\'adhérents'],
+  niveau_demandes: ['Adhérents', 'demande de niveau', 'demandes de niveau'],
   inscriptions: ['Inscriptions', 'inscription', 'inscriptions', 1], participations: ['Inscriptions', 'réponse présent/absent', 'réponses présent/absent', 1],
   evenements: ['Agenda', 'événement / séance', 'événements / séances'], evenement_groupes: ['Agenda', 'groupe d\'événement', 'groupes d\'événements'], evenement_quotas: ['Agenda', 'quota de places', 'quotas de places'],
   creneaux: ['Agenda', 'créneau de cours', 'créneaux de cours'], periodes_sans_cours: ['Agenda', 'période sans cours', 'périodes sans cours', 1],
@@ -2674,6 +2681,69 @@ function vueHistorique(m) {
 }
 
 // ---------- Idées et bugs ----------
+// ---------- Niveaux des joueurs : barème du club, classement FFT, demandes des familles ----------
+var BAREME = [
+  ['Galaxie', ['Galaxie Blanc', 'Galaxie Violet', 'Galaxie Rouge', 'Galaxie Orange', 'Galaxie Vert']],
+  ['Ados', ['Ados balle jaune', 'Ados compétition']],
+  ['Adultes', ['Adultes 1', 'Adultes 2', 'Adultes 3', 'Adultes 4', 'Adultes 5', 'Adultes 6', 'Adultes 7', 'Adultes 8', 'Adultes 9', 'Adultes 10']]
+];
+var ADULTES_LIB = { 1: 'Débutant balle orange', 2: 'Balle verte', 3: 'Balle dure', 4: 'Débutant +', 5: 'Élémentaire (NC ou 40)', 6: 'Intermédiaire (≈ 30/5 à 30/4)', 7: 'Confirmé (≈ 30/3 à 30/1)', 8: 'Avancé (30 à 15/4)', 9: 'Avancé + (15/3 à 15/1)', 10: 'Expert (15 et mieux)' };
+function selectBareme(id, val, off) {
+  return '<select class="f" id="' + id + '"' + (off ? ' disabled' : '') + '><option value="">À définir</option>' + BAREME.map(function (g) {
+    return '<optgroup label="' + g[0] + '">' + g[1].map(function (n) { var d = /^Adultes (\d+)$/.exec(n); return '<option value="' + n + '"' + (val === n ? ' selected' : '') + '>' + n + (d ? ' · ' + ADULTES_LIB[d[1]] : '') + '</option>'; }).join('') + '</optgroup>';
+  }).join('') + '</select>';
+}
+var NVF = { tab: 'demandes', txt: '', niv: '' };
+function vueNiveaux(m) {
+  m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par l\'équipe pédagogique selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli. Le classement FFT est affiché à titre d\'info.') +
+    '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
+  all('[data-nvt]').forEach(function (b) { b.onclick = function () { NVF.tab = b.dataset.nvt; vueNiveaux(m); }; });
+  if (NVF.tab === 'joueurs') return nvJoueurs();
+  q(sb.from('niveau_demandes').select('id, personne_id, niveau_actuel, niveau_demande, message, statut, reponse, created_at, traite_le, personnes(prenom, nom, date_naissance, classement_fft)').order('created_at', { ascending: false }).limit(200)).then(function (l) {
+    var att = l.filter(function (d) { return d.statut === 'attente'; }), faites = l.filter(function (d) { return d.statut !== 'attente'; });
+    var carte = function (d) {
+      var p = d.personnes || {};
+      return '<div class="card" style="margin-bottom:10px;' + (d.statut === 'attente' ? 'border-left:4px solid var(--ac)' : '') + '"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline"><span><b>' + esc((p.prenom || '') + ' ' + (p.nom || '')) + '</b>' + (p.date_naissance ? ' <span class="mut xs">' + age(p.date_naissance) + ' ans</span>' : '') + (p.classement_fft ? ' <span class="mut xs">· FFT ' + esc(p.classement_fft) + '</span>' : '') + '</span>' +
+        '<span class="mut xs">' + esc(fmtJour(new Date(d.created_at))) + '</span></div>' +
+        '<div style="margin:8px 0"><span class="badge">' + esc(d.niveau_actuel || 'À définir') + '</span> → <span class="badge b-ac">' + esc(d.niveau_demande) + '</span></div>' +
+        (d.message ? '<div class="small" style="white-space:pre-wrap;margin-bottom:8px">« ' + esc(d.message) + ' »</div>' : '') +
+        (d.statut === 'attente' ? '<div class="toolbar"><input class="f grow" id="nr-' + d.id + '" placeholder="Réponse à la famille (facultatif)"><button class="btn sm ok" data-nva="' + d.id + '|1">Accepter</button><button class="btn sm ko" data-nva="' + d.id + '|0">Refuser</button></div>'
+          : '<span class="badge ' + (d.statut === 'acceptee' ? 'b-ok' : 'b-ko') + '">' + (d.statut === 'acceptee' ? 'Acceptée' : 'Refusée') + '</span>' + (d.reponse ? ' <span class="small mut">' + esc(d.reponse) + '</span>' : '')) + '</div>';
+    };
+    $('nv-l').innerHTML = (att.length ? att.map(carte).join('') : '<div class="card empty">Aucune demande en attente.</div>') + (faites.length ? '<div class="sect">Déjà traitées</div>' + faites.slice(0, 30).map(carte).join('') : '');
+    all('[data-nva]').forEach(function (b) { b.onclick = function () {
+      var v = b.dataset.nva.split('|'), rep = ($('nr-' + v[0]) || {}).value || null;
+      b.disabled = true;
+      q(sb.rpc('niveau_traiter', { d: v[0], accepter: v[1] === '1', reponse: rep })).then(function () { toast(v[1] === '1' ? 'Niveau changé, famille prévenue' : 'Demande refusée, famille prévenue'); A.pers = null; vueNiveaux(m); }).catch(function () { toast('Action impossible'); b.disabled = false; });
+    }; });
+  }).catch(function () { $('nv-l').innerHTML = '<div class="card empty">Impossible de charger les demandes.</div>'; });
+}
+function nvJoueurs() {
+  chargerPers().then(function (l) {
+    var filtre = function () {
+      var t = NVF.txt.toLowerCase();
+      return l.filter(function (p) { return p.actif && (!t || (p.prenom + ' ' + p.nom).toLowerCase().indexOf(t) >= 0) && (!NVF.niv || (NVF.niv === '-' ? !p.niveau_club : p.niveau_club === NVF.niv)); });
+    };
+    var dessiner = function () {
+      var r = filtre();
+      $('nv-tb').innerHTML = r.slice(0, 150).map(function (p) {
+        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b><div class="mut xs">' + (p.date_naissance ? age(p.date_naissance) + ' ans' : '') + (p.niveau_arena ? ' · CLOC\'ARENA ' + esc(p.niveau_arena) : '') + '</div></td>' +
+          '<td>' + selectBareme('nvc-' + p.id, p.niveau_club) + '</td><td><input class="f" style="max-width:90px" id="nvf-' + p.id + '" value="' + esc(p.classement_fft || '') + '" placeholder="—"></td><td><input class="f" style="max-width:90px" id="nvm-' + p.id + '" value="' + esc(p.meilleur_classement_fft || '') + '" placeholder="—"></td>' +
+          '<td><button class="btn sm line" data-nvs="' + p.id + '">Enregistrer</button></td></tr>';
+      }).join('') || '<tr><td colspan="5" class="mut">Personne ne correspond.</td></tr>';
+      $('nv-n').textContent = r.length + ' joueur' + (r.length > 1 ? 's' : '') + (r.length > 150 ? ' (150 premiers affichés)' : '');
+      all('[data-nvs]').forEach(function (b) { b.onclick = function () {
+        var id = b.dataset.nvs, ch = { niveau_club: $('nvc-' + id).value || null, classement_fft: $('nvf-' + id).value.trim() || null, meilleur_classement_fft: $('nvm-' + id).value.trim() || null };
+        q(sb.from('personnes').update(ch).eq('id', id)).then(function () { var p = l.filter(function (x) { return x.id === id; })[0]; Object.assign(p, ch); toast('Enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
+      }; });
+    };
+    $('nv-l').innerHTML = '<div class="toolbar"><input class="f grow" id="nv-q" placeholder="Rechercher un joueur" value="' + esc(NVF.txt) + '"><select class="f" id="nv-niv"><option value="">Tous les niveaux</option><option value="-"' + (NVF.niv === '-' ? ' selected' : '') + '>Niveau à définir</option>' + BAREME.map(function (g) { return g[1].map(function (n) { return '<option' + (NVF.niv === n ? ' selected' : '') + '>' + n + '</option>'; }).join(''); }).join('') + '</select></div>' +
+      '<p class="mut xs" id="nv-n"></p><div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Niveau club</th><th>FFT</th><th>Meilleur</th><th></th></tr></thead><tbody id="nv-tb"></tbody></table></div>';
+    $('nv-q').oninput = function () { NVF.txt = this.value; dessiner(); };
+    $('nv-niv').onchange = function () { NVF.niv = this.value; dessiner(); };
+    dessiner();
+  });
+}
 function vueRetours(m) {
   var F = { statut: 'ouverts', type: '' };
   m.innerHTML = entete('Idées et bugs', 'Ce que les adhérents envoient depuis Profil → « Boîte à idées » et « Signaler un bug », et les conversations d\'annonces signalées (lien dans le détail : tu peux alors la lire). Chaque envoi part aussi par mail à contact@clocatennis.fr.') +
@@ -2987,7 +3057,7 @@ function vueAccueilApp(m) {
   }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les réglages de l\'accueil.</div>'; });
 }
 
-var VUES = { accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, reglages: vueReglages, fetes: vueFetes };
+var VUES = { accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
   fermer();

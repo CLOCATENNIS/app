@@ -135,7 +135,7 @@ function chargerUtilisateur() {
     var cible = S.apercu && S.isDir ? { foyer_id: S.apercu.foyer, personne_id: null } : S.compte;
     if (!S.isDir) S.apercu = null;
     if (S.apercu) { S.roles = []; S.isStaff = false; S.isDir = false; S.gere = []; } // l'appli exactement comme un parent
-    var champs = 'id, prenom, nom, sexe, profil, niveau_arena, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))';
+    var champs = 'id, prenom, nom, sexe, profil, niveau_arena, niveau_club, foyer_id, groupe_membres(groupe_id, groupes(nom,couleur,type))';
     // Qui suit qui : un adulte voit sa fiche et les mineurs de sa famille (la règle est appliquée par la base)
     var liste = S.apercu ? q(sb.from('personnes').select(champs).eq('foyer_id', cible.foyer_id).order('prenom'))
       : q(sb.rpc('mes_personnes_ids')).then(function (ids) {
@@ -790,7 +790,7 @@ function arenaClassement() {
     var f = S.arenaFiltre;
     var l = all.filter(function (c) { return f === 'Général' || (f === 'Filles' && c.sexe === 'F') || (f === 'Garçons' && c.sexe === 'M') || c.niveau === f; });
     var mes = S.pers.map(function (p) { return p.id; });
-    var lien = function (c, inner) { return '<a href="#/fiche/' + c.personne_id + '">' + inner + '</a>'; };
+    var lien = function (c, inner) { return lienJoueur(c.personne_id, inner); };
     var h = '<div class="chips">' + filtres.map(function (x) {
       var st = NIV[x] && f === x ? ' style="background:' + NIV[x].bg + ';border-color:' + NIV[x].bg + ';color:' + NIV[x].fg + '"' : '';
       return '<button class="chip ' + (f === x ? 'on' : '') + '" data-filtre="' + x + '"' + st + '>' + x + '</button>';
@@ -855,33 +855,95 @@ function arenaResultats() {
 }
 
 // ---------- Fiche joueur ----------
-function pageFiche(id) {
+// Une fiche par personne, visible de tous les adhérents connectés (règle appliquée par la base, fonction profil_joueur) :
+// « Prénom L. », âge, niveau club (barème du club, fixé par l'équipe), classement FFT actuel et meilleur,
+// et les stats de chaque circuit CLOC'ARENA auquel le joueur participe. La famille peut demander un changement de niveau.
+var BAREME = [
+  ['Galaxie', ['Galaxie Blanc', 'Galaxie Violet', 'Galaxie Rouge', 'Galaxie Orange', 'Galaxie Vert']],
+  ['Ados', ['Ados balle jaune', 'Ados compétition']],
+  ['Adultes', ['Adultes 1', 'Adultes 2', 'Adultes 3', 'Adultes 4', 'Adultes 5', 'Adultes 6', 'Adultes 7', 'Adultes 8', 'Adultes 9', 'Adultes 10']]
+];
+var ADULTES_LIB = { 1: 'Débutant balle orange', 2: 'Balle verte', 3: 'Balle dure', 4: 'Débutant +', 5: 'Élémentaire (NC ou 40)', 6: 'Intermédiaire (≈ 30/5 à 30/4)', 7: 'Confirmé (≈ 30/3 à 30/1)', 8: 'Avancé (30 à 15/4)', 9: 'Avancé + (15/3 à 15/1)', 10: 'Expert (15 et mieux)' };
+function nivClubDetail(n) { var m = /^Adultes (\d+)$/.exec(n || ''); return m ? ADULTES_LIB[m[1]] || '' : ''; }
+function nivClubCouleur(n) {
+  n = n || '';
+  if (n.indexOf('Galaxie ') === 0 && NIV[n.slice(8)]) return NIV[n.slice(8)];
+  if (n === 'Ados balle jaune') return NIV.Jaune;
+  if (n === 'Ados compétition') return { bg: '#0B3547', fg: '#fff' };
+  if (n.indexOf('Adultes') === 0) return { bg: '#1f5a85', fg: '#fff' };
+  return { bg: '#667068', fg: '#fff' };
+}
+function nivClubBadge(n) { var c = nivClubCouleur(n); return '<span class="badge" style="background:' + c.bg + ';color:' + c.fg + '">' + esc(n || 'À définir') + '</span>'; }
+function nomCourt(f) { return f.prenom + (f.initiale ? ' ' + f.initiale + '.' : ''); }
+function ageTxt(a) { return a == null ? '' : a + ' an' + (a > 1 ? 's' : ''); }
+function lienJoueur(id, inner) { return '<a href="#/joueur/' + id + '">' + inner + '</a>'; }
+function blocCircuit(ci) {
+  var c = NIV[ci.niveau] || { bg: '#1f5a85', fg: '#fff' };
+  var v = (ci.matchs || []).filter(function (m) { return m.gagne; }).length;
+  var h = '<div class="dayhead" style="display:flex;justify-content:space-between;align-items:center">' + esc(ci.libelle) +
+    '<span class="small mut" style="text-transform:none;letter-spacing:0">' + (ci.rang ? ci.rang + (ci.rang === 1 ? 'er' : 'e') + ' au général' : '') + (ci.rang_niveau ? ' · ' + ci.rang_niveau + (ci.rang_niveau === 1 ? 'er' : 'e') + ' en ' + esc(ci.niveau) : '') + '</span></div>' +
+    '<div class="grid4"><div class="stat"><b>' + (+ci.points) + '</b><span class="mut xs">points</span></div><div class="stat"><b>' + (ci.matchs || []).length + '</b><span class="mut xs">matchs</span></div><div class="stat"><b>' + v + '</b><span class="mut xs">victoires</span></div><div class="stat"><b>' + (ci.participations || 0) + '</b><span class="mut xs">présences</span></div></div>';
+  var pr = (ci.progression || []).slice(-10);
+  if (pr.length > 1) {
+    var max = Math.max.apply(null, pr.map(function (x) { return +x.cumul; })) || 1;
+    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Progression des points</span><div style="display:flex;align-items:flex-end;gap:6px;height:70px">' + pr.map(function (x, i) {
+      return '<div title="' + esc(fmtCourt(new Date(x.date + 'T12:00:00')) + ' : ' + (+x.cumul) + ' pts') + '" style="flex:1;height:' + Math.max(6, Math.round(+x.cumul / max * 100)) + '%;border-radius:6px 6px 0 0;background:' + (i === pr.length - 1 ? c.bg : 'var(--soft)') + '"></div>';
+    }).join('') + '</div></section>';
+  }
+  h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">Derniers matchs</div>' + ((ci.matchs || []).length ? ci.matchs.slice(0, 5).map(function (m) {
+    return '<div class="row"><div class="stack"><b class="small">' + (m.partenaires ? 'avec ' + esc(m.partenaires) + ' ' : '') + 'contre ' + esc(m.adversaires || '—') + '</b><span class="mut xs">' + esc(fmtCourt(new Date(m.date + 'T12:00:00'))) + ' · ' + esc(m.format.toLowerCase()) + (m.invite ? ' · invité' : '') + '</span></div>' +
+      '<div style="display:flex;gap:8px;align-items:center"><b class="small" style="white-space:nowrap">' + esc(scorePour(m.score, m.equipe)) + '</b><span class="badge" style="background:' + (m.gagne ? 'var(--ok)' : '#f3dcc8') + ';color:' + (m.gagne ? '#fff' : '#5d3a17') + '">' + (m.gagne ? 'Gagné' : 'Perdu') + '</span></div></div>';
+  }).join('') : '<div class="empty">Pas encore de match.</div>') + '</section>';
+  return h;
+}
+function pageJoueur(id) {
+  var retour = '<a class="back" href="#/club/competitions" data-retour style="color:#fff">' + ic('back', 20, '#fff') + 'Retour</a>';
+  if (!S.user) return '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card stack" style="gap:10px"><b>Fiche réservée aux adhérents</b><span class="mut small">Connecte-toi pour voir la fiche des joueurs du club.</span><a class="btn" href="#/profil">Me connecter</a></section></main>';
   setTimeout(function () {
-    q(sb.rpc('arena_fiche', { p: id })).then(function (f) {
-      var c = NIV[f.niveau] || { bg: '#1f5a85', fg: '#fff' };
-      var v = f.matchs.filter(function (m) { return m.gagne; }).length;
-      var h = '<div class="darkhead" style="background:' + c.bg + ';color:' + c.fg + '"><div class="wrap">' + backLink('#/arena/tweener', 'Classement', c.fg === '#fff') +
-        '<div class="hero-row" style="margin-top:6px"><div class="datebox" style="background:#fff;color:' + c.bg + ';border-radius:50%"><b style="font-size:24px">' + esc(f.prenom.charAt(0) + f.nom.charAt(0)) + '</b></div>' +
-        '<div><h1 style="font-size:26px;line-height:1.1">' + esc(f.prenom + ' ' + f.nom) + '</h1><div class="small" style="opacity:.9">Niveau ' + esc(f.niveau || '—') + (f.rang ? ' · ' + f.rang + (f.rang === 1 ? 'er' : 'e') + ' au général' : '') + (f.rang_niveau ? ' · ' + f.rang_niveau + (f.rang_niveau === 1 ? 'er' : 'e') + ' en ' + esc(f.niveau) : '') + '</div></div></div></div></div><main>' +
-        '<div class="grid4"><div class="stat"><b>' + (+f.points) + '</b><span class="mut xs">points</span></div><div class="stat"><b>' + f.matchs.length + '</b><span class="mut xs">matchs</span></div><div class="stat"><b>' + v + '</b><span class="mut xs">victoires</span></div><div class="stat"><b>' + f.participations + '</b><span class="mut xs">présences</span></div></div>';
-      var pr = f.progression.slice(-10);
-      if (pr.length > 1) {
-        var max = Math.max.apply(null, pr.map(function (x) { return +x.cumul; })) || 1;
-        h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Progression des points</span><div style="display:flex;align-items:flex-end;gap:6px;height:80px">' + pr.map(function (x, i) {
-          return '<div title="' + esc(fmtCourt(new Date(x.date + 'T12:00:00')) + ' : ' + (+x.cumul) + ' pts') + '" style="flex:1;height:' + Math.max(6, Math.round(+x.cumul / max * 100)) + '%;border-radius:6px 6px 0 0;background:' + (i === pr.length - 1 ? c.bg : 'var(--soft)') + '"></div>';
-        }).join('') + '</div><span class="mut xs">Points cumulés, du ' + fmtCourt(new Date(pr[0].date + 'T12:00:00')) + ' au ' + fmtCourt(new Date(pr[pr.length - 1].date + 'T12:00:00')) + ' : ' + (+pr[pr.length - 1].cumul) + ' pts</span></section>';
+    q(sb.rpc('profil_joueur', { p: id })).then(function (f) {
+      if (!f) throw new Error('vide');
+      var c = nivClubCouleur(f.niveau_club), clair = c.fg === '#fff';
+      var h = '<div class="darkhead" style="background:' + c.bg + ';color:' + c.fg + '"><div class="wrap">' + retour.replace(/#fff/g, clair ? '#fff' : c.fg) +
+        '<div class="hero-row" style="margin-top:6px"><div class="datebox" style="background:#fff;color:' + c.bg + ';border-radius:50%"><b style="font-size:24px;color:' + (clair ? c.bg : '#3a2f00') + '">' + esc(f.prenom.charAt(0) + (f.initiale || '')) + '</b></div>' +
+        '<div><h1 style="font-size:26px;line-height:1.1">' + esc(nomCourt(f)) + '</h1><div class="small" style="opacity:.92">' + [ageTxt(f.age), f.niveau_club || 'Niveau à définir'].filter(Boolean).map(esc).join(' · ') + '</div></div></div></div></div><main>';
+      // Niveau club + classement FFT
+      var fft = f.classement_fft || f.meilleur_classement_fft;
+      h += '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Niveau au club</span>' + nivClubBadge(f.niveau_club) + '</div>' +
+        (nivClubDetail(f.niveau_club) ? '<span class="small">' + esc(nivClubDetail(f.niveau_club)) + '</span>' : '') +
+        '<span class="mut xs">Fixé par l\'équipe pédagogique du club, selon le barème du club.</span>';
+      if (f.famille) {
+        if (f.demande && f.demande.statut === 'attente') h += '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px">' + ic('cal', 16) + ' Demande envoyée le ' + esc(fmtCourt(new Date(f.demande.created_at))) + ' : passer en <b>' + esc(f.demande.niveau_demande) + '</b>. En attente de réponse de l\'équipe.</div>';
+        else h += '<button class="btn line" id="jr-dem">Demander un changement de niveau</button>' + (f.demande && f.demande.statut === 'refusee' ? '<span class="mut xs">Dernière demande non retenue' + (f.demande.reponse ? ' : ' + esc(f.demande.reponse) : '') + '.</span>' : '');
       }
-      h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">Derniers matchs</div>' + (f.matchs.length ? f.matchs.slice(0, 12).map(function (m) {
-        return '<div class="row"><div class="stack"><b class="small">' + (m.partenaires ? 'avec ' + esc(m.partenaires) + ' ' : '') + 'contre ' + esc(m.adversaires || '—') + '</b><span class="mut xs">' + esc(fmtCourt(new Date(m.date + 'T12:00:00'))) + ' · ' + esc(m.format.toLowerCase()) + (m.invite ? ' · invité' : '') + '</span></div>' +
-          '<div style="display:flex;gap:8px;align-items:center"><b class="small">' + esc(scorePour(m.score, m.equipe)) + '</b><span class="badge" style="background:' + (m.gagne ? 'var(--ok)' : '#f3dcc8') + ';color:' + (m.gagne ? '#fff' : '#5d3a17') + '">' + (m.gagne ? 'Gagné' : 'Perdu') + '</span></div></div>';
-      }).join('') : '<div class="empty">Pas encore de match.</div>') + '</section>' +
-        '<p class="mut xs" style="text-align:center">Fiche CLOC\'ARENA visible par tous les adhérents.</p></main>';
+      h += '</section>';
+      if (fft) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement FFT</span><div class="grid2"><div class="stat"><b>' + esc(f.classement_fft || '—') + '</b><span class="mut xs">actuel</span></div><div class="stat"><b>' + esc(f.meilleur_classement_fft || f.classement_fft || '—') + '</b><span class="mut xs">meilleur</span></div></div></section>';
+      // Un bloc par circuit CLOC'ARENA (Tweener, Masters, Versus) où le joueur a joué
+      (f.circuits || []).forEach(function (ci) { h += blocCircuit(ci); });
+      h += '<p class="mut xs" style="text-align:center">Fiche visible par les adhérents connectés.</p></main>';
       $('app').innerHTML = h;
+      var r = document.querySelector('[data-retour]'); if (r && history.length > 1) r.onclick = function (e) { e.preventDefault(); history.back(); };
+      if ($('jr-dem')) $('jr-dem').onclick = function () { demanderNiveau(f); };
     }).catch(function () {
-      $('app').innerHTML = '<div class="pagehead">' + backLink('#/arena/tweener', 'Classement') + '</div><main><section class="card empty">Fiche introuvable : ce joueur n\'a pas (ou plus) de niveau CLOC\'ARENA.</section></main>';
+      $('app').innerHTML = '<div class="pagehead wrap">' + backLink('#/club/competitions', 'Retour') + '</div><main><section class="card empty">Fiche introuvable.</section></main>';
     });
   });
   return '<div style="padding:40px 16px"><div class="skel"></div></div>';
+}
+// Demande de changement de niveau : la famille propose, l'équipe (coach ou direction) accepte ou refuse dans la gestion
+function demanderNiveau(f) {
+  var opts = BAREME.map(function (g) { return '<optgroup label="' + g[0] + '">' + g[1].map(function (n) { return '<option' + (n === f.niveau_club ? ' disabled' : '') + ' value="' + n + '">' + n + (nivClubDetail(n) ? ' · ' + nivClubDetail(n) : '') + (n === f.niveau_club ? ' (actuel)' : '') + '</option>'; }).join('') + '</optgroup>'; }).join('');
+  modale('<div class="stack" style="gap:12px"><b style="font-size:18px">Changer le niveau de ' + esc(f.prenom) + '</b>' +
+    '<span class="mut small">Niveau actuel : <b>' + esc(f.niveau_club || 'à définir') + '</b>. L\'équipe pédagogique étudie la demande et te répond dans l\'appli.</span>' +
+    '<label class="f">Niveau demandé<select class="f" id="jd-n"><option value="">Choisir…</option>' + opts + '</select></label>' +
+    '<label class="f">Pourquoi ? <span class="mut" style="font-weight:400">(facultatif)</span><textarea class="f" id="jd-m" maxlength="400" placeholder="Ex. résultats en tournoi, nouveau classement FFT…"></textarea></label>' +
+    '<button class="btn" id="jd-go">Envoyer la demande</button></div>', function () {
+      $('jd-go').onclick = function () {
+        var n = $('jd-n').value; if (!n) return toast('Choisis un niveau');
+        this.disabled = true;
+        q(sb.rpc('niveau_demander', { p: f.id, niveau: n, message: $('jd-m').value.trim() || null })).then(function () { fermerModale(); toast('Demande envoyée à l\'équipe'); render(); })
+          .catch(function () { toast('Envoi impossible, réessaie'); $('jd-go').disabled = false; });
+      };
+    });
 }
 
 // ---------- Club ----------
@@ -1034,11 +1096,15 @@ function annonceDirecte(a) { return !!(a.contact_appli || a.contact_tel || a.con
 function chargerAnnonces() {
   var jeune = S.user && S.jeune == null ? q(sb.rpc('suis_compte_jeune')).then(function (j) { S.jeune = !!j; }).catch(function () { S.jeune = false; }) : Promise.resolve();
   return jeune.then(function () { return Promise.all([
-    q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le, contact_appli, contact_tel, contact_wa').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })),
-    S.user && !estCompteJeune() ? q(sb.rpc('annonces_contacts')).catch(function () { return []; }) : Promise.resolve([])
+    q(sb.from('annonces').select('id, num, type, created_at, cree_par, prenom, titre, niveau, dispo, prix, description, image_path, images, statut, expire_le, contact_appli, contact_tel, contact_wa, personne_id').in('statut', ['attente', 'publiee']).order('created_at', { ascending: false })),
+    S.user && !estCompteJeune() ? q(sb.rpc('annonces_contacts')).catch(function () { return []; }) : Promise.resolve([]),
+    // Mini fiche du joueur concerné par une recherche de partenaire (adhérents connectés seulement)
+    S.user ? q(sb.rpc('annonces_joueurs')).catch(function () { return []; }) : Promise.resolve([])
   ]); }).then(function (r) {
     AN.liste = r[0] || []; AN.contacts = {};
     (r[1] || []).forEach(function (c) { AN.contacts[c.annonce_id] = c; });
+    var js = {}; (Array.isArray(r[2]) ? r[2] : []).forEach(function (j) { js[j.annonce_id] = j; });
+    AN.liste.forEach(function (a) { if (js[a.id]) a.joueur = js[a.id]; });
     return AN.liste;
   });
 }
@@ -1072,8 +1138,10 @@ function carteAnnonce(a, opts) {
     h += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b>' + esc(a.titre) + '</b>' + (a.prix ? '<span class="badge" style="background:var(--ac);color:#fff">' + esc(a.prix) + '</span>' : '') + '</div>' +
       (a.description ? '<span class="mut small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
   } else {
-    h += '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(a.prenom) + '</b>' + (NIV[a.niveau] ? niveauBadge(a.niveau) : '<span class="badge" style="background:var(--soft);color:var(--tx)">' + esc(a.niveau) + '</span>') + '</div>' +
-      '<span class="mut small">' + esc(a.dispo) + '</span>' + (a.description ? '<span class="small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
+    var j = a.joueur; // fiche liée (profil_joueur) : rempli par la base quand l'annonce est faite pour un membre de la famille
+    h += j ? '<a href="#/joueur/' + a.personne_id + '" style="display:flex;justify-content:space-between;align-items:center;gap:8px;text-decoration:none;color:inherit"><span class="stack" style="gap:2px"><b>' + esc(j.prenom + (j.initiale ? ' ' + j.initiale + '.' : '')) + '</b><span class="mut xs">' + [ageTxt(j.age), j.classement_fft ? 'FFT ' + j.classement_fft : ''].filter(Boolean).map(esc).join(' · ') + '</span></span><span style="display:flex;gap:6px;align-items:center">' + nivClubBadge(j.niveau_club) + ic('next', 16, 'var(--mut)') + '</span></a>'
+      : '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(a.prenom) + '</b>' + (NIV[a.niveau] ? niveauBadge(a.niveau) : '<span class="badge" style="background:var(--soft);color:var(--tx)">' + esc(a.niveau) + '</span>') + '</div>';
+    h += '<span class="mut small">' + esc(a.dispo) + '</span>' + (a.description ? '<span class="small" style="white-space:pre-line">' + esc(a.description) + '</span>' : '');
   }
   h += '<span class="mut xs">Annonce n°' + a.num + ' · ' + esc(fmtCourt(new Date(a.created_at))) + (a.type === 'vente' && c.prenom ? ' · ' + esc(c.prenom) : '') + '</span>';
   if (opts.statut) h += '<span><span class="badge" style="background:' + (a.statut === 'attente' ? 'var(--soft)' : 'var(--ok)') + ';color:' + (a.statut === 'attente' ? 'var(--tx)' : '#fff') + '">' + (a.statut === 'attente' ? 'En attente de validation' : 'Publiée jusqu\'au ' + esc(fmtCourt(new Date(a.expire_le + 'T12:00:00')))) + '</span></span>' +
@@ -1151,6 +1219,18 @@ function chargerPrefsAnnonce() {
   if (!S.user) return Promise.resolve(null);
   return q(sb.from('annonce_prefs').select('contact_appli, contact_tel, contact_wa, tel').eq('user_id', S.user.id).maybeSingle()).catch(function () { return null; });
 }
+// Recherche de partenaire : on choisit pour qui (soi ou un enfant) ; la fiche joueur donne prénom, âge et niveau club.
+// « Quelqu'un d'autre » garde l'ancienne saisie libre (prénom + niveau).
+function quiAnnonce(F) {
+  var pers = (S.pers || []).filter(function (p) { return p.foyer_id || S.pers.length === 1; });
+  if (F.qui == null) F.qui = pers.length ? pers[0].id : '';
+  var p = pers.filter(function (x) { return x.id === F.qui; })[0];
+  var h = pers.length ? '<label class="f">Pour qui ?<select class="f" id="an-qui">' + pers.map(function (x) { return '<option value="' + x.id + '"' + (x.id === F.qui ? ' selected' : '') + '>' + esc(x.prenom) + (S.compte && S.compte.personne_id === x.id ? ' (moi)' : '') + '</option>'; }).join('') + '<option value=""' + (!F.qui ? ' selected' : '') + '>Quelqu\'un d\'autre</option></select></label>' : '';
+  if (p) return h + '<div class="f stack" style="gap:6px;background:var(--soft);border-radius:14px;padding:12px 14px"><span style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:15px">' + esc(p.prenom + ' ' + p.nom.charAt(0) + '.') + '</b>' + nivClubBadge(p.niveau_club) + '</span>' +
+    '<span class="mut xs" style="font-weight:400">Les adhérents verront sa fiche joueur (âge, niveau, classement FFT, CLOC\'ARENA). Le niveau est celui fixé par l\'équipe.</span></div>';
+  return h + '<label class="f">Prénom<input class="f" data-anf="prenom" maxlength="40" autocomplete="given-name" value="' + esc(F.prenom || '') + '"></label>' +
+    '<label class="f">Niveau<select class="f" data-anf="niveau"><option value="">Choisir…</option>' + NIVEAUX.concat(['Adulte / autre']).map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>';
+}
 function formAnnonce(box) {
   var v = AN.form === 'vente', F = AN.f, jeune = estCompteJeune();
   if (!F._init) {
@@ -1176,14 +1256,14 @@ function formAnnonce(box) {
     (v ? champ('titre', 'Quoi ?', 'maxlength="80" placeholder="Ex. Raquette Babolat Pure Drive 26"') + champ('prix', 'Prix', 'maxlength="30" placeholder="Ex. 40 €"') +
       champ('description', 'Description (facultatif)', 'maxlength="600" placeholder="État, taille, tension…"', true) +
       '<div class="f">Photos (facultatif, jusqu\'à 6)<div id="an-ph" class="an-ph"></div><label class="btn line" style="margin-top:6px">+ Ajouter des photos<input type="file" accept="image/*" multiple id="an-photo" hidden></label></div>'
-      : champ('prenom', 'Prénom', 'maxlength="40" autocomplete="given-name"') +
-      '<label class="f">Niveau<select class="f" data-anf="niveau"><option value="">Choisir…</option>' + NIVEAUX.concat(['Adulte / autre']).map(function (n) { return '<option' + (F.niveau === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+      : quiAnnonce(F) +
       champ('dispo', 'Mes disponibilités', 'maxlength="140" placeholder="Ex. mercredi après-midi, samedi matin"') +
       champ('description', 'Message (facultatif)', 'maxlength="600" placeholder="Ex. je cherche quelqu\'un pour m\'entraîner"', true)) +
     moyens +
     '<label class="check"><input type="checkbox" id="an-ok"' + (F.ok ? ' checked' : '') + '><span>J\'accepte que mon annonce soit publiée dans l\'appli après validation par le club' + (jeune ? '.' : ', et que les adhérents connectés me contactent par les moyens cochés. Je peux retirer l\'annonce à tout moment : mon numéro disparaît avec elle.') + '</span></label>' +
     '<button class="btn" id="an-go">Envoyer</button><button class="btn line" id="an-back">Annuler</button></section>';
   Array.prototype.forEach.call(box.querySelectorAll('[data-anf]'), function (i) { i.oninput = i.onchange = function () { F[i.dataset.anf] = i.value; }; });
+  if ($('an-qui')) $('an-qui').onchange = function () { F.qui = this.value; formAnnonce(box); };
   // Cocher « numéro » ou « WhatsApp » fait apparaître le champ du numéro
   [['an-appli', 'appli'], ['an-tel', 'tel'], ['an-wa', 'wa'], ['an-memo', 'memo'], ['an-ok', 'ok']].forEach(function (x) {
     if ($(x[0])) $(x[0]).onchange = function () { var avant = F.tel || F.wa; F[x[1]] = this.checked; if ((F.tel || F.wa) !== avant) { formAnnonce(box); if ($('an-moyens')) $('an-moyens').scrollIntoView({ block: 'nearest' }); } };
@@ -1204,13 +1284,15 @@ function formAnnonce(box) {
   $('an-go').onclick = function () {
     var t = function (k) { return String(F[k] || '').trim(); };
     if (v && !t('titre')) return toast('Indique ce que tu vends');
-    if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast('Prénom, niveau et disponibilités sont nécessaires');
+    var qui = !v && F.qui ? S.pers.filter(function (x) { return x.id === F.qui; })[0] : null;
+    if (qui) { F.prenom = qui.prenom; F.niveau = qui.niveau_club || qui.niveau_arena || 'Adulte / autre'; }
+    if (!v && (!t('prenom') || !t('niveau') || !t('dispo'))) return toast(qui ? 'Indique tes disponibilités' : 'Prénom, niveau et disponibilités sont nécessaires');
     if (!jeune && !F.appli && !F.tel && !F.wa) return toast('Choisis au moins un moyen d\'être contacté');
     if ((F.tel || F.wa) && !telWa(t('contact'))) return toast('Vérifie le numéro de téléphone');
     if (!$('an-ok').checked) return toast('Coche la case d\'accord');
     var moyens = { contact_appli: !jeune && !!F.appli, contact_tel: !jeune && !!F.tel, contact_wa: !jeune && !!F.wa, contact: (F.tel || F.wa) && !jeune ? t('contact') : null };
     var row = Object.assign(v ? { type: 'vente', titre: t('titre'), prix: t('prix') || null, description: t('description') || null }
-      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null }, moyens);
+      : { type: 'partenaire', prenom: t('prenom'), niveau: t('niveau'), dispo: t('dispo'), description: t('description') || null, personne_id: qui ? qui.id : null }, moyens);
     $('an-go').disabled = true;
     // Mémo : enregistré si la case est cochée, oublié si elle est décochée
     var memo = jeune ? Promise.resolve() : F.memo
@@ -1863,7 +1945,7 @@ function pageProfil() {
     h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">' + (S.pers.length > 1 ? 'Ma famille' : 'Mon profil') + '</div>' + S.pers.map(function (p) {
       var gs = (p.groupe_membres || []).filter(function (g) { return g.groupes && g.groupes.type !== 'profil'; }).map(function (g) { return groupeBadge(g.groupes); }).join(' ');
       return '<div class="stack" style="gap:8px;padding:12px 0;border-top:1px solid var(--line)"><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b></span>' + (gs ? '<span style="display:flex;gap:6px;flex-wrap:wrap;padding-left:18px">' + gs + '</span>' : '') + '</div>' +
-        (p.niveau_arena ? '<a href="#/fiche/' + p.id + '" class="small" style="display:block;padding:0 0 10px 18px;font-weight:600">Voir la fiche CLOC\'ARENA →</a>' : '');
+        '<a href="#/joueur/' + p.id + '" class="small" style="display:flex;gap:8px;align-items:center;padding:0 0 10px 18px;font-weight:600">' + nivClubBadge(p.niveau_club) + ' Voir la fiche joueur →</a>';
     }).join('') + '</section>';
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
   if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
@@ -3703,7 +3785,7 @@ function render() {
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
   else if (p === 'arena') actif = 'club', html = arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : pageArenaAccueil();
-  else if (p === 'fiche') { html = pageFiche(arg); actif = 'club'; }
+  else if (p === 'fiche' || p === 'joueur') { html = pageJoueur(arg); actif = 'club'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
   else if (p === 'fete' || p === 'noel') {
