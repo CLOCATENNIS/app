@@ -332,7 +332,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '11/11 accueil';
+var VERSION_APPLI = '11/11 profil';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -2123,6 +2123,49 @@ function carteInsc(e) {
 }
 
 // ---------- Profil et connexion ----------
+// ---------- Profil : une ligne claire par personne (niveau une seule fois, créneaux lisibles) ----------
+var JOURS_ORDRE = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+function creneauCourt(nom) {
+  var t = String(nom || ''), quand = t.split(' · ')[0], ter = (t.match(/\(([^)]*)\)\s*$/) || [])[1];
+  return quand + (ter ? ' · ' + ter : '');
+}
+function blocPersonneProfil(p) {
+  var gs = (p.groupe_membres || []).map(function (g) { return g.groupes; }).filter(function (g) { return g && g.type !== 'profil'; });
+  var cren = gs.filter(function (g) { return g.type === 'creneau'; }).sort(function (a, b) {
+    var ja = JOURS_ORDRE.indexOf(String(a.nom).split(' ')[0].toLowerCase()), jb = JOURS_ORDRE.indexOf(String(b.nom).split(' ')[0].toLowerCase());
+    return (ja < 0 ? 9 : ja) - (jb < 0 ? 9 : jb) || String(a.nom).localeCompare(String(b.nom));
+  });
+  var tags = [];
+  if (gs.some(function (g) { return g.type === 'niveau'; })) tags.push('CLOC\'ARENA');
+  gs.forEach(function (g) { if ((g.type === 'activite' || g.type === 'autre' || (g.type === 'cours' && !cren.length)) && tags.indexOf(g.nom) < 0) tags.push(g.nom); });
+  return '<div class="stack pf-p">' +
+    '<span class="pf-h"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b>' + (p.niveau_club ? nivClubBadge(p.niveau_club) : '') + '</span>' +
+    (cren.length ? '<span class="stack pf-cr">' + cren.map(function (c) { return '<span>' + ic('cal', 15) + esc(creneauCourt(c.nom)) + '</span>'; }).join('') + '</span>' : '') +
+    (tags.length ? '<span class="pf-tags">' + tags.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span>' : '') +
+    '<a href="#/joueur/' + p.id + '" class="small pf-fiche">Voir la fiche joueur →</a></div>';
+}
+// Une seule carte « Réglages et aide » au lieu de 4 blocs séparés (installer, notifications, aide, mon accueil)
+function ligneReglage(icone, titre, droite, href) {
+  var tete = '<span class="pf-ic">' + ic(icone, 19) + '</span><span class="stack" style="gap:1px;flex:1;min-width:0"><b class="small">' + titre + '</b>' + droite + '</span>';
+  return href ? '<a class="pf-r" href="' + href + '">' + tete + '<span class="mut" aria-hidden="true">›</span></a>' : '<div class="pf-r">' + tete + '</div>';
+}
+function carteReglagesProfil() {
+  var ok = function (t) { return '<span class="xs" style="color:var(--ok)">✓ ' + t + '</span>'; }, mut = function (t) { return '<span class="xs mut">' + t + '</span>'; };
+  var notif;
+  if (pushPossible() && Notification.permission === 'granted' && localStorageGet('cloca-push') === S.user.id) notif = ok('Activées sur cet appareil');
+  else if (estIos() && !estInstallee()) notif = mut('Installe d\'abord l\'appli (ligne du dessous), puis ouvre-la depuis son icône.');
+  else if (!pushPossible()) notif = mut('Pas disponibles sur ce navigateur : le club te prévient par WhatsApp.');
+  else if (Notification.permission === 'denied') notif = mut('Bloquées dans les réglages du navigateur. Le guide explique comment les débloquer.');
+  else notif = '<span><button class="btn navy" id="push-on" style="min-height:36px;padding:0 14px;margin-top:4px">Activer les notifications</button></span>';
+  var inst = estInstallee() ? ok('Installée sur cet appareil')
+    : INSTALL ? '<span><button class="btn navy" id="install-go" style="min-height:36px;padding:0 14px;margin-top:4px">Installer CLOCA Tennis</button></span>'
+    : mut(estIos() ? 'Dans Safari : Partager, puis « Sur l\'écran d\'accueil ».' : 'Menu ⋮ du navigateur : « Installer l\'application ».');
+  return '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">Réglages et aide</div>' +
+    ligneReglage('home', 'Mon accueil', mut('Choisir mes raccourcis (ou le crayon ✏️ sur l\'accueil)'), '#/profil/accueil') +
+    ligneReglage('bell', 'Notifications', notif) +
+    ligneReglage('dl', 'Appli sur ce téléphone', inst) +
+    ligneReglage('alert', 'Aide et guide pas à pas', mut('Installer, se connecter, activer les notifications'), '#/aide') + '</section>';
+}
 function pageProfil() {
   var h = '<div class="pagehead wrap"><h1>' + (S.user ? 'Mon profil' : 'Connexion') + '</h1></div><main>';
   if (!S.user) {
@@ -2135,11 +2178,7 @@ function pageProfil() {
     return h;
   }
   if (S.pers.length) {
-    h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">' + (S.pers.length > 1 ? 'Ma famille' : 'Mon profil') + '</div>' + S.pers.map(function (p) {
-      var gs = (p.groupe_membres || []).filter(function (g) { return g.groupes && g.groupes.type !== 'profil'; }).map(function (g) { return groupeBadge(g.groupes); }).join(' ');
-      return '<div class="stack" style="gap:8px;padding:12px 0;border-top:1px solid var(--line)"><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b></span>' + (gs ? '<span style="display:flex;gap:6px;flex-wrap:wrap;padding-left:18px">' + gs + '</span>' : '') + '</div>' +
-        '<a href="#/joueur/' + p.id + '" class="small" style="display:flex;gap:8px;align-items:center;padding:0 0 10px 18px;font-weight:600;text-decoration:none">' + nivClubBadge(p.niveau_club) + ' <span style="text-decoration:underline">Voir la fiche joueur →</span></a>';
-    }).join('') + '</section>';
+    h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">' + (S.pers.length > 1 ? 'Ma famille' : 'Ma fiche') + '</div>' + S.pers.map(blocPersonneProfil).join('') + '</section>';
   } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
   if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
@@ -2148,13 +2187,11 @@ function pageProfil() {
   if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
     '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
   if (S.compte && !S.compte.foyer_id && !S.compte.personne_id && !S.isStaff) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
-  h += blocInstaller() + blocPush();
-  h += '<a class="btn ghost" href="#/aide">' + ic('alert', 18) + ' Aide et guide pas à pas</a>';
-  h += '<a class="card stack" href="#/profil/accueil" style="gap:6px;text-decoration:none;color:inherit"><span class="eyebrow">Mon accueil</span><b>Choisir mes raccourcis</b><span class="mut small">CLOC\'ARENA, cordage, double interne… garde seulement ce qui t\'intéresse.</span></a>';
+  h += carteReglagesProfil();
   h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Ton avis compte</span><span class="mut small">L\'appli est en version bêta : une idée, un souci ? Ton message part directement au club.</span>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn line" id="rt-idee">💡 Boîte à idées</button><button class="btn line" id="rt-bug">🐞 Signaler un bug</button></div></section>';
-  h += '<section class="card stack" style="gap:4px"><span class="eyebrow">Connecté avec</span><span>' + esc(S.user.email) + '</span></section>' +
-    '<button class="btn line" id="logout">Se déconnecter</button><p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a> · version ' + VERSION_APPLI + '</p></main>';
+  h += '<section class="card stack" style="gap:10px"><span class="stack" style="gap:2px"><span class="eyebrow">Connecté avec</span><span style="overflow-wrap:anywhere">' + esc(S.user.email) + '</span></span><button class="btn line" id="logout">Se déconnecter</button></section>' +
+    '<p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a> · version ' + VERSION_APPLI + '</p></main>';
   setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('rt-idee').onclick = function () { ouvrirRetour('idee'); }; $('rt-bug').onclick = function () { ouvrirRetour('bug'); }; $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
