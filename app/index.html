@@ -357,6 +357,13 @@ main.wrap{max-width:640px;margin:0 auto}
 @keyframes jflot{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-5px) rotate(2deg)}}
 @media (prefers-reduced-motion:reduce){.jball{animation:none}}
 @media (min-width:1024px){.jball{width:150px;height:150px;right:28px;bottom:-10px}.jhead.avecballe .hero-row{padding-right:170px}}
+/* pop-up d'installation */
+.ip-n{flex:none;width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center}
+.ip-ic{display:inline-flex;vertical-align:middle;padding:2px 4px;border-radius:6px;background:var(--soft);color:#0a84ff}
+.ip-fleche{position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:var(--ac);color:#fff;padding:10px 16px 6px;border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.35);font-weight:700;font-size:14px;animation:ipbond 1s ease-in-out infinite}
+.ip-fleche span{display:flex;gap:6px;align-items:center;white-space:nowrap}.ip-fleche b{font-size:26px;line-height:1}
+@keyframes ipbond{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,8px)}}
 /* circuit pas encore ouvert */
 .sablier{flex:none;width:52px;height:52px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:26px;animation:sabl 3s ease-in-out infinite}
 @keyframes sabl{0%,40%{transform:rotate(0)}50%,90%{transform:rotate(180deg)}100%{transform:rotate(180deg)}}

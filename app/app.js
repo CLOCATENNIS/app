@@ -75,6 +75,8 @@ var IC = {
   people: '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M15 20a4.5 4.5 0 0 1 6-4.2"/>',
   phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
   wa: '<path d="M3 21l1.7-4.6A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1.2-1.6-2-1-.9.9a4.5 4.5 0 0 1-2.6-2.6l.9-.9-1-2L9 8.5z"/>',
+  share: '<path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/>',
+  plus: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>',
   cam: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
   flag: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>'
 };
@@ -3068,6 +3070,65 @@ function lierIdentite(apres) {
     }).catch(function () { toast('Enregistrement impossible'); $('id-ok').disabled = false; });
   };
 }
+// Pousser l'installation : sur téléphone, à chaque ouverture (une fois par session) tant que l'appli n'est pas installée.
+// On mâche le travail : un bouton sur Android, un pas à pas illustré sur iPhone, et on sort des navigateurs de WhatsApp / Instagram.
+function navigateurIntegre() { return /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Messenger|Line\/|Snapchat|; wv\)/i.test(navigator.userAgent); }
+function estAndroid() { return /android/i.test(navigator.userAgent); }
+function popupInstaller() {
+  if (S.apercu || estInstallee() || !(estIos() || estAndroid())) return false;
+  var vu = +localStorageGet('cloca-install-deja') || 0;
+  if (Date.now() - vu < 7 * 864e5) return false;
+  var lien = 'https://clocatennis.fr/app/';
+  var tete = '<div class="stack" style="gap:12px;text-align:center"><img src="icon-192.png" alt="" style="width:76px;height:76px;margin:0 auto;border-radius:18px;box-shadow:0 6px 16px rgba(0,0,0,.25)">' +
+    '<h2 style="margin:0;font-size:22px">Mets CLOCA Tennis sur ton téléphone</h2>' +
+    '<span class="small">Une icône sur ton écran d\'accueil, l\'appli s\'ouvre en un geste, et tu reçois les infos du club en notification.</span>';
+  var bas = '<button class="btn line" id="ip-non">Plus tard</button><button class="lnk xs mut" id="ip-deja" style="background:none;border:0;text-decoration:underline">Je l\'ai déjà installée</button></div>';
+  var etape = function (n, html) { return '<div style="display:flex;gap:12px;align-items:center;text-align:left"><span class="ip-n">' + n + '</span><span class="small">' + html + '</span></div>'; };
+  var lierBas = function () {
+    $('ip-non').onclick = function () { fermerModale(); var f = $('ip-fleche'); if (f) f.remove(); };
+    $('ip-deja').onclick = function () { localStorageSet('cloca-install-deja', String(Date.now())); fermerModale(); var f = $('ip-fleche'); if (f) f.remove(); };
+  };
+  // 1. Navigateur de WhatsApp, Instagram, Facebook… : l'installation y est impossible
+  if (navigateurIntegre()) {
+    modale(tete + '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px;text-align:left">Tu as ouvert le lien depuis une autre appli (WhatsApp, Instagram…). Pour installer, il faut l\'ouvrir dans ' + (estIos() ? '<b>Safari</b>' : '<b>Chrome</b>') + '.</div>' +
+      (estAndroid() ? '<a class="btn" href="intent://clocatennis.fr/app/#Intent;scheme=https;package=com.android.chrome;end">Ouvrir dans Chrome</a>'
+        : etape(1, 'Touche les <b>3 points</b> ou le bouton <b>Partager</b> de cette page') + etape(2, 'Choisis <b>« Ouvrir dans Safari »</b>') + '<button class="btn" id="ip-copie">Copier le lien de l\'appli</button>') + bas, function () {
+      lierBas();
+      if ($('ip-copie')) $('ip-copie').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié : colle-le dans Safari'); }).catch(function () { toast(lien); }); };
+    });
+    return true;
+  }
+  // 2. Android (Chrome) : installation en un geste quand le téléphone le propose, sinon le chemin dans le menu
+  if (estAndroid()) {
+    var dessiner = function () {
+      var c = $('ip-and'); if (!c) return;
+      c.innerHTML = INSTALL ? '<button class="btn" id="ip-go">' + ic('dl', 18, '#fff') + 'Installer CLOCA Tennis</button>'
+        : etape(1, 'Touche les <b>3 points ⋮</b> en haut à droite de Chrome') + etape(2, 'Choisis <b>« Installer l\'application »</b> (ou « Ajouter à l\'écran d\'accueil »)') + etape(3, 'Ouvre l\'appli depuis la nouvelle icône <b>CLOCA Tennis</b>');
+      if ($('ip-go')) $('ip-go').onclick = function () {
+        INSTALL.prompt(); INSTALL.userChoice.then(function (r) { INSTALL = null; if (r.outcome === 'accepted') { fermerModale(); toast('Appli installée : ouvre-la depuis son icône'); } else dessiner(); });
+      };
+    };
+    modale(tete + '<div id="ip-and" class="stack" style="gap:10px"></div>' + bas, function () { lierBas(); dessiner(); });
+    window.addEventListener('beforeinstallprompt', function () { setTimeout(dessiner, 0); }, { once: true });
+    return true;
+  }
+  // 3. iPhone (Safari) : pas à pas illustré + flèche qui montre le bouton Partager en bas de l'écran
+  modale(tete +
+    etape(1, 'Touche le bouton <b>Partager</b> ' + '<span class="ip-ic">' + ic('share', 16) + '</span> en bas de Safari') +
+    etape(2, 'Fais défiler et choisis <b>« Sur l\'écran d\'accueil »</b> <span class="ip-ic">' + ic('plus', 16) + '</span>') +
+    etape(3, 'Touche <b>« Ajouter »</b>, puis ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>') +
+    '<button class="btn" id="ip-ok">J\'ai compris, je le fais</button>' + bas, function () {
+      lierBas();
+      $('ip-ok').onclick = function () {
+        fermerModale();
+        var f = document.createElement('div'); f.id = 'ip-fleche'; f.className = 'ip-fleche';
+        f.innerHTML = '<span>Touche ' + ic('share', 16, '#fff') + ' juste en dessous</span><b>↓</b>';
+        f.onclick = function () { f.remove(); };
+        document.body.appendChild(f); setTimeout(function () { if (f.parentNode) f.remove(); }, 20000);
+      };
+    });
+  return true;
+}
 // Pousser les notifications : à chaque ouverture de l'appli (une fois par session), tant qu'elles ne sont pas actives sur l'appareil.
 // Autorisation déjà donnée mais appareil pas enregistré pour ce compte : on l'enregistre sans rien demander.
 function popupNotifs() {
@@ -3109,6 +3170,7 @@ function guidesAuto() {
     $('w-go').onclick = function () { ouvrirGuide(0); };
     $('w-non').onclick = function () { localStorageSet('cloca-guide-vu', '1'); fermerModale(); };
   });
+  if (S.user && !ss('cloca-install-pop') && popupInstaller()) { ssSet('cloca-install-pop'); ssSet('cloca-notif-pop'); return; }
   if (S.user && !ss('cloca-notif-pop') && popupNotifs()) { ssSet('cloca-notif-pop'); return; }
   if (!S.user && estInstallee() && !ss('cloca-rappel-cnx')) { ssSet('cloca-rappel-cnx'); return modale('<div class="stack" style="gap:14px;text-align:center"><h2 style="margin:0;font-size:21px">Tu n\'es pas encore connecté</h2><span class="small">Connecte-toi avec l\'adresse mail donnée au club pour voir ton agenda, tes messages et tes inscriptions. Un code arrive par mail, sans mot de passe.</span>' + maquette('connexion') +
     '<button class="btn" id="r-go">Me connecter</button><button class="btn line" id="r-aide">Voir le guide</button></div>', function () { $('r-go').onclick = function () { fermerModale(); go('#/profil'); }; $('r-aide').onclick = function () { ouvrirGuide(0); }; }); }
