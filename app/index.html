@@ -400,12 +400,13 @@ button.javatar{cursor:pointer}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .signature img{background:#fff;border-radius:18px;padding:10px 16px}}
 :root[data-theme="dark"] .signature img{background:#fff;border-radius:18px;padding:10px 16px}
 /* accueil : rangée Club house (25 %) + Prochain rendez-vous (75 %) */
-.acc-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,3fr);gap:10px;align-items:stretch}
+.acc-row{display:grid;grid-template-columns:minmax(86px,1fr) minmax(0,3.3fr);gap:10px;align-items:stretch}
 .acc-row.solo{grid-template-columns:minmax(0,1fr)}
 .acc-ch{display:flex;min-width:0}.acc-ch:empty{background:var(--card);border:1px solid var(--bd);border-radius:16px}
 .acc-ch>.tile{flex:1;width:100%}
-.acc-ch-t{font:inherit;padding:12px 10px;gap:6px;justify-content:flex-start;min-width:0}
-.acc-ch-t b{font-size:17px;line-height:1.1}
+.acc-ch-t{font:inherit;padding:11px 8px;gap:5px;justify-content:flex-start;min-width:0}
+.acc-ch-t b{font-size:14.5px;line-height:1.1;white-space:nowrap}
+.acc-ch-t .acc-lab{font-size:9.5px}
 .acc-ch-t .xs{line-height:1.25;overflow-wrap:anywhere}
 .acc-lab{font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;line-height:1.2}
 .acc-rdv{padding:12px 14px;gap:8px;border-left:4px solid var(--g,var(--ac));min-width:0}
@@ -424,6 +425,14 @@ button.javatar{cursor:pointer}
 .acc-t.drag{z-index:5;cursor:grabbing;box-shadow:0 12px 28px rgba(11,53,71,.22);border-style:solid;border-color:var(--ac);background:var(--card)}
 .acc-x{position:absolute;top:-9px;right:-9px;width:28px;height:28px;border-radius:50%;border:2px solid var(--card);background:var(--ko);color:#fff;font-size:20px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .acc-ajout{display:flex;flex-wrap:wrap;gap:8px}
+/* découverte du crayon : bulle « Nouveau » + pulsation, une seule fois par appareil */
+.acc-crayon.neuf{color:#fff;background:var(--ac);border-color:var(--ac);animation:acc-pulse 1.8s ease-out infinite}
+@keyframes acc-pulse{0%{box-shadow:0 0 0 0 rgba(180,83,42,.55)}70%{box-shadow:0 0 0 12px rgba(180,83,42,0)}100%{box-shadow:0 0 0 0 rgba(180,83,42,0)}}
+.acc-bulle{position:relative;display:flex;flex-direction:column;gap:10px;margin:0 0 12px;padding:12px 14px;border-radius:14px;background:var(--navy);color:#fff}
+.acc-bulle::before{content:"";position:absolute;top:-7px;right:13px;width:14px;height:14px;background:var(--navy);transform:rotate(45deg);border-radius:2px}
+.acc-bulle .btn{min-height:36px;padding:0 14px}
+.acc-bulle .btn.line{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+@media (prefers-reduced-motion:reduce){.acc-crayon.neuf{animation:none}}
 .acc-ajout .chip svg{color:var(--ac)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}}
 :root[data-theme="dark"] .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}

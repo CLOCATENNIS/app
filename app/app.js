@@ -375,7 +375,7 @@ function accueilCfg() {
 // Les deux écrans lisent et écrivent la même ligne compte_accueil (une par compte, protégée par la base).
 // Blocs fixes (club house, prochain RDV, fête, dernière actu, réseaux, partenaires) : jamais réglables par l'adhérent.
 var ACC_PERSO = ['double', 'inscriptions', 'reserver', 'cordage', 'arena', 'annonces'];
-var ACC_BLOCS_PERSO = ['arena']; // seul bloc que l'adhérent peut masquer (carte Mon CLOC'ARENA)
+var ACC_BLOCS_PERSO = []; // aucun bloc masquable par l'adhérent (Mon CLOC'ARENA s'affiche tout seul pour les familles qui participent)
 function cleTuile(x) { return x.type === 'lien' ? 'lien:' + x.titre : x.type; }
 // Raccourcis proposés : les 6 du club + ceux ajoutés par le club dans la gestion (sauf la fête, qui a son propre bloc)
 function catalogueTuiles(club) {
@@ -383,9 +383,15 @@ function catalogueTuiles(club) {
   club.tuiles.forEach(function (t) { if (t.type !== 'fete' && !l.some(function (x) { return cleTuile(x) === cleTuile(t); })) l.push(t); });
   return l;
 }
+function participeArena() { return !!(S.user && S.pers.some(function (p) { return p.niveau_arena; })); }
+function tuilesParDefaut(club) {
+  var l = club.tuiles.slice();
+  if (participeArena() && !l.some(function (t) { return t.type === 'arena'; })) l.push({ type: 'arena' });
+  return l;
+}
 function accueilPerso(cfg) {
   var m = S.monAccueil;
-  if (!m) return cfg;
+  if (!m) { cfg.tuiles = tuilesParDefaut(cfg); return cfg; }
   var cat = catalogueTuiles(cfg);
   if (Array.isArray(m.tuiles)) cfg.tuiles = m.tuiles.map(function (k) { return cat.filter(function (x) { return cleTuile(x) === k; })[0]; }).filter(Boolean);
   (m.blocs_masques || []).forEach(function (k) { if (ACC_BLOCS_PERSO.indexOf(k) >= 0) cfg.blocs.forEach(function (b) { if (b.k === k) b.on = false; }); });
@@ -399,11 +405,11 @@ function chargerMonAccueil() {
 // Choix actuel du compte (ou, à défaut, les raccourcis réglés par le club), prêt à modifier
 function monAccueilBrouillon() {
   var club = accueilCfg(), cat = catalogueTuiles(club), cles = cat.map(cleTuile);
-  var base = S.monAccueil && Array.isArray(S.monAccueil.tuiles) ? S.monAccueil.tuiles : club.tuiles.map(cleTuile);
-  return { tuiles: base.filter(function (k) { return cles.indexOf(k) >= 0; }), arenaMasque: ((S.monAccueil && S.monAccueil.blocs_masques) || []).indexOf('arena') >= 0 };
+  var base = S.monAccueil && Array.isArray(S.monAccueil.tuiles) ? S.monAccueil.tuiles : tuilesParDefaut(club).map(cleTuile);
+  return { tuiles: base.filter(function (k) { return cles.indexOf(k) >= 0; }) };
 }
 function enregistrerMonAccueil(E, ok) {
-  var blocs = E.arenaMasque ? ['arena'] : [];
+  var blocs = [];
   return q(sb.from('compte_accueil').upsert({ user_id: S.user.id, tuiles: E.tuiles, blocs_masques: blocs, maj_le: new Date().toISOString() })).then(function () { S.monAccueil = { tuiles: E.tuiles.slice(), blocs_masques: blocs }; ok(); }).catch(function () { toast('Enregistrement impossible, réessaie'); });
 }
 function retablirAccueilClub(ok) {
@@ -418,7 +424,6 @@ function pageMonAccueil() {
   var club = accueilCfg(), cat = catalogueTuiles(club);
   var E = S.monAccEd || (S.monAccEd = monAccueilBrouillon());
   var dispo = cat.slice().sort(function (a, b) { var ia = E.tuiles.indexOf(cleTuile(a)), ib = E.tuiles.indexOf(cleTuile(b)); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-  var aArena = S.user && S.pers.some(function (p) { return p.niveau_arena; });
   var h = '<div class="pagehead wrap">' + backLink('#/profil', 'Profil') + '<h1 style="font-size:26px">Mon accueil</h1><p class="mut small" style="margin:4px 0 0">Choisis tes raccourcis. Astuce : tu peux aussi le faire directement sur l\'accueil avec le crayon ✏️.</p></div><main>' +
     '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Mes raccourcis</span>' + dispo.map(function (t) {
       var k = cleTuile(t), d = infoTuile(t), i = E.tuiles.indexOf(k), on = i >= 0;
@@ -426,13 +431,11 @@ function pageMonAccueil() {
         '<span style="width:36px;height:36px;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex:none">' + ic(d.icone, 20, on ? 'var(--ac)' : 'var(--mut)') + '</span><span class="stack" style="gap:0"><b class="small">' + esc(d.titre) + '</b><span class="xs mut">' + esc(d.aide) + '</span></span></label>' +
         (on ? '<span style="display:flex;gap:4px;flex:none"><button class="chip" data-mam="' + i + '|-1" aria-label="Monter"' + (i ? '' : ' disabled style="opacity:.35"') + '>↑</button><button class="chip" data-mam="' + i + '|1" aria-label="Descendre"' + (i < E.tuiles.length - 1 ? '' : ' disabled style="opacity:.35"') + '>↓</button></span>' : '') + '</div>';
     }).join('') + '</section>' +
-    (aArena ? '<section class="card stack" style="gap:2px"><span class="eyebrow" style="margin-bottom:6px">Ce que j\'affiche</span><label class="check" style="border-top:1px solid var(--bd);padding:10px 0"><input type="checkbox" id="ma-arena"' + (E.arenaMasque ? '' : ' checked') + '><span class="stack" style="gap:0"><b class="small">Mon CLOC\'ARENA</b><span class="xs mut">Classement et prochaine séance</span></span></label></section>' : '') +
-    '<span class="xs mut" style="padding:0 4px">Le club house, le prochain rendez-vous, la dernière actu, les réseaux, les partenaires et les messages importants restent toujours affichés.</span>' +
+    '<span class="xs mut" style="padding:0 4px">Le club house, le prochain rendez-vous, la dernière actu, les réseaux, les partenaires et les messages importants restent toujours affichés. La carte Mon CLOC\'ARENA s\'affiche toute seule pour les familles qui participent.</span>' +
     '<button class="btn" id="ma-go">Enregistrer</button><button class="btn line" id="ma-raz">Revenir aux raccourcis du club</button></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-mat]'), function (c) { c.onchange = function () { var k = c.dataset.mat; if (c.checked) E.tuiles.push(k); else E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); render(); }; });
     Array.prototype.forEach.call(document.querySelectorAll('[data-mam]'), function (b) { b.onclick = function () { var x = b.dataset.mam.split('|'), i = +x[0], j = i + +x[1], t = E.tuiles[i]; E.tuiles[i] = E.tuiles[j]; E.tuiles[j] = t; render(); }; });
-    if ($('ma-arena')) $('ma-arena').onchange = function () { E.arenaMasque = !this.checked; };
     $('ma-go').onclick = function () { enregistrerMonAccueil(E, function () { S.monAccEd = null; toast('Accueil enregistré'); go('#/accueil'); }); };
     $('ma-raz').onclick = function () { retablirAccueilClub(function () { S.monAccEd = null; toast('Raccourcis du club rétablis'); go('#/accueil'); }); };
   });
@@ -444,13 +447,14 @@ function zoneRaccourcis(cfg, dyn) {
   if (!E) {
     var grille = tuilesAccueil(cfg, dyn);
     if (!peut) return grille;
-    return '<div class="acc-rac" id="acc-rac"><div class="acc-rac-h"><span class="eyebrow">Mes raccourcis</span><button class="acc-crayon" id="acc-ed" aria-label="Modifier mes raccourcis" title="Modifier mes raccourcis">' + ic('edit', 17) + '</button></div>' +
+    var bulle = !localStorageGet('cloca-crayon-vu');
+    return '<div class="acc-rac" id="acc-rac"><div class="acc-rac-h"><span class="eyebrow">Mes raccourcis</span><button class="acc-crayon' + (bulle ? ' neuf' : '') + '" id="acc-ed" aria-label="Modifier mes raccourcis" title="Modifier mes raccourcis">' + ic('edit', 17) + '</button></div>' +
+      (bulle ? '<div class="acc-bulle" role="note"><span class="small"><b>Nouveau :</b> choisis tes raccourcis ! Touche le crayon ✏️ pour les déplacer, en retirer ou en ajouter.</span><span style="display:flex;gap:8px"><button class="btn sm" id="acc-bulle-go">Essayer</button><button class="btn sm line" id="acc-bulle-ok">OK, compris</button></span></div>' : '') +
       (grille || '<button class="tile acc-vide" id="acc-ed2">' + ic('plus', 22) + '<b>Ajouter des raccourcis</b><span class="mut small">Cordage, CLOC\'ARENA, annonces…</span></button>') + '</div>';
   }
   var cat = catalogueTuiles(accueilCfg());
   var parCle = function (k) { return cat.filter(function (x) { return cleTuile(x) === k; })[0]; };
   var vis = E.tuiles.map(parCle).filter(Boolean), caches = cat.filter(function (t) { return E.tuiles.indexOf(cleTuile(t)) < 0; });
-  var aArena = S.pers.some(function (p) { return p.niveau_arena; });
   return '<section class="card stack acc-edit" id="acc-rac" style="gap:12px"><div class="acc-rac-h" style="margin:0"><span class="eyebrow">Mes raccourcis</span><span class="xs mut">Modification</span></div>' +
     '<span class="small mut" style="margin-top:-6px">Fais glisser une case pour la déplacer, touche <b>−</b> pour la retirer.</span>' +
     (vis.length ? '<div class="grid2 acc-grille" id="acc-grille">' + vis.map(function (t) {
@@ -460,18 +464,19 @@ function zoneRaccourcis(cfg, dyn) {
     (caches.length ? '<div class="stack" style="gap:8px"><span class="eyebrow">Ajouter</span><div class="acc-ajout">' + caches.map(function (t) {
       var d = infoTuile(t); return '<button class="chip" data-aca="' + esc(cleTuile(t)) + '">' + ic('plus', 15) + esc(d.titre) + '</button>';
     }).join('') + '</div></div>' : '') +
-    (aArena ? '<label class="check" style="border-top:1px solid var(--bd);padding-top:10px;min-height:0"><input type="checkbox" id="acc-arena"' + (E.arenaMasque ? '' : ' checked') + '><span class="small">Afficher la carte <b>Mon CLOC\'ARENA</b></span></label>' : '') +
     '<div class="grid2"><button class="btn line" id="acc-annul">Annuler</button><button class="btn" id="acc-ok">Terminer</button></div>' +
     '<button class="btn ghost" id="acc-raz" style="min-height:36px">Revenir aux raccourcis du club</button></section>';
 }
 function lierRaccourcis() {
-  var ouvrir = function () { S.accEd = monAccueilBrouillon(); render(); setTimeout(function () { var z = $('acc-rac'); if (z && z.scrollIntoView) z.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50); };
+  var vu = function () { localStorageSet('cloca-crayon-vu', '1'); };
+  if ($('acc-bulle-ok')) $('acc-bulle-ok').onclick = function () { vu(); render(); };
+  if ($('acc-bulle-go')) $('acc-bulle-go').onclick = function () { ouvrir(); };
+  var ouvrir = function () { vu(); S.accEd = monAccueilBrouillon(); render(); setTimeout(function () { var z = $('acc-rac'); if (z && z.scrollIntoView) z.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50); };
   if ($('acc-ed')) $('acc-ed').onclick = ouvrir;
   if ($('acc-ed2')) $('acc-ed2').onclick = ouvrir;
   var E = S.accEd; if (!E || !$('acc-rac')) return;
   Array.prototype.forEach.call(document.querySelectorAll('[data-acx]'), function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.acx; E.tuiles = E.tuiles.filter(function (x) { return x !== k; }); render(); }; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-aca]'), function (b) { b.onclick = function () { E.tuiles.push(b.dataset.aca); render(); }; });
-  if ($('acc-arena')) $('acc-arena').onchange = function () { E.arenaMasque = !this.checked; };
   $('acc-annul').onclick = function () { S.accEd = null; render(); };
   $('acc-ok').onclick = function () { var b = this; b.disabled = true; enregistrerMonAccueil(E, function () { S.accEd = null; toast('Raccourcis enregistrés'); render(); }); setTimeout(function () { b.disabled = false; }, 3000); };
   $('acc-raz').onclick = function () { retablirAccueilClub(function () { S.accEd = null; toast('Raccourcis du club rétablis'); render(); }); };
@@ -2794,7 +2799,7 @@ function remplirPresence() {
         var mot = { ouvert: 'Ouvert', coach: 'Coach', ferme: 'Fermé' }[A.etat];
         var bas = A.pause ? esc(A.pause.libelle) : A.fin ? 'jusqu\'à ' + fmtH(A.fin) : A.etat === 'ferme' && A.prochain ? 'Ouvre ' + esc(quandCourt(A.prochain)) : '';
         box.innerHTML = '<button class="tile acc-ch-t" id="pres-tile" aria-expanded="' + (S.presDet ? 'true' : 'false') + '" aria-label="Club house : ' + E.t + '"><span class="acc-lab mut">Club house</span>' +
-          '<span style="display:flex;align-items:center;gap:8px"><span class="dot" style="width:10px;height:10px;flex:none;background:' + E.c + ';box-shadow:0 0 0 3px ' + E.c + '33"></span><b style="color:' + E.c + '">' + mot + '</b></span>' + (bas ? '<span class="mut xs">' + bas + '</span>' : '') + '</button>';
+          '<span style="display:flex;align-items:center;gap:6px;min-width:0"><span class="dot" style="width:9px;height:9px;flex:none;background:' + E.c + ';box-shadow:0 0 0 3px ' + E.c + '33"></span><b style="color:' + E.c + '">' + mot + '</b></span>' + (bas ? '<span class="mut xs">' + bas + '</span>' : '') + '</button>';
         det.innerHTML = S.presDet ? h + '</section>' : '';
         $('pres-tile').onclick = function () { S.presDet = !S.presDet; remplirPresence(); };
       } else {
