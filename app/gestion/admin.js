@@ -151,7 +151,7 @@ function chargerGroupes(force) {
 }
 function chargerPers(force) {
   if (A.pers && !force) return Promise.resolve(A.pers);
-  return q(sb.from('personnes').select('id, prenom, nom, profil, sexe, date_naissance, cours, cotisation_a_jour, foyer_id, actif, niveau_arena, niveau_club, classement_fft, meilleur_classement_fft, photo_path, adoc_id, email, arena_id, groupe_membres(groupe_id)').order('nom').order('prenom'))
+  return q(sb.from('personnes').select('id, prenom, nom, profil, sexe, date_naissance, cours, cotisation_a_jour, foyer_id, actif, niveau_arena, niveau_club, classement_fft, meilleur_classement_fft, niveau_fft, photo_path, adoc_id, email, arena_id, groupe_membres(groupe_id)').order('nom').order('prenom'))
     .then(function (l) { A.pers = l || []; return A.pers; });
 }
 function nomGroupe(id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g ? g.nom : '?'; }
@@ -2732,6 +2732,11 @@ function fftPropre(v) {
   if (/^N°?\d+/.test(s) || /^T\d+/.test(s)) return s.replace(/^N(\d)/, 'N°$1'); // classés numérotés ou top
   return ECHELLE_FFT.indexOf(s) >= 0 ? s : null;
 }
+// Niveau FFT (Galaxie) d'ADOC : « Niveau Rouge » → « Rouge »
+function nivFftPropre(v) {
+  var s = String(v || '').replace(/\s+/g, ' ').trim().replace(/^niveau\s*/i, ''); if (!s) return null;
+  return ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'].filter(function (x) { return x.toLowerCase() === s.toLowerCase(); })[0] || null;
+}
 function fftRang(c) { if (!c) return -1; if (/^(N°|T)/.test(c)) return 1000 - (parseInt(c.replace(/\D/g, ''), 10) || 999) / 1000; return ECHELLE_FFT.indexOf(c); }
 function fftMeilleur() { var l = Array.prototype.slice.call(arguments).filter(Boolean); return l.sort(function (a, b) { return fftRang(b) - fftRang(a); })[0] || null; }
 function lireFft(XLSX, buf) {
@@ -2743,20 +2748,21 @@ function lireFft(XLSX, buf) {
   var hi = -1; for (var i = 0; i < Math.min(rows.length, 8); i++) { if (aCol(rows[i], /licence/i) && aCol(rows[i], /class|^clt|meilleur/i)) { hi = i; break; } }
   if (hi < 0) throw new Error('format');
   var H = rows[hi].map(function (h) { return String(h || '').replace(/\s+/g, ' ').trim(); }), trouve = function (re, sauf) { for (var j = 0; j < H.length; j++) if (re.test(H[j]) && !(sauf && sauf.test(H[j]))) return j; return -1; };
-  var C = { lic: trouve(/licence/i), nom: trouve(/^nom$/i), pre: trouve(/^pr[ée]nom$/i), clt: trouve(/class|^clt/i, /meilleur|ancien|pr[ée]c/i), best: trouve(/meilleur/i) };
+  var C = { lic: trouve(/licence/i), nom: trouve(/^nom$/i), pre: trouve(/^pr[ée]nom$/i), clt: trouve(/class|^clt/i, /meilleur|ancien|pr[ée]c/i), best: trouve(/meilleur/i), niv: trouve(/^niveau/i) };
   if (C.clt < 0 && C.best < 0) throw new Error('colonne');
-  return { colonnes: { clt: C.clt >= 0 ? H[C.clt] : null, best: C.best >= 0 ? H[C.best] : null }, lignes: rows.slice(hi + 1).filter(function (r) { return r && (r[C.lic] || r[C.nom]); }).map(function (r) {
-    return { licence: r[C.lic] ? String(r[C.lic]).trim() : null, nom: C.nom >= 0 ? String(r[C.nom] || '').trim() : '', prenom: C.pre >= 0 ? String(r[C.pre] || '').trim() : '', clt: C.clt >= 0 ? fftPropre(r[C.clt]) : null, best: C.best >= 0 ? fftPropre(r[C.best]) : null };
+  return { colonnes: { clt: C.clt >= 0 ? H[C.clt] : null, best: C.best >= 0 ? H[C.best] : null, niv: C.niv >= 0 ? H[C.niv] : null }, lignes: rows.slice(hi + 1).filter(function (r) { return r && (r[C.lic] || r[C.nom]); }).map(function (r) {
+    return { licence: r[C.lic] ? String(r[C.lic]).trim() : null, nom: C.nom >= 0 ? String(r[C.nom] || '').trim() : '', prenom: C.pre >= 0 ? String(r[C.pre] || '').trim() : '', clt: C.clt >= 0 ? fftPropre(r[C.clt]) : null, best: C.best >= 0 ? fftPropre(r[C.best]) : null, niv: C.niv >= 0 ? nivFftPropre(r[C.niv]) : null };
   }) };
 }
 function nvImportFft() {
   $('nv-l').innerHTML = '<div class="two"><div class="card stack"><b>1. Exporter depuis ADOC</b><span class="small">Le même export que pour la mise à jour des adhérents (<b>Adhérents → Gestion → Résultats</b>, bouton <b>Excel</b>), avec la colonne du <b>classement</b> (et, si ADOC la propose, le <b>meilleur classement</b>).</span>' +
-    '<div class="stack" style="gap:6px;background:var(--soft);border-radius:12px;padding:10px 12px"><b class="small">Colonnes à mettre dans l\'Excel</b>' +
+    '<div class="stack" style="gap:6px;background:var(--soft);border-radius:12px;padding:10px 12px"><b class="small">Colonnes à mettre dans l\'Excel, dans cet ordre (noms de l\'export ADOC) : Nom · Prénom · Licence · Dernier class. tennis · Meilleur class. tennis · Niveau</b>' +
       '<table class="t" style="font-size:13px"><thead><tr><th>Colonne</th><th>Obligatoire</th><th>À quoi elle sert</th></tr></thead><tbody>' +
       '<tr><td><b>Nom</b> et <b>Prénom</b></td><td>Conseillé</td><td>Retrouver le joueur si sa licence n\'est pas dans l\'appli</td></tr>' +
       '<tr><td><b>Licence</b></td><td>Oui</td><td>Retrouver le joueur dans l\'appli (ex. 9212937 L)</td></tr>' +
-      '<tr><td><b>Classement</b></td><td>Oui</td><td>Classement FFT actuel</td></tr>' +
-      '<tr><td><b>Meilleur classement</b></td><td>Non</td><td>Si absent, l\'appli le calcule au fil des imports</td></tr></tbody></table>' +
+      '<tr><td><b>Dernier class. tennis</b></td><td>Oui</td><td>Classement FFT actuel</td></tr>' +
+      '<tr><td><b>Meilleur class. tennis</b></td><td>Non</td><td>Si absent, l\'appli le calcule au fil des imports</td></tr>' +
+      '<tr><td><b>Niveau</b></td><td>Non</td><td>Niveau FFT (ex. « Niveau Rouge »), pris seulement pour les <b>11 ans et moins</b> ; ignoré à partir de 12 ans</td></tr></tbody></table>' +
       '<span class="xs mut">Les autres colonnes de l\'export sont ignorées, l\'ordre n\'a pas d\'importance. Valeurs comme sur Ten\'Up : NC, 40, 30/5, 30/2, 30, 15/4, 15, 5/6, 0, -15… Case vide = on ne touche pas. Évite une 2e colonne « Ancien classement ». Feuille « Détaillé » (export ADOC) ou la première feuille ; en-têtes dans les 8 premières lignes.</span>' +
       '<button class="btn sm line" id="ff-modele" style="align-self:flex-start">Télécharger un modèle Excel vide</button></div>' +
     '<b>2. Le déposer ici</b><input class="f" type="file" id="ff-f" accept=".xls,.xlsx,.csv"><div id="ff-r"></div></div>' +
@@ -2764,8 +2770,8 @@ function nvImportFft() {
     '<b>Ce qu\'il ne touche jamais</b><span class="small">Le niveau club, fixé par la direction sportive, et tout le reste de la fiche.</span></div></div>';
   $('ff-modele').onclick = function () {
     chargerXlsx().then(function (X) {
-      var ws = X.utils.aoa_to_sheet([['Nom', 'Prénom', 'Licence', 'Classement', 'Meilleur classement'], ['MARTIN', 'Léa', '1234567 A', '30/2', '30/1']]);
-      ws['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 20 }];
+      var ws = X.utils.aoa_to_sheet([['Nom', 'Prénom', 'Licence', 'Dernier class. tennis', 'Meilleur class. tennis', 'Niveau'], ['MARTIN', 'Léa', '1234567 A', 'NC', 'NC', 'Niveau Rouge']]);
+      ws['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 16 }];
       var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Détaillé'); X.writeFile(wb, 'modele-classements-fft.xlsx');
     }).catch(function () { toast('Téléchargement impossible'); });
   };
@@ -2781,21 +2787,24 @@ function nvImportFft() {
       lu.lignes.forEach(function (l) {
         var p = (l.licence && parLic[lic(l.licence)]) || parNom[cle(l.nom) + '|' + cle(l.prenom)];
         if (!p) { inconnus.push(l); return; }
-        if (!l.clt && !l.best) { vides++; return; }
+        var petit = p.date_naissance && age(p.date_naissance) <= 11;
+        var niv = petit && lu.colonnes.niv ? l.niv : undefined; // 12 ans et plus : la colonne Niveau est ignorée
+        if (!l.clt && !l.best && niv === undefined) { vides++; return; }
         var clt = l.clt || p.classement_fft || null, best = fftMeilleur(p.meilleur_classement_fft, l.best, clt);
-        if (clt === (p.classement_fft || null) && best === (p.meilleur_classement_fft || null)) { pareil++; return; }
-        changes.push({ p: p, clt: clt, best: best });
+        var nivChange = niv !== undefined && (niv || null) !== (p.niveau_fft || null);
+        if (clt === (p.classement_fft || null) && best === (p.meilleur_classement_fft || null) && !nivChange) { pareil++; return; }
+        changes.push({ p: p, clt: clt, best: best, niv: niv, nivChange: nivChange });
       });
       var liste = function (t, arr, fn) { return arr.length ? '<details' + (arr.length < 15 ? ' open' : '') + '><summary class="small"><b>' + t + ' (' + arr.length + ')</b></summary><div class="small mut" style="margin:6px 0 0 14px">' + arr.slice(0, 300).map(fn).join('<br>') + '</div></details>' : ''; };
-      $('ff-r').innerHTML = '<p class="xs mut">Colonnes lues : ' + esc([lu.colonnes.clt, lu.colonnes.best].filter(Boolean).join(' · ')) + '</p>' +
+      $('ff-r').innerHTML = '<p class="xs mut">Colonnes lues : ' + esc([lu.colonnes.clt, lu.colonnes.best, lu.colonnes.niv].filter(Boolean).join(' · ')) + (lu.colonnes.niv ? ' (niveau pris seulement pour les 11 ans et moins)' : '') + '</p>' +
         '<div class="kpis" style="margin:8px 0"><div class="kpi"><b>' + lu.lignes.length + '</b><span>dans le fichier</span></div><div class="kpi"><b>' + changes.length + '</b><span>à mettre à jour</span></div><div class="kpi"><b>' + pareil + '</b><span>déjà à jour</span></div><div class="kpi"><b>' + inconnus.length + '</b><span>introuvables</span></div></div>' +
-        liste('Changements', changes, function (x) { return '<b>' + esc(x.p.prenom + ' ' + x.p.nom) + '</b> : ' + esc((x.p.classement_fft || '—') + ' → ' + (x.clt || '—')) + (x.best !== (x.p.meilleur_classement_fft || null) ? ' · meilleur ' + esc(x.best || '—') : ''); }) +
+        liste('Changements', changes, function (x) { return '<b>' + esc(x.p.prenom + ' ' + x.p.nom) + '</b> : ' + esc((x.p.classement_fft || '—') + ' → ' + (x.clt || '—')) + (x.best !== (x.p.meilleur_classement_fft || null) ? ' · meilleur ' + esc(x.best || '—') : '') + (x.nivChange ? ' · niveau FFT ' + esc(x.niv || '—') : ''); }) +
         liste('Introuvables dans l\'appli', inconnus, function (l) { return esc((l.prenom + ' ' + l.nom).trim() || l.licence); }) +
         (vides ? '<p class="xs mut">' + vides + ' joueur' + (vides > 1 ? 's' : '') + ' sans classement dans le fichier : rien ne change pour eux.</p>' : '') +
         (changes.length ? '<button class="btn" id="ff-go">Mettre à jour ' + changes.length + ' classement' + (changes.length > 1 ? 's' : '') + '</button>' : '<p class="small" style="color:var(--ok)">Tout est déjà à jour.</p>');
       if ($('ff-go')) $('ff-go').onclick = function () {
         var b = this; b.disabled = true; b.textContent = 'Mise à jour…';
-        q(sb.rpc('fft_importer', { lignes: changes.map(function (x) { return { id: x.p.id, clt: x.clt, best: x.best }; }) })).then(function (n) {
+        q(sb.rpc('fft_importer', { lignes: changes.map(function (x) { var o = { id: x.p.id, clt: x.clt, best: x.best }; if (x.niv !== undefined) o.niv = x.niv || ''; return o; }) })).then(function (n) {
           toast((n || changes.length) + ' classements mis à jour'); A.pers = null; NVF.tab = 'joueurs'; router();
         }).catch(function () { toast('Mise à jour impossible'); b.disabled = false; b.textContent = 'Réessayer'; });
       };
@@ -2811,7 +2820,7 @@ function nvJoueurs() {
     var dessiner = function () {
       var r = filtre();
       $('nv-tb').innerHTML = r.slice(0, 150).map(function (p) {
-        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b><div class="mut xs">' + (p.date_naissance ? age(p.date_naissance) + ' ans' : '') + (p.niveau_arena ? ' · CLOC\'ARENA ' + esc(p.niveau_arena) : '') + '</div></td>' +
+        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b><div class="mut xs">' + (p.date_naissance ? age(p.date_naissance) + ' ans' : '') + (p.niveau_arena ? ' · CLOC\'ARENA ' + esc(p.niveau_arena) : '') + (p.niveau_fft && p.date_naissance && age(p.date_naissance) <= 11 ? ' · niveau FFT ' + esc(p.niveau_fft) : '') + '</div></td>' +
           '<td>' + selectBareme('nvc-' + p.id, p.niveau_club) + '</td><td><input class="f" style="max-width:90px" id="nvf-' + p.id + '" value="' + esc(p.classement_fft || '') + '" placeholder="—"></td><td><input class="f" style="max-width:90px" id="nvm-' + p.id + '" value="' + esc(p.meilleur_classement_fft || '') + '" placeholder="—"></td>' +
           '<td><button class="btn sm line" data-nvs="' + p.id + '">Enregistrer</button></td></tr>';
       }).join('') || '<tr><td colspan="5" class="mut">Personne ne correspond.</td></tr>';

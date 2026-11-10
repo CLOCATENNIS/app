@@ -284,3 +284,7 @@ begin
 end $$;
 revoke all on function public.fft_importer(jsonb) from public, anon;
 grant execute on function public.fft_importer(jsonb) to authenticated;
+
+-- Niveau FFT (Galaxie) importé d'ADOC, affiché pour les 11 ans et moins (10/11 19h15)
+alter table public.personnes add column if not exists niveau_fft text;
+-- fft_importer : met aussi à jour niveau_fft quand la clé 'niv' est fournie ; profil_joueur renvoie niveau_fft si âge <= 11 (voir migration niveau_fft_moins_12_ans)

@@ -330,7 +330,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '10/11 18h15';
+var VERSION_APPLI = '10/11 19h15';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -928,7 +928,7 @@ function pageJoueur(id) {
           '<b style="color:' + (clair ? c.bg : '#3a2f00') + '">' + esc(f.prenom.charAt(0) + (f.initiale || '')) + '</b><img id="jr-img" alt="" hidden>' + (f.famille ? '<span class="jcam">' + ic('cam', 14, '#fff') + '</span></button>' : '</span>') +
         '<div><h1 style="font-size:26px;line-height:1.1">' + esc(nomCourt(f)) + '</h1><div class="small" style="opacity:.92">' + [ageTxt(f.age), f.niveau_club || 'Niveau à définir'].filter(Boolean).map(esc).join(' · ') + '</div></div></div></div></div><main>';
       // Niveau club + classement FFT
-      var fft = f.classement_fft || f.meilleur_classement_fft;
+      var fft = f.classement_fft || f.meilleur_classement_fft || f.niveau_fft;
       h += '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Niveau au club</span>' + nivClubBadge(f.niveau_club) + '</div>' +
         (nivClubDetail(f.niveau_club) ? '<span class="small">' + esc(nivClubDetail(f.niveau_club)) + '</span>' : '') +
         '<span class="mut xs">Fixé par la direction sportive, selon le barème du club.</span>';
@@ -937,7 +937,7 @@ function pageJoueur(id) {
         else h += '<button class="btn line" id="jr-dem">Demander un changement de niveau</button>' + (f.demande && f.demande.statut === 'refusee' ? '<span class="mut xs">Dernière demande non retenue' + (f.demande.reponse ? ' : ' + esc(f.demande.reponse) : '') + '.</span>' : '');
       }
       h += '</section>';
-      if (fft) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement FFT</span><div class="grid2"><div class="stat"><b>' + esc(f.classement_fft || '—') + '</b><span class="mut xs">actuel</span></div><div class="stat"><b>' + esc(f.meilleur_classement_fft || f.classement_fft || '—') + '</b><span class="mut xs">meilleur</span></div></div></section>';
+      if (fft) h += '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">' + (f.niveau_fft ? 'Niveau et classement FFT' : 'Classement FFT') + '</span>' + (f.niveau_fft ? '<span class="badge" style="background:' + (NIV[f.niveau_fft] || { bg: '#667068' }).bg + ';color:' + (NIV[f.niveau_fft] || { fg: '#fff' }).fg + '">Niveau FFT ' + esc(f.niveau_fft) + '</span>' : '') + '</div><div class="grid2"><div class="stat"><b>' + esc(f.classement_fft || '—') + '</b><span class="mut xs">actuel</span></div><div class="stat"><b>' + esc(f.meilleur_classement_fft || f.classement_fft || '—') + '</b><span class="mut xs">meilleur</span></div></div></section>';
       // Un bloc par circuit CLOC'ARENA (Tweener, Masters, Versus) où le joueur a joué
       (f.circuits || []).forEach(function (ci) { h += blocCircuit(ci); });
       h += '<p class="mut xs" style="text-align:center">Fiche visible par les adhérents connectés.</p></main>';
