@@ -315,7 +315,10 @@ function grouperJours() {
     while (n) { var suiv = n.nextElementSibling; g.appendChild(n); n = suiv && suiv.classList.contains('ev') ? suiv : null; }
   });
 }
+// Rafraîchir la barre sans argument garde l'onglet en cours (ex. compteur de non-lus mis à jour dans un fil de Messages)
+var TAB_ACTIF = 'accueil';
 function tabs(actif) {
+  actif = actif || TAB_ACTIF; TAB_ACTIF = actif;
   // Arena n'est plus dans la barre : carte « Mon CLOC'ARENA » sur l'accueil (joueurs concernés) et Club → Compétitions
   var t = [['accueil', 'home', 'Accueil'], ['agenda', 'cal', 'Agenda'], ['messages', 'chat', 'Messages'], ['club', 'club', 'Club']];
   var nm = totalNonLus();
@@ -4055,7 +4058,7 @@ function lierListeDisc() {
 function pageDiscussions() {
   var h = '<div class="pagehead wrap">' + backLink('#/accueil', 'Accueil') + '<h1 style="font-size:26px">Discussions</h1><p class="mut small" style="margin:4px 0 0">Tes groupes du club : annonces, CLOC\'ARENA, poules, équipes…</p></div><main>';
   if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes discussions.</section></main>';
-  setTimeout(function () { lierListeDisc(); chargerDiscussions().then(function () { if ($('disc-l') && !($('disc-q') && $('disc-q').value)) { $('disc-l').innerHTML = discListeHtml(); lierListeDisc(); } tabs('accueil'); }); });
+  setTimeout(function () { lierListeDisc(); chargerDiscussions().then(function () { if ($('disc-l') && !($('disc-q') && $('disc-q').value)) { $('disc-l').innerHTML = discListeHtml(); lierListeDisc(); } tabs(); }); });
   return h + '<div id="disc-l" class="stack" style="gap:12px">' + discListeHtml() + '</div></main>';
 }
 function pageDiscussion(id) {
@@ -4127,7 +4130,7 @@ function signalerDiscussion(d) {
 function discFermerCanal() { if (DISC.canal) { try { sb.removeChannel(DISC.canal); } catch (e) { } DISC.canal = null; } DISC.id = null; }
 function discMarquerLu(d) {
   clearTimeout(DISC.luT);
-  DISC.luT = setTimeout(function () { q(sb.rpc('discussion_lu', { p_disc: d.id })).then(function () { d.non_lus = 0; d.lu_le = new Date().toISOString(); tabs('accueil'); }).catch(function () { }); }, 400);
+  DISC.luT = setTimeout(function () { q(sb.rpc('discussion_lu', { p_disc: d.id })).then(function () { d.non_lus = 0; d.lu_le = new Date().toISOString(); tabs(); }).catch(function () { }); }, 400);
 }
 function ouvrirFil(d) {
   discFermerCanal();
