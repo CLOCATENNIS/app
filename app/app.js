@@ -81,6 +81,7 @@ var IC = {
   flag: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>',
   // discussion éphémère : cercle en pointillés avec une aiguille
   eph: '<path d="M12 3a9 9 0 1 1-9 9"/><path d="M3.6 8.5h.01M5.6 5.6h.01M8.5 3.6h.01" stroke-width="2.6"/><path d="M12 7.5V12l3 2"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>',
   sortie: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'
 };
 function ic(n, size, color) {
@@ -4074,7 +4075,7 @@ function pageDiscussion(id) {
   var prive = d.type === 'prive';
   var h = '<div class="pagehead wrap" style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:18;background:var(--bg)">' +
     '<a class="back" href="#/messages" aria-label="Retour aux messages" style="color:var(--tx);margin:0">' + ic('back', 22) + '</a>' + discAvatar(d, 38) +
-    '<span class="stack" style="flex:1;min-width:0;gap:0"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+    '<span class="stack"' + (prive ? '' : ' id="disc-infos" role="button" tabindex="0" aria-label="Voir les infos et les membres du fil"') + ' style="flex:1;min-width:0;gap:0' + (prive ? '' : ';cursor:pointer') + '"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
     (prive ? esc(d.annonce_titre || 'Annonce n°' + d.annonce_num) : d.membres + ' membre' + (d.membres > 1 ? 's' : '')) + (d.expire_le ? ' · se ferme le ' + esc(discFin(d)) : '') + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
     '<button class="chip" id="disc-muet" aria-label="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '" title="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '">' + ic(d.muet ? 'bell' : 'mute', 18) + '</button>' +
     (prive ? '<button class="chip" id="disc-signal" style="color:var(--ac);border-color:var(--ac)">' + ic('flag', 16) + 'Signaler</button>' : '') +
@@ -4132,6 +4133,28 @@ function discMarquerLu(d) {
   clearTimeout(DISC.luT);
   DISC.luT = setTimeout(function () { q(sb.rpc('discussion_lu', { p_disc: d.id })).then(function () { d.non_lus = 0; d.lu_le = new Date().toISOString(); tabs(); }).catch(function () { }); }, 400);
 }
+// Infos du fil (toucher le nom en haut) : description, date de fin si éphémère, membres avec lien vers leur fiche joueur
+function infosFil(d) {
+  var tete = '<div style="display:flex;align-items:center;gap:12px;padding-right:30px">' + discAvatar(d, 52) + '<span class="stack" style="gap:2px;min-width:0"><b style="font-size:18px">' + esc(d.nom) + '</b>' +
+    '<span class="xs mut">' + d.membres + ' membre' + (d.membres > 1 ? 's' : '') + (d.categorie ? ' · ' + esc(d.categorie) : '') + '</span></span></div>' +
+    (d.description ? '<p class="small" style="margin:0">' + esc(d.description) + '</p>' : '') +
+    (d.expire_le ? '<div class="small mut" style="padding:8px 12px;border-radius:12px;background:var(--soft)">' + ic('eph', 14) + ' Discussion éphémère : elle sera fermée le ' + esc(discFin(d, true)) + '.</div>' : '');
+  modale('<div class="stack" style="gap:12px">' + tete + '<b class="small" style="margin-top:4px">Membres</b><div id="inf-l" class="stack" style="gap:0"><div class="small mut">Chargement…</div></div></div>');
+  q(sb.rpc('discussion_membres_liste', { p_disc: d.id })).then(function (l) {
+    if (!$('inf-l')) return;
+    l = l || [];
+    $('inf-l').innerHTML = l.length ? l.map(function (m) {
+      var ini = (m.nom || '?').split(' ').map(function (x) { return x.charAt(0); }).join('').slice(0, 2).toUpperCase();
+      var lien = m.personne_id && !m.moi;
+      return '<' + (lien ? 'a href="#/joueur/' + m.personne_id + '" data-fiche' : 'div') + ' style="display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid var(--bd);color:var(--tx);text-decoration:none">' +
+        '<span style="width:36px;height:36px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none">' + esc(ini) + '</span>' +
+        '<span style="flex:1;min-width:0"><b style="font-size:15px">' + esc(m.nom) + '</b>' + (m.moi ? ' <span class="xs mut">(toi)</span>' : '') + '</span>' +
+        (m.club ? '<span class="badge" style="background:var(--ac);color:#fff">Club</span>' : '') +
+        (lien ? ic('chev', 18, 'var(--mut)') : '') + '</' + (lien ? 'a' : 'div') + '>';
+    }).join('') + '<span class="xs mut" style="margin-top:10px">Touche un membre pour voir sa fiche joueur.</span>' : '<div class="small mut">Aucun membre.</div>';
+    Array.prototype.forEach.call($('inf-l').querySelectorAll('[data-fiche]'), function (a) { a.onclick = function () { fermerModale(); }; });
+  }).catch(function () { if ($('inf-l')) $('inf-l').innerHTML = '<div class="small mut">Liste des membres indisponible pour le moment.</div>'; });
+}
 function ouvrirFil(d) {
   discFermerCanal();
   DISC.id = d.id; DISC.msgs = []; DISC.tout = false;
@@ -4155,6 +4178,7 @@ function ouvrirFil(d) {
     if (document.visibilityState === 'visible') discMarquerLu(d);
   }).subscribe();
   if ($('disc-signal')) $('disc-signal').onclick = function () { signalerDiscussion(d); };
+  if ($('disc-infos')) { $('disc-infos').onclick = function () { infosFil(d); }; $('disc-infos').onkeydown = function (e) { if (e.key === 'Enter') infosFil(d); }; }
   if ($('disc-quitter')) $('disc-quitter').onclick = function () {
     if (!confirm('Quitter « ' + d.nom + ' » ?\n\nTu ne verras plus ce fil ni ses messages. La direction pourra te rajouter si besoin.')) return;
     q(sb.rpc('discussion_quitter', { p_disc: d.id })).then(function () { toast('Tu as quitté la discussion'); return chargerDiscussions(); }).then(function () { go('#/messages'); }).catch(function () { toast('Action impossible'); });
