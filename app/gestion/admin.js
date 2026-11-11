@@ -1508,7 +1508,11 @@ var HOR_DEF = {
   clubhouse: { 3: [['09:30', '12:00'], ['14:00', '16:30']], 6: [['09:30', '12:00'], ['14:00', '16:30']] },
   coach: { 1: [['17:30', '22:45']], 2: [['17:30', '22:45']], 3: [['09:00', '21:00']], 4: [['17:30', '22:15']], 5: [['17:30', '22:45']], 6: [['09:00', '16:00']] }
 };
+var ROLES_PRIVE = [['direction', 'Direction sportive'], ['bureau', 'Bureau'], ['enseignant', 'Coachs (enseignants)'], ['coach', 'Coach d\'un groupe'], ['cordeur', 'Cordeur'], ['accueil', 'Accueil'], ['responsable', 'Responsable d\'activité']];
 var REGLAGES = [
+  ['Messages privés', [
+    ['prive_roles', 'Qui peut démarrer une conversation privée avec un adhérent (bouton + dans Messages) ? Les adhérents peuvent toujours répondre.', 'roles', ['direction', 'bureau', 'enseignant', 'coach', 'cordeur', 'accueil']]
+  ]],
   ['Le club', [
     ['club_adresse', 'Adresse du club', 'text', '81 rue de Saint-Germain, 78260 Achères'],
     ['club_tel', 'Téléphone du club house', 'tel', '01 39 11 69 47'],
@@ -1548,6 +1552,7 @@ function vueReglages(m) {
     var champ = function (r) {
       var v = val(r), id = 'rg-' + r[0];
       if (r[2] === 'horaires') return '<div class="l"><b class="small">' + esc(r[1]) + '</b><div class="list">' + [1, 2, 3, 4, 5, 6, 7].map(function (j) { return '<label class="toolbar" style="margin:0;align-items:center"><span class="small" style="width:90px">' + JOURS_R[j] + '</span><input class="f grow" data-rgh="' + r[0] + '|' + j + '" value="' + esc(horTexte(v[j])) + '" placeholder="Fermé (ex. 09:30-12:00, 14:00-16:30)"></label>'; }).join('') + '</div></div>';
+      if (r[2] === 'roles') return '<div class="l"><b class="small">' + esc(r[1]) + '</b><div class="chips" style="margin-top:6px">' + ROLES_PRIVE.map(function (x) { return '<label class="c" style="margin:0 12px 6px 0"><input type="checkbox" data-rgrole="' + r[0] + '|' + x[0] + '"' + ((v || []).indexOf(x[0]) >= 0 ? ' checked' : '') + '>' + esc(x[1]) + '</label>'; }).join('') + '</div><span class="xs mut">La direction ne lit une conversation privée que si quelqu\'un la signale.</span></div>';
       if (r[2] === 'textarea') return '<label class="l">' + esc(r[1]) + '<textarea class="f" id="' + id + '" rows="3">' + esc(v) + '</textarea></label>';
       if (r[2] === 'list') return '<label class="l">' + esc(r[1]) + '<input class="f" id="' + id + '" value="' + esc((v || []).join(', ')) + '"></label>';
       return '<label class="l">' + esc(r[1]) + '<input class="f" id="' + id + '" ' + (r[2] === 'number' ? 'type="number" min="1" max="365"' : r[2] === 'tel' ? 'type="tel"' : '') + ' value="' + esc(v) + '"></label>';
@@ -1562,6 +1567,7 @@ function vueReglages(m) {
         g[1].forEach(function (r) {
           var v;
           if (r[2] === 'horaires') { v = {}; [1, 2, 3, 4, 5, 6, 7].forEach(function (j) { var x = horLire(document.querySelector('[data-rgh="' + r[0] + '|' + j + '"]').value); if (x === null) err = 'Horaire illisible le ' + JOURS_R[j].toLowerCase() + ' (ex. 09:30-12:00)'; else if (x.length) v[j] = x; }); }
+          else if (r[2] === 'roles') { v = all('[data-rgrole^="' + r[0] + '|"]').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.rgrole.split('|')[1]; }); }
           else if (r[2] === 'number') { v = parseInt($('rg-' + r[0]).value, 10); if (!(v > 0)) err = 'Nombre invalide : ' + r[1]; }
           else if (r[2] === 'list') { v = $('rg-' + r[0]).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean); if (!v.length) err = 'Liste vide : ' + r[1]; }
           else { v = $('rg-' + r[0]).value.trim(); if (!v) err = 'Champ vide : ' + r[1]; if (r[2] === 'tel' && v && !telWa(v)) err = 'Numéro invalide : ' + r[1]; }

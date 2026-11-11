@@ -445,6 +445,10 @@ button.javatar{cursor:pointer}
 .cmp-di{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;flex:none}
 @media (min-width:768px){.cmp{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:stretch}.cmp-double{flex-direction:column;align-items:flex-start;justify-content:flex-end}.cmp-t{font-size:42px}}
 @media (min-width:1024px) and (hover:hover){.cmp-c:hover,.cmp-double:hover{filter:brightness(1.08)}}
+.fab{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:21;width:58px;height:58px;border-radius:50%;border:0;background:var(--ac);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 22px rgba(180,83,42,.38);cursor:pointer;font:600 15px var(--font)}
+.fab span{display:none}
+@media (min-width:1024px){.fab{width:auto;height:52px;border-radius:26px;padding:0 20px 0 16px;right:32px;bottom:32px}.fab span{display:inline}}
+.pf-jeune{min-height:0;padding:4px 0 0 18px;align-items:flex-start}
 .pf-p{gap:8px;padding:12px 0;border-top:1px solid var(--line)}
 .pf-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pf-cr{gap:4px;padding-left:18px}.pf-cr>span{display:flex;gap:8px;align-items:center;font-size:14px}.pf-cr svg{color:var(--ac);flex:none}
@@ -469,6 +473,6 @@ button.javatar{cursor:pointer}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611110110"></script>
+<script src="app.js?v=202611110200"></script>
 </body>
 </html>

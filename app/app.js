@@ -332,7 +332,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '11/11 01h10';
+var VERSION_APPLI = '11/11 messages';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -2174,6 +2174,10 @@ function blocPersonneProfil(p) {
     '<span class="pf-h"><span class="dot" style="background:' + S.couleur[p.id] + '"></span><b>' + esc(p.prenom + ' ' + p.nom) + '</b>' + (p.niveau_club ? nivClubBadge(p.niveau_club) : '') + '</span>' +
     (cren.length ? '<span class="stack pf-cr">' + cren.map(function (c) { return '<span>' + ic('cal', 15) + esc(creneauCourt(c.nom)) + '</span>'; }).join('') + '</span>' : '') +
     (tags.length ? '<span class="pf-tags">' + tags.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span>' : '') +
+    (function () {
+      var j = (S.jeunesComptes || []).filter(function (x) { return x.personne_id === p.id; })[0];
+      return j ? '<label class="check pf-jeune"><input type="checkbox" data-jmsg="' + p.id + '"' + (j.messages_ok ? ' checked' : '') + '><span class="small">Le club peut aussi écrire à ' + esc(p.prenom) + ' sur son propre compte<span class="xs mut" style="display:block">Les messages privés du club t\'arrivent toujours. Décoche pour qu\'ils n\'arrivent qu\'à toi.</span></span></label>' : '';
+    })() +
     '<a href="#/joueur/' + p.id + '" class="small pf-fiche">Voir la fiche joueur →</a></div>';
 }
 // Une seule carte « Réglages et aide » au lieu de 4 blocs séparés (installer, notifications, aide, mon accueil)
@@ -2233,6 +2237,17 @@ function pageProfil() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn line" id="rt-idee">💡 Boîte à idées</button><button class="btn line" id="rt-bug">🐞 Signaler un bug</button></div></section>';
   h += '<section class="card stack" style="gap:10px"><span class="stack" style="gap:2px"><span class="eyebrow">Connecté avec</span><span style="overflow-wrap:anywhere">' + esc(S.user.email) + '</span></span><button class="btn line" id="logout">Se déconnecter</button></section>' +
     '<p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a> · version ' + VERSION_APPLI + '</p></main>';
+  setTimeout(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-jmsg]'), function (c) {
+      c.onchange = function () {
+        var pid = c.dataset.jmsg, okv = c.checked; c.disabled = true;
+        q(sb.rpc('jeune_messages_regler', { p_personne: pid, p_ok: okv })).then(function () {
+          (S.jeunesComptes || []).forEach(function (x) { if (x.personne_id === pid) x.messages_ok = okv; }); c.disabled = false;
+          toast(okv ? 'Le club peut lui écrire sur son compte' : 'Les messages du club n\'arriveront qu\'à toi');
+        }).catch(function () { c.checked = !okv; c.disabled = false; toast('Réglage impossible'); });
+      };
+    });
+  });
   setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('rt-idee').onclick = function () { ouvrirRetour('idee'); }; $('rt-bug').onclick = function () { ouvrirRetour('bug'); }; $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
@@ -3056,6 +3071,64 @@ function ligneMsgClub(x) {
     '<span style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (nl ? 'font-weight:700' : 'color:var(--mut)') + '">' + esc(m.titre) + (x.pour ? ' · pour ' + esc(x.pour) : '') + '</span>' +
     (nl ? '<span class="badge" style="background:var(--ac);color:#fff;min-width:22px;justify-content:center;flex:none">1</span>' : '') + '</span></span></a>';
 }
+// ---------- Messages privés lancés par l'équipe (bouton + dans Messages) ----------
+// Qui peut lancer : rôles cochés dans Gestion → Réglages (vérifié par la base). Les familles répondent mais ne lancent pas.
+function chargerPrive() {
+  S.peutPrive = false; S.jeunesComptes = [];
+  if (!S.user || S.apercu) return Promise.resolve();
+  var l = [];
+  if (S.roles.length) l.push(q(sb.rpc('peux_lancer_prive')).then(function (r) { S.peutPrive = r === true; }).catch(function () { }));
+  if (S.pers.some(function (p) { return p.profil === 'jeune'; })) l.push(q(sb.rpc('mes_jeunes_comptes')).then(function (r) { S.jeunesComptes = r || []; }).catch(function () { }));
+  return Promise.all(l);
+}
+function nouveauMessage() {
+  var E = { res: [], choisi: null, t: 0, q: '' };
+  var ligneRes = function (d, i) {
+    var dest = !d.comptes ? 'Pas de compte dans l\'appli : passe par WhatsApp ou mail' : d.mineur ? 'Arrive aux parents' + (d.compte_jeune ? ' et à ' + esc(d.prenom) : '') : 'Arrive à ' + esc(d.prenom);
+    return '<button class="pick" data-dst="' + i + '"' + (d.comptes ? '' : ' disabled') + ' style="width:100%;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;height:auto' + (d.comptes ? '' : ';opacity:.55') + '">' +
+      '<b>' + esc(d.prenom + ' ' + d.nom) + '</b><span class="xs mut">' + [d.age != null ? d.age + ' ans' : '', d.niveau || ''].filter(Boolean).map(esc).join(' · ') + (d.age != null || d.niveau ? ' · ' : '') + dest + '</span></button>';
+  };
+  var dessiner = function () {
+    var box = $('nm-corps'); if (!box) return;
+    if (E.choisi) {
+      var d = E.choisi;
+      box.innerHTML = '<div class="card stack" style="gap:2px;padding:10px 12px;background:var(--soft)"><b>' + esc(d.prenom + ' ' + d.nom) + '</b><span class="xs mut">' + (d.mineur ? 'Message aux parents' + (d.compte_jeune ? ' et à ' + esc(d.prenom) + ' sur son compte' : '') : 'Message à ' + esc(d.prenom)) + '</span></div>' +
+        '<label class="f">Ton message<textarea class="f" id="nm-t" rows="5" maxlength="2000" placeholder="Bonjour…"></textarea></label>' +
+        '<span class="xs mut">Conversation privée : la personne peut te répondre. La direction ne la lit que si quelqu\'un la signale.</span>' +
+        '<div class="grid2"><button class="btn line" id="nm-back">Changer</button><button class="btn" id="nm-go">Envoyer</button></div>';
+      $('nm-back').onclick = function () { E.choisi = null; dessiner(); };
+      $('nm-t').focus();
+      $('nm-go').onclick = function () {
+        var t = $('nm-t').value.trim(); if (!t) return toast('Écris ton message');
+        var b = this; b.disabled = true;
+        q(sb.rpc('message_prive_nouveau', { p_personne: d.id, p_texte: t })).then(function (r) {
+          sb.functions.invoke('discussion-notifier', { body: { message_id: r.message_id } }).catch(function () { });
+          fermerModale(); toast('Message envoyé');
+          return chargerDiscussions().then(function () { go('#/discussion/' + r.discussion_id); });
+        }).catch(function (e) {
+          b.disabled = false; var m = String(e && e.message || '');
+          toast(m.indexOf('aucun compte') >= 0 ? 'Cette personne n\'a pas de compte dans l\'appli' : m.indexOf('non autorisé') >= 0 ? 'Tu n\'as pas l\'accès aux messages privés' : 'Envoi impossible, réessaie');
+        });
+      };
+      return;
+    }
+    box.innerHTML = '<input class="f" id="nm-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off" value="' + esc(E.q) + '"><div id="nm-r" class="stack" style="gap:6px;max-height:50vh;overflow:auto">' +
+      (E.q.length < 2 ? '<span class="xs mut">Tape au moins 2 lettres.</span>' : E.res.length ? E.res.map(ligneRes).join('') : '<span class="xs mut">Personne trouvé.</span>') + '</div>';
+    var inp = $('nm-q'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+    inp.oninput = function () {
+      E.q = inp.value.trim(); clearTimeout(E.t);
+      E.t = setTimeout(function () {
+        if (E.q.length < 2) { E.res = []; return majRes(); }
+        var cherche = E.q;
+        q(sb.rpc('destinataires_chercher', { p_q: cherche })).then(function (l) { if (cherche === E.q) { E.res = l || []; majRes(); } }).catch(function () { toast('Recherche impossible'); });
+      }, 250);
+    };
+    lierRes();
+  };
+  var majRes = function () { var r = $('nm-r'); if (!r) return; r.innerHTML = E.q.length < 2 ? '<span class="xs mut">Tape au moins 2 lettres.</span>' : E.res.length ? E.res.map(ligneRes).join('') : '<span class="xs mut">Personne trouvé.</span>'; lierRes(); };
+  var lierRes = function () { Array.prototype.forEach.call(document.querySelectorAll('[data-dst]'), function (b) { b.onclick = function () { E.choisi = E.res[+b.dataset.dst]; dessiner(); }; }); };
+  modale('<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">Nouveau message</h2><div id="nm-corps" class="stack" style="gap:10px"></div></div>', dessiner);
+}
 function pageMessages() {
   var h = '<div class="pagehead wrap"><h1>Messages</h1></div><main>';
   if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes messages.</section></main>';
@@ -3080,11 +3153,13 @@ function pageMessages() {
     return '<button class="' + (MSGF === c ? 'on' : '') + '" data-msgf="' + esc(c) + '">' + esc(MSG_NOM[c] || c) + (nb[c] ? '<span class="msgnb">' + (nb[c] > 99 ? '99+' : nb[c]) + '</span>' : '') + '</button>';
   }).join('') + '</div>';
   if (MSGF === 'annonces' && nonLus().length > 1) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
+  if (S.peutPrive && !S.apercu) h += '<button class="fab" id="msg-new" aria-label="Nouveau message" title="Nouveau message">' + ic('plus', 26, '#fff') + '<span>Nouveau message</span></button>';
   h += items.length ? '<section class="card tight">' + items.map(function (i) { return i.h; }).join('') + '</section>'
     : '<section class="card empty">' + (({ annonces: 'Aucune annonce du club pour le moment. Les infos du club et des coachs arriveront ici, avec une notification.', club: 'Rien pour le moment. Les discussions CLOC\'ARENA et Next Gen dont tu fais partie arriveront ici.', Interclub: 'Rien pour le moment. Les discussions de ton équipe d\'interclub arriveront ici.', prives: 'Aucune conversation. Touche « Envoyer un message » sous une petite annonce pour en démarrer une.' })[MSGF] || 'Rien pour le moment.') + '</section>';
   h += '</main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-msgf]'), function (b) { b.onclick = function () { MSGF = b.dataset.msgf; render(); }; });
+    if ($('msg-new')) $('msg-new').onclick = nouveauMessage;
     if ($('msg-tout')) $('msg-tout').onclick = function () {
       var ids = nonLus().map(function (x) { return x.messages.id; });
       q(sb.rpc('messages_lus', { ids: ids })).then(function () { nonLus().forEach(function (x) { x.lu_le = new Date().toISOString(); }); render(); });
@@ -4147,7 +4222,7 @@ function demarrer() {
   sb.auth.getSession().then(function (r) {
     S.user = r.data && r.data.session ? r.data.session.user : null;
     return Promise.all([chargerPublic(), chargerUtilisateur()]);
-  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions(), chargerMonAccueil(), chargerNotifs()]); })
+  }).then(function () { return Promise.all([chargerAgenda(), chargerClassement().catch(function () { }), chargerCordage().catch(function () { }), chargerMessages(), chargerQuestionnaires(), chargerDiscussions(), chargerMonAccueil(), chargerNotifs(), chargerPrive()]); })
     .then(render).catch(render);
   sb.auth.onAuthStateChange(function (ev, session) {
     if (ev === 'SIGNED_IN' && (!S.user || S.user.id !== session.user.id)) {
