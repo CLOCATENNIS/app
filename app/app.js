@@ -1314,7 +1314,7 @@ function clubInfos() {
     '<div id="presence"></div><section class="card stack" style="gap:6px"><span class="eyebrow">Club house</span>' + horairesTexte('clubhouse') + '<a class="btn ghost" href="tel:' + esc(String(reg('club_tel', '01 39 11 69 47')).replace(/\s/g, '')) + '">' + esc(reg('club_tel', '01 39 11 69 47')) + '</a></section>' +
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Coordinateur sportif</span><b>' + esc(reg('coord_nom', 'Dorian')) + '</b><a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + WA_CLUB + '">WhatsApp</a>' +
     '<div class="grid2"><a class="btn line" href="tel:+' + WA_CLUB + '">Appeler</a><a class="btn line" href="sms:+' + WA_CLUB + '">SMS</a></div></section>' +
-    '<section class="card stack" style="gap:6px"><span class="eyebrow">Installer l\'appli</span><span class="small"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l\'écran d\'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Installer l\'application ».</span></section>' +
+    '<section class="card stack" style="gap:6px"><span class="eyebrow">Installer l\'appli</span><span class="small"><b>iPhone</b> : dans Safari, bouton Partager, puis « Sur l\'écran d\'accueil ».<br><b>Android</b> : dans Chrome, menu ⋮, puis « Installer l\'application ». Sur Samsung (Internet) : menu ≡, « Ajouter la page à », « Installer en tant qu\'application Web ».</span></section>' +
     suivre() + '<p class="mut xs" style="text-align:center"><a href="confidentialite.html" style="color:var(--mut)">Politique de confidentialité</a></p>';
 }
 // Petites annonces : recherche de partenaire et matériel à vendre, validées par le club.
@@ -3253,13 +3253,15 @@ function lierEcrireGroupe(gid) {
 
 // ---------- Guide pas à pas : installer l'appli, se connecter, s'y retrouver ----------
 function estAndroid() { return /android/i.test(navigator.userAgent); }
+// Navigateur « Internet » de Samsung (souvent par défaut sur les Galaxy) : menus différents de Chrome
+function estSamsung() { return /SamsungBrowser/i.test(navigator.userAgent); }
 function estMobile() { return estIos() || estAndroid(); }
 function navInterne() { return /FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|musical_ly|TikTok/i.test(navigator.userAgent) || (estAndroid() && /; wv\)/.test(navigator.userAgent)); }
 function iosHorsSafari() { return estIos() && /CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent); }
 var URL_APPLI = 'https://clocatennis.fr/app/';
 // Petites maquettes dessinées pour montrer où appuyer
 function maquette(t) {
-  var o = '#b4532a', cadre = function (h, c) { return '<svg viewBox="0 0 260 ' + h + '" width="100%" style="max-width:300px;display:block;margin:0 auto" role="img" aria-hidden="true"><rect x="1" y="1" width="258" height="' + (h - 2) + '" rx="16" fill="#f4f6f8" stroke="#c9d3dc" stroke-width="2"/>' + c + '</svg>'; };
+  var o = '#b4532a', cadre = function (h, c) { return '<svg viewBox="0 0 260 ' + h + '" width="100%" style="max-width:300px;display:block;margin:0 auto;pointer-events:none;user-select:none;-webkit-user-select:none" role="img" aria-hidden="true"><rect x="1" y="1" width="258" height="' + (h - 2) + '" rx="16" fill="#f4f6f8" stroke="#c9d3dc" stroke-width="2"/>' + c + '</svg>'; };
   var halo = function (x, y, r) { return '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="none" stroke="' + o + '" stroke-width="3.5"/><circle cx="' + x + '" cy="' + y + '" r="' + (r + 7) + '" fill="none" stroke="' + o + '" stroke-opacity=".35" stroke-width="3"/>'; };
   var txt = function (x, y, s, w, c, a) { return '<text x="' + x + '" y="' + y + '" font-family="system-ui,sans-serif" font-size="' + (w || 13) + '" fill="' + (c || '#12304a') + '"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + s + '</text>'; };
   if (t === 'ios-partager') return cadre(170, '<rect x="14" y="16" width="232" height="70" rx="10" fill="#fff"/>' + txt(130, 56, 'clocatennis.fr/app', 14, '#5d6b78', 'middle') +
@@ -3283,8 +3285,14 @@ function maquette(t) {
     '<rect x="96" y="54" width="150" height="124" rx="10" fill="#fff" stroke="#d6dee6"/>' + ['Nouvel onglet', 'Favoris', 'Historique', 'Installer l\'application'].map(function (l, i) {
       var y = 78 + i * 28, on = i === 3; return (on ? '<rect x="100" y="' + (y - 18) + '" width="142" height="26" rx="6" fill="#fbe3d8" stroke="' + o + '" stroke-width="2.5"/>' : '') + txt(110, y, l, 12, on ? o : '#12304a');
     }).join('') + txt(20, 176, 'ou « Ajouter à l\'écran d\'accueil »', 11, '#5d6b78'));
+  if (t === 'samsung-menu') return cadre(230, '<rect x="14" y="14" width="232" height="148" rx="12" fill="#fff"/>' + txt(26, 38, 'Ajouter la page à', 12.5, '#5d6b78') +
+    ['Favoris', 'Accès rapide', 'Écran d\'accueil', 'Installer en tant qu\'appli Web'].map(function (l, i) {
+      var y = 64 + i * 26, on = i === 3; return (on ? '<rect x="20" y="' + (y - 18) + '" width="220" height="26" rx="6" fill="#fbe3d8" stroke="' + o + '" stroke-width="2.5"/>' : '') + txt(30, y, l, 12.5, on ? o : '#12304a');
+    }).join('') +
+    '<rect x="1" y="176" width="258" height="52" fill="#fff"/><g stroke="#12304a" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M26 202l-6-6 6-6M62 190l6 6-6 6"/><path d="M104 204v-9l9-7 9 7v9z"/><path d="M226 194h14M226 200h14M226 206h14"/></g>' + halo(233, 200, 15) +
+    txt(130, 172, '↑ puis ce choix  ·  d\'abord le menu ≡ ↓', 11, o, 'middle'));
   if (t === 'connexion') return cadre(170, '<rect x="14" y="14" width="232" height="142" rx="12" fill="#fff"/>' + txt(28, 38, 'Adresse mail', 12, '#5d6b78') +
-    '<rect x="28" y="46" width="204" height="30" rx="8" fill="#f4f6f8" stroke="#c9d3dc"/>' + txt(38, 66, 'prenom.nom@gmail.com', 12) + '<rect x="28" y="86" width="204" height="32" rx="9" fill="' + o + '"/>' + txt(130, 107, 'Recevoir mon code', 13, '#fff', 'middle') +
+    '<rect x="28" y="46" width="204" height="30" rx="8" fill="#f4f6f8" stroke="#c9d3dc"/>' + txt(38, 66, 'prenom.nom<tspan>&#64;</tspan><tspan>gmail</tspan><tspan>.com</tspan>', 12) + '<rect x="28" y="86" width="204" height="32" rx="9" fill="' + o + '"/>' + txt(130, 107, 'Recevoir mon code', 13, '#fff', 'middle') +
     txt(28, 140, 'Code reçu par mail :', 12, '#5d6b78') + '<g font-family="system-ui" font-size="16" font-weight="700" fill="#12304a">' + '482915'.split('').map(function (c, i) { return '<rect x="' + (150 + i * 14) + '" y="126" width="12" height="20" rx="3" fill="#fbe3d8"/><text x="' + (156 + i * 14) + '" y="141" text-anchor="middle" font-size="12">' + c + '</text>'; }).join('') + '</g>');
   if (t === 'notifs') return cadre(130, '<rect x="14" y="20" width="232" height="56" rx="12" fill="#fff" stroke="#d6dee6"/><image href="' + LOGO + '" x="24" y="30" width="36" height="36"/>' + txt(70, 44, 'CLOCA Tennis · Coach Florian', 12, '#12304a') + txt(70, 62, 'Pour Enora : séance en extérieur…', 11.5, '#5d6b78') +
     '<rect x="70" y="90" width="120" height="30" rx="9" fill="' + o + '"/>' + txt(130, 110, 'Autoriser', 13, '#fff', 'middle'));
@@ -3300,7 +3308,8 @@ function etapesGuide() {
       E.push({ t: 'Installer · étape 2 sur 3', x: 'Fais défiler la liste vers le bas et touche <b>« Sur l\'écran d\'accueil »</b>. Si tu ne la vois pas, touche « Modifier les actions » tout en bas pour l\'ajouter.', img: maquette('ios-ecran') });
       E.push({ t: 'Installer · étape 3 sur 3', x: 'Touche <b>« Ajouter »</b> en haut à droite. L\'icône CLOCA Tennis apparaît sur ton écran d\'accueil, comme une vraie appli.', img: maquette('ios-ajouter') });
     } else {
-      E.push({ t: 'Installer l\'appli', x: INSTALL ? 'Touche le bouton ci-dessous, puis <b>« Installer »</b>. L\'icône CLOCA Tennis apparaît sur ton écran d\'accueil.' : 'Dans <b>Chrome</b>, touche les <b>3 petits points ⋮</b> en haut à droite, puis <b>« Installer l\'application »</b> (ou « Ajouter à l\'écran d\'accueil »), et confirme.', img: INSTALL ? '' : maquette('android-menu'), btn: INSTALL ? ['installer', 'Installer CLOCA Tennis'] : null });
+      if (estSamsung() && !INSTALL) E.push({ t: 'Installer l\'appli', x: 'Tu utilises <b>Internet Samsung</b>. Touche le <b>menu ≡</b> en bas à droite, puis <b>« Ajouter la page à »</b>, puis <b>« Installer en tant qu\'application Web »</b>. Si tu vois une petite icône <b>⬇</b> dans la barre d\'adresse, tu peux aussi la toucher.', img: maquette('samsung-menu') });
+      else E.push({ t: 'Installer l\'appli', x: INSTALL ? 'Touche le bouton ci-dessous, puis <b>« Installer »</b>. L\'icône CLOCA Tennis apparaît sur ton écran d\'accueil.' : 'Dans <b>Chrome</b>, touche les <b>3 petits points ⋮</b> en haut à droite, puis <b>« Installer l\'application »</b> (ou « Ajouter à l\'écran d\'accueil »), et confirme.', img: INSTALL ? '' : maquette('android-menu'), btn: INSTALL ? ['installer', 'Installer CLOCA Tennis'] : null });
     }
     E.push({ t: 'Ouvre l\'appli depuis son icône', x: 'Ferme ' + (ios ? 'Safari' : 'le navigateur') + ' et ouvre <b>CLOCA Tennis</b> depuis ton écran d\'accueil. ' + (ios ? 'C\'est indispensable sur iPhone pour recevoir les notifications.' : 'Elle s\'ouvre en plein écran, comme une vraie appli.'), img: maquette('icone') });
   } else if (!estMobile()) E.push({ t: 'Sur ordinateur', x: 'Tu peux utiliser l\'appli directement ici, rien à installer. Pour l\'avoir sur ton téléphone, ouvre <b>clocatennis.fr/app</b> dessus et relance ce guide.' });
@@ -3409,7 +3418,7 @@ function popupNotifs() {
   if (!pushPossible()) return false;
   if (Notification.permission === 'denied') return montrer(tete +
     '<div class="small" style="background:var(--soft);border-radius:12px;padding:10px 12px;text-align:left">Les notifications sont <b>bloquées</b> sur ce téléphone. Pour les débloquer :<br>' +
-    (estIos() ? '<b>Réglages</b> → <b>Notifications</b> → <b>CLOCA Tennis</b> → <b>Autoriser les notifications</b>.' : 'dans Chrome, touche le <b>cadenas</b> (ou ⋮ → <b>Infos sur le site</b>) → <b>Notifications</b> → <b>Autoriser</b>. Si l\'appli est installée : appui long sur son icône → <b>Infos sur l\'appli</b> → <b>Notifications</b>.') + '</div>' +
+    (estIos() ? '<b>Réglages</b> → <b>Notifications</b> → <b>CLOCA Tennis</b> → <b>Autoriser les notifications</b>.' : estSamsung() ? 'touche le <b>cadenas</b> à gauche de l\'adresse → <b>Autorisations</b> → <b>Notifications</b> → <b>Autoriser</b> (ou menu ≡ → <b>Paramètres</b> → <b>Sites et téléchargements</b> → <b>Notifications</b>). Si l\'appli est installée : appui long sur son icône → <b>Infos sur l\'appli</b> → <b>Notifications</b>.' : 'dans Chrome, touche le <b>cadenas</b> (ou ⋮ → <b>Infos sur le site</b>) → <b>Notifications</b> → <b>Autoriser</b>. Si l\'appli est installée : appui long sur son icône → <b>Infos sur l\'appli</b> → <b>Notifications</b>.') + '</div>' +
     '<button class="btn" id="pn-ok">C\'est fait</button>' + plusTard, function () { non(); $('pn-ok').onclick = function () { fermerModale(); if (Notification.permission === 'granted') activerPush().then(function () { toast('Notifications activées'); }).catch(function () { }); }; });
   return montrer(tete + '<button class="btn" id="pn-go">' + ic('bell', 18, '#fff') + 'Activer les notifications</button>' + plusTard, function () {
     non();
@@ -3441,6 +3450,7 @@ function pageAide() {
   var bloc = function (titre, etapes, img) { return '<details class="card"><summary style="cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:8px">' + titre + '<span class="mut">▾</span></summary><div class="stack" style="gap:10px;margin-top:12px">' + (img || '') + '<ol class="small" style="margin:0;padding-left:20px;line-height:1.6">' + etapes.map(function (e) { return '<li>' + e + '</li>'; }).join('') + '</ol></div></details>'; };
   h += bloc('Installer sur iPhone', ['Ouvre <b>clocatennis.fr/app</b> dans <b>Safari</b> (pas depuis WhatsApp ou Instagram : copie le lien dans Safari).', 'Touche le bouton <b>Partager</b> (carré avec une flèche), en bas.', 'Choisis <b>« Sur l\'écran d\'accueil »</b>, puis <b>« Ajouter »</b>.', 'Ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>.'], maquette('ios-partager'));
   h += bloc('Installer sur Android', ['Ouvre <b>clocatennis.fr/app</b> dans <b>Chrome</b>.', 'Touche les <b>3 points ⋮</b> en haut à droite.', 'Choisis <b>« Installer l\'application »</b> ou <b>« Ajouter à l\'écran d\'accueil »</b>.', 'Ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>.'], maquette('android-menu'));
+  h += bloc('Installer sur Samsung (navigateur « Internet »)', ['Ouvre <b>clocatennis.fr/app</b> dans <b>Internet Samsung</b> (ou dans Chrome, voir au-dessus).', 'Touche le <b>menu ≡</b> en bas à droite.', 'Choisis <b>« Ajouter la page à »</b>, puis <b>« Installer en tant qu\'application Web »</b>.', 'Ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>.'], maquette('samsung-menu'));
   h += bloc('Se connecter', ['Va dans <b>Profil</b>.', 'Tape l\'adresse mail donnée au club à l\'inscription.', 'Ouvre le mail reçu et tape le <b>code à 6 chiffres</b> dans l\'appli.', 'Pas de mail ? Regarde dans les <b>spams</b> ou <b>Promotions</b>, attends une minute, puis redemande un code.'], maquette('connexion'));
   h += bloc('Activer les notifications', ['Ouvre l\'appli <b>depuis son icône</b> (obligatoire sur iPhone).', 'Va dans <b>Profil</b> → <b>Activer les notifications</b>.', 'Touche <b>« Autoriser »</b>.'], maquette('notifs'));
   h += bloc('Mon adresse n\'est pas reconnue', ['Vérifie que c\'est bien l\'adresse donnée au club à l\'inscription.', 'Dans <b>Profil</b>, touche <b>« Indiquer mon nom »</b> (prénom, nom, enfants) : le club reliera ton compte à ta famille.', 'Sinon, demande à l\'accueil du club house.']);
