@@ -1,14 +1,23 @@
 -- Messages privés lancés par l'équipe du club (bouton + dans Messages), demande de Dorian du 11/11/2026.
 -- Qui peut lancer : rôles cochés dans Gestion → Réglages (clé prive_roles), par défaut direction, bureau, enseignant, coach, cordeur, accueil.
 -- À qui : n'importe quel adhérent. Adulte : son compte (sinon les comptes adultes de sa famille).
--- Mineur : les comptes des parents + son compte jeune, sauf si un parent l'a coupé (personnes.messages_compte_jeune).
+-- Mineur : son compte jeune s'il en a un + les comptes des parents, sauf un parent qui a coché « Je ne veux plus recevoir les messages destinés à mon enfant »
+--   (table messages_parent_retrait, un choix par parent et par enfant ; proposé seulement quand l'enfant a son propre compte).
 -- Lecture par la direction : seulement si la conversation est signalée (règle existante des conversations privées).
 
 alter table public.discussions add column if not exists personne_id uuid references public.personnes(id) on delete set null;
 alter table public.discussions drop constraint if exists discussions_source_check;
 alter table public.discussions add constraint discussions_source_check
   check (source = any (array['tous', 'groupe', 'double', 'nextgen', 'manuel', 'annonce', 'equipe']));
-alter table public.personnes add column if not exists messages_compte_jeune boolean not null default true;
+create table if not exists public.messages_parent_retrait (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  personne_id uuid not null references public.personnes(id) on delete cascade,
+  cree_le timestamptz not null default now(),
+  primary key (user_id, personne_id)
+);
+alter table public.messages_parent_retrait enable row level security;
+drop policy if exists mpr_lire on public.messages_parent_retrait;
+create policy mpr_lire on public.messages_parent_retrait for select using (user_id = (select auth.uid()));
 
 -- Rôles autorisés à lancer une conversation privée
 create or replace function prive.roles_prive() returns text[]
@@ -28,7 +37,7 @@ language sql stable security definer set search_path = '' as $$ select prive.peu
 -- Comptes qui reçoivent un message adressé à une personne
 create or replace function prive.destinataires_comptes(pid uuid) returns uuid[]
 language sql stable security definer set search_path = '' as $$
-  with p as (select id, foyer_id, messages_compte_jeune, prive.mineur(date_naissance, annee_naissance, profil) as mi
+  with p as (select id, foyer_id, prive.mineur(date_naissance, annee_naissance, profil) as mi
              from public.personnes where id = pid)
   select coalesce(array_agg(distinct x.u), '{}') from (
     select c.user_id as u from public.comptes c, p where not p.mi and c.personne_id = p.id
@@ -37,14 +46,16 @@ language sql stable security definer set search_path = '' as $$
       and not prive.compte_jeune(c.user_id) and not exists (select 1 from public.comptes c2 where c2.personne_id = p.id)
     union
     select c.user_id from public.comptes c, p where p.mi and p.foyer_id is not null and c.foyer_id = p.foyer_id and not prive.compte_jeune(c.user_id)
+      and not (exists (select 1 from public.comptes cj where cj.personne_id = p.id)
+               and exists (select 1 from public.messages_parent_retrait r where r.user_id = c.user_id and r.personne_id = p.id))
     union
-    select c.user_id from public.comptes c, p where p.mi and p.messages_compte_jeune and c.personne_id = p.id
+    select c.user_id from public.comptes c, p where p.mi and c.personne_id = p.id
   ) x where x.u is not null;
 $$;
 
 -- Recherche d'un destinataire (réservée aux rôles autorisés)
 create or replace function public.destinataires_chercher(p_q text)
-returns table (id uuid, prenom text, nom text, mineur boolean, age integer, niveau text, comptes integer, compte_jeune boolean)
+returns table (id uuid, prenom text, nom text, mineur boolean, age integer, niveau text, comptes integer, compte_jeune boolean, parents integer)
 language plpgsql stable security definer set search_path = '' as $$
 declare t text := lower(trim(coalesce(p_q, '')));
 begin
@@ -56,7 +67,9 @@ begin
            when p.annee_naissance is not null then (extract(year from now())::int - p.annee_naissance) end,
       p.niveau_club,
       coalesce(array_length(array(select u from unnest(prive.destinataires_comptes(p.id)) u where u <> auth.uid()), 1), 0),
-      exists (select 1 from public.comptes c where c.personne_id = p.id and prive.compte_jeune(c.user_id) and p.messages_compte_jeune)
+      exists (select 1 from public.comptes c where c.personne_id = p.id and prive.compte_jeune(c.user_id)),
+      coalesce(array_length(array(select u from unnest(prive.destinataires_comptes(p.id)) u
+        where u <> auth.uid() and not exists (select 1 from public.comptes c where c.user_id = u and c.personne_id = p.id)), 1), 0)
     from public.personnes p
     where coalesce(p.actif, true) and (lower(p.prenom || ' ' || p.nom) like '%' || t || '%' or lower(p.nom || ' ' || p.prenom) like '%' || t || '%')
     order by p.nom, p.prenom limit 20;
@@ -82,7 +95,7 @@ begin
       returning id into did;
     insert into public.discussion_membres (discussion_id, user_id, role, origine) values (did, me, 'membre', 'manuel');
   end if;
-  -- destinataires à jour : un compte ajouté depuis entre, un compte jeune coupé par les parents sort
+  -- destinataires à jour : un compte ajouté depuis entre, un parent qui a coché « je ne veux plus recevoir » sort
   -- (créés « une seconde avant » : le premier message compte bien comme non lu pour la famille)
   insert into public.discussion_membres (discussion_id, user_id, role, origine, created_at)
     select did, u, 'membre', 'manuel', now() - interval '1 second' from unnest(dest) u
@@ -92,23 +105,29 @@ begin
   return jsonb_build_object('discussion_id', did, 'message_id', mid);
 end $$;
 
--- Parents : enfants mineurs qui ont leur propre compte, et réglage « le club peut lui écrire directement »
-create or replace function public.mes_jeunes_comptes() returns table (personne_id uuid, messages_ok boolean)
+-- Parents : enfants mineurs qui ont leur propre compte, et choix « je reçois les messages du club qui lui sont destinés »
+create or replace function public.mes_jeunes_comptes() returns table (personne_id uuid, je_recois boolean)
 language sql stable security definer set search_path = '' as $$
-  select p.id, p.messages_compte_jeune from public.comptes moi
+  select p.id, not exists (select 1 from public.messages_parent_retrait r where r.user_id = auth.uid() and r.personne_id = p.id)
+  from public.comptes moi
     join public.personnes p on p.foyer_id = moi.foyer_id
   where moi.user_id = auth.uid() and not prive.compte_jeune(auth.uid())
     and prive.mineur(p.date_naissance, p.annee_naissance, p.profil)
     and exists (select 1 from public.comptes cj where cj.personne_id = p.id);
 $$;
-create or replace function public.jeune_messages_regler(p_personne uuid, p_ok boolean) returns void
+create or replace function public.parent_messages_regler(p_personne uuid, p_recevoir boolean) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   if not exists (select 1 from public.mes_jeunes_comptes() j where j.personne_id = p_personne) then raise exception 'non autorisé'; end if;
-  update public.personnes set messages_compte_jeune = coalesce(p_ok, true) where id = p_personne;
-  update public.discussion_membres m set exclu = not coalesce(p_ok, true)
-    from public.discussions d, public.comptes c
-    where d.id = m.discussion_id and d.source = 'equipe' and d.personne_id = p_personne and c.user_id = m.user_id and c.personne_id = p_personne;
+  if coalesce(p_recevoir, true) then
+    delete from public.messages_parent_retrait where user_id = auth.uid() and personne_id = p_personne;
+  else
+    insert into public.messages_parent_retrait (user_id, personne_id) values (auth.uid(), p_personne) on conflict do nothing;
+  end if;
+  -- conversations déjà ouvertes au sujet de cet enfant : le parent en sort (ou y revient)
+  update public.discussion_membres m set exclu = not coalesce(p_recevoir, true)
+    from public.discussions d
+    where d.id = m.discussion_id and d.source = 'equipe' and d.personne_id = p_personne and m.user_id = auth.uid() and d.created_by <> auth.uid();
 end $$;
 
 -- Nom affiché d'une conversation : celui qui a lancé voit « Prénom N. · message du club », la famille voit qui lui écrit
@@ -139,7 +158,7 @@ as $function$
 $function$;
 
 revoke all on function public.peux_lancer_prive(), public.destinataires_chercher(text), public.message_prive_nouveau(uuid, text),
-  public.mes_jeunes_comptes(), public.jeune_messages_regler(uuid, boolean) from public, anon;
+  public.mes_jeunes_comptes(), public.parent_messages_regler(uuid, boolean) from public, anon;
 grant execute on function public.peux_lancer_prive(), public.destinataires_chercher(text), public.message_prive_nouveau(uuid, text),
-  public.mes_jeunes_comptes(), public.jeune_messages_regler(uuid, boolean) to authenticated;
+  public.mes_jeunes_comptes(), public.parent_messages_regler(uuid, boolean) to authenticated;
 revoke all on function prive.roles_prive(), prive.peut_lancer_prive(uuid), prive.destinataires_comptes(uuid) from public, anon;

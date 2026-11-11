@@ -2176,7 +2176,7 @@ function blocPersonneProfil(p) {
     (tags.length ? '<span class="pf-tags">' + tags.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span>' : '') +
     (function () {
       var j = (S.jeunesComptes || []).filter(function (x) { return x.personne_id === p.id; })[0];
-      return j ? '<label class="check pf-jeune"><input type="checkbox" data-jmsg="' + p.id + '"' + (j.messages_ok ? ' checked' : '') + '><span class="small">Le club peut aussi écrire à ' + esc(p.prenom) + ' sur son propre compte<span class="xs mut" style="display:block">Les messages privés du club t\'arrivent toujours. Décoche pour qu\'ils n\'arrivent qu\'à toi.</span></span></label>' : '';
+      return j ? '<label class="check pf-jeune"><input type="checkbox" data-jmsg="' + p.id + '"' + (j.je_recois ? '' : ' checked') + '><span class="small">Je ne veux plus recevoir les messages du club destinés à ' + esc(p.prenom) + '<span class="xs mut" style="display:block">' + esc(p.prenom) + ' a son propre compte : les messages lui arrivent directement. Ce choix ne concerne que toi.</span></span></label>' : '';
     })() +
     '<a href="#/joueur/' + p.id + '" class="small pf-fiche">Voir la fiche joueur →</a></div>';
 }
@@ -2240,11 +2240,12 @@ function pageProfil() {
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-jmsg]'), function (c) {
       c.onchange = function () {
-        var pid = c.dataset.jmsg, okv = c.checked; c.disabled = true;
-        q(sb.rpc('jeune_messages_regler', { p_personne: pid, p_ok: okv })).then(function () {
-          (S.jeunesComptes || []).forEach(function (x) { if (x.personne_id === pid) x.messages_ok = okv; }); c.disabled = false;
-          toast(okv ? 'Le club peut lui écrire sur son compte' : 'Les messages du club n\'arriveront qu\'à toi');
-        }).catch(function () { c.checked = !okv; c.disabled = false; toast('Réglage impossible'); });
+        var pid = c.dataset.jmsg, recevoir = !c.checked; c.disabled = true;
+        q(sb.rpc('parent_messages_regler', { p_personne: pid, p_recevoir: recevoir })).then(function () {
+          (S.jeunesComptes || []).forEach(function (x) { if (x.personne_id === pid) x.je_recois = recevoir; }); c.disabled = false;
+          toast(recevoir ? 'Tu reçois de nouveau ses messages' : 'Tu ne recevras plus ses messages');
+          chargerDiscussions();
+        }).catch(function () { c.checked = !c.checked; c.disabled = false; toast('Réglage impossible'); });
       };
     });
   });
@@ -3081,10 +3082,15 @@ function chargerPrive() {
   if (S.pers.some(function (p) { return p.profil === 'jeune'; })) l.push(q(sb.rpc('mes_jeunes_comptes')).then(function (r) { S.jeunesComptes = r || []; }).catch(function () { }));
   return Promise.all(l);
 }
+function quiRecoit(d) {
+  if (!d.mineur) return 'Arrive à ' + esc(d.prenom);
+  if (d.compte_jeune && !d.parents) return 'Arrive à ' + esc(d.prenom) + ' sur son compte (ses parents ne reçoivent pas ses messages)';
+  return 'Arrive ' + (d.parents > 1 ? 'aux parents' : 'au parent') + (d.compte_jeune ? ' et à ' + esc(d.prenom) + ' sur son compte' : '');
+}
 function nouveauMessage() {
   var E = { res: [], choisi: null, t: 0, q: '' };
   var ligneRes = function (d, i) {
-    var dest = !d.comptes ? 'Pas de compte dans l\'appli : passe par WhatsApp ou mail' : d.mineur ? 'Arrive aux parents' + (d.compte_jeune ? ' et à ' + esc(d.prenom) : '') : 'Arrive à ' + esc(d.prenom);
+    var dest = !d.comptes ? 'Pas de compte dans l\'appli : passe par WhatsApp ou mail' : quiRecoit(d);
     return '<button class="pick" data-dst="' + i + '"' + (d.comptes ? '' : ' disabled') + ' style="width:100%;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;height:auto' + (d.comptes ? '' : ';opacity:.55') + '">' +
       '<b>' + esc(d.prenom + ' ' + d.nom) + '</b><span class="xs mut">' + [d.age != null ? d.age + ' ans' : '', d.niveau || ''].filter(Boolean).map(esc).join(' · ') + (d.age != null || d.niveau ? ' · ' : '') + dest + '</span></button>';
   };
@@ -3092,7 +3098,7 @@ function nouveauMessage() {
     var box = $('nm-corps'); if (!box) return;
     if (E.choisi) {
       var d = E.choisi;
-      box.innerHTML = '<div class="card stack" style="gap:2px;padding:10px 12px;background:var(--soft)"><b>' + esc(d.prenom + ' ' + d.nom) + '</b><span class="xs mut">' + (d.mineur ? 'Message aux parents' + (d.compte_jeune ? ' et à ' + esc(d.prenom) + ' sur son compte' : '') : 'Message à ' + esc(d.prenom)) + '</span></div>' +
+      box.innerHTML = '<div class="card stack" style="gap:2px;padding:10px 12px;background:var(--soft)"><b>' + esc(d.prenom + ' ' + d.nom) + '</b><span class="xs mut">' + quiRecoit(d) + '</span></div>' +
         '<label class="f">Ton message<textarea class="f" id="nm-t" rows="5" maxlength="2000" placeholder="Bonjour…"></textarea></label>' +
         '<span class="xs mut">Conversation privée : la personne peut te répondre. La direction ne la lit que si quelqu\'un la signale.</span>' +
         '<div class="grid2"><button class="btn line" id="nm-back">Changer</button><button class="btn" id="nm-go">Envoyer</button></div>';
