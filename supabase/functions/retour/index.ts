@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
           const cle = async (c: string) => (await admin.rpc("reglage_prive", { c })).data as string;
           webpush.setVapidDetails(await cle("vapid_sujet"), await cle("vapid_public"), await cle("vapid_prive"));
           const corps = JSON.stringify({ title: (genre + " · " + r.categorie).slice(0, 80), body: (qui + " : " + String(r.texte).replace(/\s+/g, " ")).slice(0, 200), url: "/app/gestion/#/retours" });
-          await Promise.all(abos.map((a) => webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, corps, { TTL: 86400 }).catch(() => {})));
+          await Promise.all(abos.map((a) => webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, corps, { TTL: 86400, urgency: "high" }).catch(() => {})));
         }
       }
     } catch (_e) { /* la notification est un bonus */ }
