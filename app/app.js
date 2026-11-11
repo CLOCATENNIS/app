@@ -332,7 +332,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '11/11 00h30';
+var VERSION_APPLI = '11/11 01h10';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -607,7 +607,7 @@ function pageAccueil() {
   if (!S.user) P.login = '<section class="card stack" style="gap:12px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">Tu n\'es pas connecté</span><b style="font-size:18px">Connecte-toi en 1 minute</b>' +
     '<ol class="small" style="margin:0;padding-left:20px;line-height:1.7"><li>Tape l\'adresse mail donnée au club</li><li>Ouvre le mail : tu reçois un code</li><li>Tape le code : c\'est fait !</li></ol>' +
     '<a class="btn" href="#/profil">Me connecter</a><button class="btn line" data-guide="1">Besoin d\'aide ? Le guide pas à pas</button></section>';
-  else if (!S.pers.length && !S.isStaff) P.login = '<section class="card stack" style="gap:8px"><b>Adresse pas encore reconnue</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. ' + (S.compte && S.compte.identite_le ? 'Le club a reçu ton nom (' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + ') et va relier ton compte à ta famille.' : 'Indique ton nom pour que le club relie ton compte à ta famille.') + '</span>' + (S.compte && S.compte.identite_le ? '' : '<button class="btn" data-identite="1">Indiquer mon nom</button>') + '</section>';
+  else if (!S.pers.length && !S.isStaff) P.login = '<section class="card stack" style="gap:8px"><b>Compte pas encore relié</b><span class="mut small">Tu es connecté avec ' + esc(S.user.email) + ', mais cette adresse n\'est pas encore rattachée à un adhérent. ' + (S.compte && S.compte.identite_le ? 'Le club a reçu ton nom (' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + ') et va relier ton compte à ta famille.' : 'Indique ton nom pour que le club relie ton compte à ta famille.') + '</span>' + (S.compte && S.compte.identite_le ? '' : '<button class="btn" data-identite="1">Indiquer mon nom</button>') + '</section>';
 
   if (S.user && estMobile() && !estInstallee() && !localStorageGet('cloca-install-masque')) P.install = '<section class="card stack" style="gap:8px"><b>📲 Installe l\'appli sur ton téléphone</b><span class="mut small">Une icône sur l\'écran d\'accueil, et les notifications du club.</span><div style="display:flex;gap:8px"><button class="btn" data-guide="1" style="flex:2">Me montrer comment</button><button class="btn line" id="inst-masq" style="flex:1">Plus tard</button></div></section>';
   var actu = (S.pubs || []).filter(function (p) { return !p.urgent; })[0];
@@ -2198,6 +2198,16 @@ function carteReglagesProfil() {
     ligneReglage('dl', 'Appli sur ce téléphone', inst) +
     ligneReglage('alert', 'Aide et guide pas à pas', mut('Installer, se connecter, activer les notifications'), '#/aide') + '</section>';
 }
+// Compte connecté mais relié à aucune fiche (adresse absente de la liste ADOC) : une seule carte, qui disparaît dès que la direction relie le compte
+function carteCompteARelier() {
+  var c = S.compte || {}, nomDonne = !!c.identite_le;
+  if (c.foyer_id || c.personne_id) return '<section class="card stack" style="gap:6px"><b>Aucun adhérent sur ce compte</b><span class="mut small">Ton compte est bien relié, mais aucune fiche n\'y est rattachée pour le moment. Préviens le club : <a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a>.</span></section>';
+  return '<section class="card stack" style="gap:8px;border-left:4px solid var(--ac)"><span class="eyebrow">Compte pas encore relié</span>' +
+    '<span class="small">Ton adresse <b>' + esc(S.user.email) + '</b> n\'est pas dans la liste des adhérents du club. ' + (nomDonne ? 'Le club a reçu tes informations et va relier ton compte à ta famille.' : 'Indique ton nom : le club reliera ton compte à ta famille.') + '</span>' +
+    (nomDonne ? '<span class="mut small">' + esc(c.prenom_declare + ' ' + c.nom_declare) + (c.enfants_declares ? ' · enfants : ' + esc(c.enfants_declares) : '') + '</span>' : '') +
+    '<button class="btn' + (nomDonne ? ' line' : '') + '" id="pr-id">' + (nomDonne ? 'Modifier mes informations' : 'Indiquer mon nom') + '</button>' +
+    '<span class="xs mut">Cette carte disparaît dès que ton compte est relié.</span></section>';
+}
 function pageProfil() {
   var h = '<div class="pagehead wrap"><h1>' + (S.user ? 'Mon profil' : 'Connexion') + '</h1></div><main>';
   if (!S.user) {
@@ -2211,14 +2221,13 @@ function pageProfil() {
   }
   if (S.pers.length) {
     h += '<section class="card tight"><div class="eyebrow" style="padding:12px 0 4px">' + (S.pers.length > 1 ? 'Ma famille' : 'Ma fiche') + '</div>' + S.pers.map(blocPersonneProfil).join('') + '</section>';
-  } else if (!S.isStaff) h += '<section class="card stack"><b>Adresse pas encore reconnue</b><span class="mut small">Cette adresse n\'est rattachée à aucun adhérent. Contacte le club pour qu\'il l\'ajoute.</span></section>';
+  } else if (!S.isStaff) h += carteCompteARelier();
   if (S.roles.length) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes responsabilités</span><span>' + S.roles.map(function (r) { return { direction: 'Direction sportive', bureau: 'Bureau', accueil: 'Accueil', enseignant: 'Coach des cours', coach: 'Coach d\'un groupe', responsable: 'Responsable', cordeur: 'Cordeur' }[r.role]; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(', ') + '</span>' +
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
     (estCoach() && !S.isDir ? '<a class="btn ghost" href="#/coach">Mon espace coach</a>' : '') +
 '</section>';
   if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
     '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
-  if (S.compte && !S.compte.foyer_id && !S.compte.personne_id && !S.isStaff) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Mes informations</span>' + (S.compte && S.compte.identite_le ? '<span>' + esc(S.compte.prenom_declare + ' ' + S.compte.nom_declare) + '</span>' + (S.compte.enfants_declares ? '<span class="mut small">Enfants : ' + esc(S.compte.enfants_declares) + '</span>' : '') : '<span class="mut small">Pas encore renseignées.</span>') + '<button class="btn line" id="pr-id">' + (S.compte && S.compte.identite_le ? 'Modifier' : 'Indiquer mon nom') + '</button></section>';
   h += carteReglagesProfil();
   h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Ton avis compte</span><span class="mut small">L\'appli est en version bêta : une idée, un souci ? Ton message part directement au club.</span>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn line" id="rt-idee">💡 Boîte à idées</button><button class="btn line" id="rt-bug">🐞 Signaler un bug</button></div></section>';
@@ -3249,7 +3258,7 @@ function ouvrirGuide(i) {
 // Après la connexion : qui es-tu ? Le club peut ainsi rattacher le compte à la bonne famille.
 function formIdentite(depuisProfil) {
   var c = S.compte || {};
-  return '<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">' + (depuisProfil ? 'Mes informations' : 'Faisons connaissance 👋') + '</h2>' +
+  return '<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">' + (depuisProfil ? 'Qui es-tu ?' : 'Faisons connaissance 👋') + '</h2>' +
     '<span class="mut small">Ton adresse mail ne dit pas toujours qui tu es. Indique ton nom : le club pourra relier ton compte à ta famille et à tes enfants.</span>' +
     '<div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Prénom<input class="f" id="id-p" autocomplete="given-name" maxlength="60" value="' + esc(c.prenom_declare) + '"></label><label class="f">Nom<input class="f" id="id-n" autocomplete="family-name" maxlength="60" value="' + esc(c.nom_declare) + '"></label></div>' +
     '<label class="f">Tu es…<select class="f" id="id-q">' + [['', 'Choisir…'], ['parent', 'Parent d\'un ou plusieurs adhérents'], ['adherent', 'Adhérent (je joue au club)'], ['les_deux', 'Les deux'], ['coach', 'Coach du club'], ['autre', 'Autre (bureau, bénévole…)']].map(function (x) { return '<option value="' + x[0] + '"' + (c.qualite_declaree === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
@@ -3323,7 +3332,7 @@ function pageAide() {
   h += bloc('Installer sur Android', ['Ouvre <b>clocatennis.fr/app</b> dans <b>Chrome</b>.', 'Touche les <b>3 points ⋮</b> en haut à droite.', 'Choisis <b>« Installer l\'application »</b> ou <b>« Ajouter à l\'écran d\'accueil »</b>.', 'Ouvre l\'appli depuis l\'icône <b>CLOCA Tennis</b>.'], maquette('android-menu'));
   h += bloc('Se connecter', ['Va dans <b>Profil</b>.', 'Tape l\'adresse mail donnée au club à l\'inscription.', 'Ouvre le mail reçu et tape le <b>code à 6 chiffres</b> dans l\'appli.', 'Pas de mail ? Regarde dans les <b>spams</b> ou <b>Promotions</b>, attends une minute, puis redemande un code.'], maquette('connexion'));
   h += bloc('Activer les notifications', ['Ouvre l\'appli <b>depuis son icône</b> (obligatoire sur iPhone).', 'Va dans <b>Profil</b> → <b>Activer les notifications</b>.', 'Touche <b>« Autoriser »</b>.'], maquette('notifs'));
-  h += bloc('Mon adresse n\'est pas reconnue', ['Vérifie que c\'est bien l\'adresse donnée au club à l\'inscription.', 'Remplis <b>Profil → Mes informations</b> (prénom, nom, enfants) : le club reliera ton compte à ta famille.', 'Sinon, demande à l\'accueil du club house.']);
+  h += bloc('Mon adresse n\'est pas reconnue', ['Vérifie que c\'est bien l\'adresse donnée au club à l\'inscription.', 'Dans <b>Profil</b>, touche <b>« Indiquer mon nom »</b> (prénom, nom, enfants) : le club reliera ton compte à ta famille.', 'Sinon, demande à l\'accueil du club house.']);
   var faq = accueilCfg().faq;
   if (faq.length) h += '<div class="eyebrow" style="margin-top:6px">Questions fréquentes</div>' + faq.map(function (x) { return '<details class="card"><summary style="cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:8px">' + esc(x.q) + '<span class="mut">▾</span></summary><p class="small" style="margin:12px 0 0;line-height:1.6;white-space:pre-line">' + esc(x.r || '') + '</p></details>'; }).join('');
   h += '</main>';
