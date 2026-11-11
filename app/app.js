@@ -332,7 +332,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '11/11 messages';
+var VERSION_APPLI = '11/11 droits';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1959,12 +1959,13 @@ function remplirGroupe(gid) {
     var hAbs = '<section class="card stack" style="gap:6px"><span class="eyebrow">Absences signalées</span>' + (Object.keys(parJour).length ? Object.keys(parJour).sort().map(function (j) {
       return '<div class="small" style="padding:6px 0;border-top:1px solid var(--line)"><b>' + esc(fmtJour(new Date(j + 'T12:00:00'))) + '</b> · ' + parJour[j].length + ' absent' + (parJour[j].length > 1 ? 's' : '') + ' : ' + esc(parJour[j].map(function (a) { return a.personnes ? a.personnes.prenom + ' ' + a.personnes.nom.charAt(0) + '.' : '?'; }).join(', ')) + '</div>';
     }).join('') : '<span class="mut small">Aucune absence signalée pour les prochains cours.</span>') + '</section>';
-    var h = hAbs + formEcrireGroupe(gid) + '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
+    var notesOk = S.isDir || coachDuGroupe(gid);
+    var h = hAbs + (peutEcrireGroupe(gid) ? formEcrireGroupe(gid) : '') + (!notesOk ? '' : '<section class="card stack" style="gap:10px"><span class="eyebrow">Nouvelle note</span>' +
       '<label class="f">Pour<select class="f" id="nt-p"><option value="">Tout le groupe</option>' + mb.map(function (m) { return '<option value="' + m.personne_id + '">' + esc(m.personnes.prenom + ' ' + m.personnes.nom) + '</option>'; }).join('') + '</select></label>' +
       '<label class="f">Séance du (facultatif)<input class="f" type="date" id="nt-j"></label>' +
       '<label class="f">Note<textarea class="f" id="nt-t" rows="3" maxlength="2000" placeholder="Ex. Nicolas : changement de prise en coup droit. Absent les 2 prochaines semaines."></textarea></label>' +
-      '<button class="btn" id="nt-ok">Enregistrer la note</button><span class="mut xs">Visible uniquement par les coachs du groupe et la direction sportive.</span></section>';
-    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Notes (' + notes.length + ')</span>' + (notes.length ? notes.map(function (n) {
+      '<button class="btn" id="nt-ok">Enregistrer la note</button><span class="mut xs">Visible uniquement par les coachs du groupe et la direction sportive.</span></section>');
+    if (notesOk) h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Notes (' + notes.length + ')</span>' + (notes.length ? notes.map(function (n) {
       return '<div class="stack" style="gap:2px;padding:8px 0;border-top:1px solid var(--line)"><span class="xs mut">' + esc(n.personne_id ? nomP(n.personne_id) : 'Tout le groupe') + (n.jour ? ' · séance du ' + esc(fmtCourt(new Date(n.jour + 'T12:00:00'))) : '') + ' · ' + esc(n.auteur_nom || '') + ', le ' + esc(fmtCourt(new Date(n.created_at))) + '</span>' +
         '<span class="small" style="white-space:pre-line">' + esc(n.texte) + '</span>' + (n.auteur === S.user.id || S.isDir ? '<button class="chip" data-ntx="' + n.id + '" style="align-self:flex-start;min-height:30px">Supprimer</button>' : '') + '</div>';
     }).join('') : '<span class="mut small">Aucune note pour le moment.</span>') + '</section>';
@@ -1975,7 +1976,7 @@ function remplirGroupe(gid) {
     }).join('') + '</section>';
     box.innerHTML = h;
     lierEcrireGroupe(gid);
-    $('nt-ok').onclick = function () {
+    if ($('nt-ok')) $('nt-ok').onclick = function () {
       var t = $('nt-t').value.trim(); if (!t) return toast('Écris ta note');
       $('nt-ok').disabled = true;
       q(sb.from('notes_coach').insert({ groupe_id: gid, personne_id: $('nt-p').value || null, jour: $('nt-j').value || null, texte: t, auteur_nom: nomCoachCompte() || (S.isDir ? 'Direction' : S.user.email) })).then(function () { toast('Note enregistrée'); remplirGroupe(gid); })
@@ -3028,7 +3029,7 @@ function lierNotifs() {
 function chargerMessages() {
   S.msgs = [];
   if (!S.user) return Promise.resolve();
-  var champs = 'user_id, pour, lu_le, messages(id, created_at, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source)';
+  var champs = 'user_id, pour, lu_le, messages(id, created_at, auteur, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source)';
   // En aperçu, la direction voit les messages reçus par les comptes de cette famille (sans les marquer comme lus)
   var req = S.apercu ? q(sb.rpc('comptes_liste')).then(function (l) {
       var ids = (l || []).filter(function (c) { return c.foyer_id === S.apercu.foyer; }).map(function (c) { return c.user_id; });
@@ -3078,7 +3079,11 @@ function chargerPrive() {
   S.peutPrive = false; S.jeunesComptes = [];
   if (!S.user || S.apercu) return Promise.resolve();
   var l = [];
-  if (S.roles.length) l.push(q(sb.rpc('peux_lancer_prive')).then(function (r) { S.peutPrive = r === true; }).catch(function () { }));
+  S.acces = [];
+  if (S.roles.length || nomCoachCompte()) {
+    l.push(q(sb.rpc('peux_lancer_prive')).then(function (r) { S.peutPrive = r === true; }).catch(function () { }));
+    l.push(q(sb.rpc('mes_acces')).then(function (r) { S.acces = r || []; }).catch(function () { S.acces = S.isDir ? ['*'] : []; }));
+  }
   if (S.pers.some(function (p) { return p.profil === 'jeune'; })) l.push(q(sb.rpc('mes_jeunes_comptes')).then(function (r) { S.jeunesComptes = r || []; }).catch(function () { }));
   return Promise.all(l);
 }
@@ -3087,6 +3092,13 @@ function quiRecoit(d) {
   if (d.compte_jeune && !d.parents) return 'Arrive à ' + esc(d.prenom) + ' sur son compte (ses parents ne reçoivent pas ses messages)';
   return 'Arrive ' + (d.parents > 1 ? 'aux parents' : 'au parent') + (d.compte_jeune ? ' et à ' + esc(d.prenom) + ' sur son compte' : '');
 }
+// Droits réglés dans Gestion → Rôles et accès (la base vérifie la même chose)
+function aAcces(mod) { return S.isDir || (S.acces || []).indexOf('*') >= 0 || (S.acces || []).indexOf(mod) >= 0; }
+function coachDuGroupe(gid) {
+  var nc = nomCoachCompte();
+  return S.gere.indexOf(gid) >= 0 || (!!nc && ((AG && AG.creneaux) || []).some(function (c) { return c.groupe_id === gid && encadrePar(c.encadrant || '', nc); }));
+}
+function peutEcrireGroupe(gid) { return !S.apercu && (aAcces('ecrire_groupes') || coachDuGroupe(gid)); }
 function nouveauMessage() {
   var E = { res: [], choisi: null, t: 0, q: '' };
   var ligneRes = function (d, i) {
@@ -3185,9 +3197,26 @@ function pageMessage(id) {
     (x.pour ? '<span class="badge" style="align-self:flex-start;background:var(--ac);color:#fff">Pour ' + esc(x.pour) + '</span>' : '') +
     '<div class="small" style="white-space:pre-line;line-height:1.55">' + esc(m.texte) + '</div>' +
     (m.lien ? '<a class="btn ghost" href="' + esc(m.lien) + '">Voir le détail</a>' : '') + '</section>';
-  if (m.repondre_a) {
-    var sujet = 'Re : ' + m.titre, corps = '\n\n\n— En réponse au message « ' + m.titre + ' » (' + m.expediteur + ', ' + fmtCourt(d) + ')' + (x.pour ? ' · concernant ' + x.pour : '');
-    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre</span><span class="mut small">Ta réponse part par mail à <b>' + esc(m.repondre_libelle || m.repondre_a) + '</b> (' + esc(m.repondre_a) + ').</span>' +
+  var sujet = 'Re : ' + m.titre, corps = '\n\n\n— En réponse au message « ' + m.titre + ' » (' + m.expediteur + ', ' + fmtCourt(d) + ')' + (x.pour ? ' · concernant ' + x.pour : '');
+  var mail = m.repondre_a ? '<a class="small" href="mailto:' + esc(m.repondre_a) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(corps) + '" style="color:var(--mut)">ou répondre par mail (' + esc(m.repondre_a) + ')</a>' : '';
+  if (m.auteur && m.auteur !== S.user.id && !S.apercu) {
+    var qui = String(m.expediteur || '').split(' · ')[0];
+    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre à ' + esc(qui) + '</span><span class="mut small">Ta réponse arrive directement à ' + esc(qui) + ', dans une conversation privée (Messages → Privés).</span>' +
+      '<textarea class="f" id="rp-t" rows="3" maxlength="2000" placeholder="Ta réponse…"></textarea><button class="btn" id="rp-go">' + ic('send', 18, '#fff') + ' Envoyer ma réponse</button>' + mail + '</section>';
+    setTimeout(function () {
+      if (!$('rp-go')) return;
+      $('rp-go').onclick = function () {
+        var t = $('rp-t').value.trim(); if (!t) return toast('Écris ta réponse');
+        var b = this; b.disabled = true;
+        q(sb.rpc('message_repondre', { p_message: m.id, p_texte: t })).then(function (r) {
+          sb.functions.invoke('discussion-notifier', { body: { message_id: r.message_id } }).catch(function () { });
+          toast('Réponse envoyée');
+          return chargerDiscussions().then(function () { go('#/discussion/' + r.discussion_id); });
+        }).catch(function () { b.disabled = false; toast('Envoi impossible, réessaie'); });
+      };
+    });
+  } else if (m.repondre_a) {
+    h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre</span><span class="mut small">Ta réponse part par mail à <b>' + esc(m.repondre_libelle || m.repondre_a) + '</b>.</span>' +
       '<a class="btn" href="mailto:' + esc(m.repondre_a) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(corps) + '">' + ic('mail', 20, '#fff') + ' Répondre par mail</a></section>';
   }
   return h + '</main>';
@@ -3195,25 +3224,19 @@ function pageMessage(id) {
 // Coach (ou direction) : écrire à tout un groupe, jamais à un enfant seul
 function formEcrireGroupe(gid, nomGroupe) {
   return '<section class="card stack" style="gap:10px"><span class="eyebrow">Écrire au groupe</span>' +
-    '<span class="mut xs">Le message arrive dans la messagerie des familles du groupe, avec une notification. Il est visible par la direction sportive.</span>' +
+    '<span class="mut xs">Le message arrive dans la messagerie des familles du groupe, avec une notification, signé de ton nom. Les familles te répondent directement dans l\'appli (Messages → Privés).</span>' +
     '<label class="f">Objet<input class="f" id="eg-t" maxlength="120" placeholder="Ex. Séance de samedi en extérieur"></label>' +
     '<label class="f">Message<textarea class="f" id="eg-x" rows="4" maxlength="4000" placeholder="Ex. Pensez à prendre une gourde et une tenue chaude."></textarea></label>' +
-    '<label class="f">Les réponses arrivent à<select class="f" id="eg-r"><option value="">Chargement…</option></select></label>' +
     '<button class="btn" id="eg-ok">Envoyer au groupe</button></section>';
 }
 function lierEcrireGroupe(gid) {
   if (!$('eg-ok')) return;
-  var nc = (nomCoachCompte() || '').toLowerCase();
-  q(sb.from('adresses_reponse').select('id, libelle, email, nom_coach').eq('actif', true).order('ordre').order('libelle')).then(function (l) {
-    l = l || []; var moi = l.filter(function (a) { return a.nom_coach && a.nom_coach.toLowerCase() === nc; })[0];
-    $('eg-r').innerHTML = l.map(function (a) { return '<option value="' + a.id + '"' + (moi && moi.id === a.id ? ' selected' : '') + '>' + esc(a.libelle + ' · ' + a.email) + '</option>'; }).join('') || '<option value="">Adresse du club</option>';
-  }).catch(function () { $('eg-r').innerHTML = '<option value="">Adresse du club</option>'; });
   $('eg-ok').onclick = function () {
     var t = $('eg-t').value.trim(), x = $('eg-x').value.trim();
     if (!t || !x) return toast('Écris un objet et un message');
     if (S.apercu) return toast('Aperçu : rien n\'est envoyé');
     $('eg-ok').disabled = true;
-    q(sb.rpc('envoyer_message', { p_titre: t, p_texte: x, p_cible: 'groupes', p_groupes: [gid], p_repondre: $('eg-r').value || null, p_expediteur: S.isStaff ? 'Direction sportive' : null })).then(function (r) {
+    q(sb.rpc('envoyer_message', { p_titre: t, p_texte: x, p_cible: 'groupes', p_groupes: [gid] })).then(function (r) {
       sb.functions.invoke('notifier', { body: { mode: 'message', message_id: r.id } }).catch(function () { });
       toast('Message envoyé à ' + r.destinataires + ' famille' + (r.destinataires > 1 ? 's' : ''));
       $('eg-t').value = ''; $('eg-x').value = ''; $('eg-ok').disabled = false;

@@ -34,6 +34,7 @@ var MODULES = [
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
   ['equipe', 'Équipe du club', ['direction']],
   ['acces', 'Accès particuliers', ['direction']],
+  ['droits', 'Rôles et accès', ['direction']],
   ['retours', 'Idées et bugs', ['direction']],
   ['reglages', 'Réglages de l\'appli', ['direction']],
   ['historique', 'Historique', ['direction']]
@@ -47,7 +48,7 @@ var RUBRIQUES = [
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
   ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
-  ['Administration', ['reglages', 'equipe', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
+  ['Administration', ['reglages', 'equipe', 'droits', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), rôles et accès, accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
   niveaux: 'Niveau club et classement FFT de chaque joueur, demandes de changement de niveau envoyées par les familles.',
@@ -1510,9 +1511,6 @@ var HOR_DEF = {
 };
 var ROLES_PRIVE = [['direction', 'Direction sportive'], ['bureau', 'Bureau'], ['enseignant', 'Coachs (enseignants)'], ['coach', 'Coach d\'un groupe'], ['cordeur', 'Cordeur'], ['accueil', 'Accueil'], ['responsable', 'Responsable d\'activité']];
 var REGLAGES = [
-  ['Messages privés', [
-    ['prive_roles', 'Qui peut démarrer une conversation privée avec un adhérent (bouton + dans Messages) ? Les adhérents peuvent toujours répondre.', 'roles', ['direction', 'bureau', 'enseignant', 'coach', 'cordeur', 'accueil']]
-  ]],
   ['Le club', [
     ['club_adresse', 'Adresse du club', 'text', '81 rue de Saint-Germain, 78260 Achères'],
     ['club_tel', 'Téléphone du club house', 'tel', '01 39 11 69 47'],
@@ -2397,6 +2395,63 @@ function vueEquipe(m) {
   charger();
 }
 
+// ---------- Rôles et accès : par rôle, puis personne par personne (la base applique la même règle) ----------
+var DROITS_ROLES = [['bureau', 'Bureau'], ['accueil', 'Accueil'], ['enseignant', 'Coachs'], ['cordeur', 'Cordeur'], ['coach', 'Coach d\'un groupe'], ['responsable', 'Responsable']];
+var DROITS_APPLI = [['ecrire_groupes', 'Écrire à n\'importe quel groupe (appli)', 'Les coachs écrivent toujours à leurs propres groupes.'], ['prive', 'Démarrer un message privé (bouton + dans Messages)', 'Les adhérents peuvent toujours répondre.']];
+var DROITS_FIXES = ['droits', 'acces', 'equipe', 'reglages', 'historique', 'retours'];
+var DR = { onglet: 'roles', qui: null };
+function vueDroits(m) {
+  m.innerHTML = entete('Rôles et accès', 'Qui voit quoi dans la gestion, et qui peut écrire aux familles. Règle d\'abord par rôle, puis ajuste personne par personne (ex. un membre du bureau chargé de la communication). La direction a toujours tout.') +
+    '<div class="chips" style="margin-bottom:14px"><button class="chip' + (DR.onglet === 'roles' ? ' on' : '') + '" data-dro="roles">Par rôle</button><button class="chip' + (DR.onglet === 'perso' ? ' on' : '') + '" data-dro="perso">Par personne</button></div><div id="dr-l"><div class="skel"></div></div>';
+  all('[data-dro]').forEach(function (b) { b.onclick = function () { DR.onglet = b.dataset.dro; vueDroits(m); }; });
+  var lignes = MODULES.map(function (x) { return [x[0], x[1], '']; }).concat(DROITS_APPLI);
+  Promise.all([q(sb.from('acces_roles').select('role, module')), q(sb.rpc('equipe_acces'))]).then(function (r) {
+    var R = r[0] || [], E = r[1] || [];
+    var aRole = function (role, mod) { return R.some(function (x) { return x.role === role && x.module === mod; }); };
+    var box = $('dr-l');
+    if (DR.onglet === 'roles') {
+      box.innerHTML = '<div class="tw"><table class="t"><thead><tr><th>Module</th><th>Direction</th>' + DROITS_ROLES.map(function (x) { return '<th>' + esc(x[1]) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        lignes.map(function (l, i) {
+          var fixe = DROITS_FIXES.indexOf(l[0]) >= 0, sep = i === MODULES.length ? ' style="border-top:2px solid var(--bd)"' : '';
+          return '<tr' + sep + '><td><b class="small">' + esc(l[1]) + '</b>' + (l[2] ? '<div class="xs mut">' + esc(l[2]) + '</div>' : '') + (fixe ? '<div class="xs mut">Réservé à la direction</div>' : '') + '</td><td class="small mut">toujours</td>' +
+            DROITS_ROLES.map(function (x) { return '<td>' + (fixe ? '<span class="mut">—</span>' : '<input type="checkbox" style="width:18px;height:18px;accent-color:var(--ac)" data-drr="' + x[0] + '|' + l[0] + '"' + (aRole(x[0], l[0]) ? ' checked' : '') + ' aria-label="' + esc(x[1] + ' : ' + l[1]) + '">') + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div><p class="mut xs">Chaque case s\'enregistre tout de suite. Une personne qui a plusieurs rôles cumule leurs accès, sauf réglage contraire dans « Par personne ».</p>';
+      all('[data-drr]').forEach(function (c) {
+        c.onchange = function () {
+          var v = c.dataset.drr.split('|'), op = c.checked ? sb.from('acces_roles').insert({ role: v[0], module: v[1] }) : sb.from('acces_roles').delete().eq('role', v[0]).eq('module', v[1]);
+          q(op).then(function () { toast('Accès enregistré'); }).catch(function () { c.checked = !c.checked; toast('Enregistrement impossible'); });
+        };
+      });
+      return;
+    }
+    // Par personne
+    var NOMS = {}; DROITS_ROLES.forEach(function (x) { NOMS[x[0]] = x[1]; }); NOMS.direction = 'Direction';
+    if (!DR.qui && E.length) DR.qui = E[0].user_id;
+    var p = E.filter(function (x) { return x.user_id === DR.qui; })[0];
+    var h = '<div class="card stack" style="gap:8px;margin-bottom:14px"><label class="l">Personne<select class="f" id="dr-qui">' + E.map(function (x) { return '<option value="' + x.user_id + '"' + (x.user_id === DR.qui ? ' selected' : '') + '>' + esc(x.nom) + ' · ' + esc(x.roles.map(function (r) { return NOMS[r] || r; }).join(', ')) + '</option>'; }).join('') + '</select></label></div>';
+    if (!p) { box.innerHTML = h + '<div class="card empty">Personne dans l\'équipe pour le moment. Ajoute des rôles dans « Équipe du club ».</div>'; }
+    else if (p.roles.indexOf('direction') >= 0) { box.innerHTML = h + '<div class="card empty">Direction sportive : accès à tout, non modifiable.</div>'; }
+    else {
+      var parRole = function (mod) { return p.roles.some(function (r) { return aRole(r, mod); }); };
+      h += '<div class="tw"><table class="t"><thead><tr><th>Module</th><th>Selon son rôle</th><th>Réglage pour ' + esc(p.nom) + '</th><th>Résultat</th></tr></thead><tbody>' +
+        lignes.filter(function (l) { return DROITS_FIXES.indexOf(l[0]) < 0; }).map(function (l) {
+          var perso = Object.prototype.hasOwnProperty.call(p.perso || {}, l[0]) ? p.perso[l[0]] : null, rr = parRole(l[0]), res = perso === null ? rr : perso;
+          return '<tr><td><b class="small">' + esc(l[1]) + '</b></td><td class="small">' + (rr ? '✓ oui' : '<span class="mut">non</span>') + '</td>' +
+            '<td><select class="f" style="min-width:150px" data-drp="' + l[0] + '"><option value=""' + (perso === null ? ' selected' : '') + '>Selon son rôle</option><option value="1"' + (perso === true ? ' selected' : '') + '>Toujours</option><option value="0"' + (perso === false ? ' selected' : '') + '>Jamais</option></select></td>' +
+            '<td>' + (res ? '<span class="badge b-ok">Oui</span>' : '<span class="badge">Non</span>') + '</td></tr>';
+        }).join('') + '</tbody></table></div><p class="mut xs">« Toujours » ou « Jamais » l\'emporte sur ses rôles, pour cette personne seulement.</p>';
+      box.innerHTML = h;
+      all('[data-drp]').forEach(function (sel) {
+        sel.onchange = function () {
+          var mod = sel.dataset.drp, v = sel.value;
+          var op = v === '' ? sb.from('acces_personnes').delete().eq('user_id', p.user_id).eq('module', mod) : sb.from('acces_personnes').upsert({ user_id: p.user_id, module: mod, autorise: v === '1', maj_le: new Date().toISOString() });
+          q(op).then(function () { if (v === '') delete p.perso[mod]; else p.perso[mod] = v === '1'; toast('Accès de ' + p.nom + ' enregistré'); vueDroits(m); }).catch(function () { toast('Enregistrement impossible'); });
+        };
+      });
+    }
+    if ($('dr-qui')) $('dr-qui').onchange = function () { DR.qui = this.value; vueDroits(m); };
+  }).catch(function () { $('dr-l').innerHTML = '<div class="card empty">Impossible de charger les accès (la mise à jour de la base n\'est peut-être pas encore faite).</div>'; });
+}
 function vueAcces(m) {
   var ROLES_AC = [['direction', 'Direction sportive (tout)'], ['bureau', 'Bureau / président (adhérents, actus, événements, annonces)'], ['accueil', 'Accueil (club house, annonces, cordage, inscriptions, actus)'], ['cordeur', 'Cordeur'], ['enseignant', 'Coach des cours (ses cours dans son agenda, ses groupes, notes, missions)'], ['coach', 'Coach d\'un groupe CLOC\'ARENA ou d\'une animation (saisit les scores, voit les joueurs du groupe)'], ['responsable', 'Responsable d\'un groupe (même chose, sans être coach)']];
   m.innerHTML = entete('Accès particuliers', 'Qui peut faire quoi. Une même personne peut cumuler plusieurs rôles et plusieurs groupes. Elle doit s\'être connectée une fois à l\'appli avant de recevoir un rôle.') +
@@ -3160,7 +3215,7 @@ function vueAccueilApp(m) {
   }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les réglages de l\'accueil.</div>'; });
 }
 
-var VUES = { accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
+var VUES = { droits: vueDroits, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
   fermer();
@@ -3208,6 +3263,13 @@ function demarrer(session) {
   q(sb.from('responsabilites').select('role, groupe_id').eq('user_id', A.user.id)).then(function (r) {
     A.roles = r || [];
     A.mods = MODULES.filter(function (m) { return A.roles.some(function (x) { return !x.groupe_id && m[2].indexOf(x.role) >= 0; }); }).map(function (m) { return m[0]; });
+    return q(sb.rpc('mes_acces')).then(function (l) {
+      if (Array.isArray(l)) A.mods = l.indexOf('*') >= 0 ? MODULES.map(function (m) { return m[0]; }) : MODULES.filter(function (m) { return l.indexOf(m[0]) >= 0; }).map(function (m) { return m[0]; });
+    }).catch(function () { }).then(function () { suiteDemarrer(); });
+  }).catch(function () { pageConnexion('Connexion au club impossible pour le moment.'); });
+}
+function suiteDemarrer() {
+  (function () {
     if (!A.mods.length) {
       $('root').innerHTML = '<div class="login"><div class="card stack"><b>Accès réservé à l\'équipe du club</b><span class="mut">Tu es connecté avec ' + esc(A.user.email) + ', mais cette adresse n\'a pas de rôle de gestion. Demande à la direction sportive de t\'en donner un.</span>' +
         (A.roles.some(function (x) { return x.role === 'coach' || x.role === 'responsable'; }) ? '' : '') + '<a class="btn line" href="../">Ouvrir l\'appli</a><button class="btn ghost" id="lo">Changer de compte</button></div></div>';
@@ -3215,7 +3277,7 @@ function demarrer(session) {
       return;
     }
     q(sb.from('reglages_publics').select('cle, valeur')).then(function (l) { var V = {}; (l || []).forEach(function (x) { V[x.cle] = x.valeur; }); appliquerReglages(V); }).catch(function () { }).then(router);
-  }).catch(function () { pageConnexion('Connexion au club impossible pour le moment.'); });
+  })();
 }
 if (!sb) { $('root').innerHTML = '<div class="login card">Connexion impossible : vérifie ta connexion internet.</div>'; return; }
 sb.auth.getSession().then(function (r) { demarrer(r.data && r.data.session); });

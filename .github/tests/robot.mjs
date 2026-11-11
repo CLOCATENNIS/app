@@ -99,7 +99,8 @@ const MOCK = {
   tables: {
     responsabilites: [{ role: 'direction', groupe_id: null }],
     fetes: [{ edition: 'noel-2026', titre: 'Fête de Noël', debut: '2026-12-19T13:00:00Z', fin: '2026-12-19T15:00:00Z', actif: true, inscription_ouverte: true, tombola_ouverte: true, prix_ticket: 2, carnet_nb: 5, prix_carnet: 8, tirage_publie: false }]
-  }
+  },
+  rpc: { mes_acces: ['*'] }
 };
 const MOCK_FAMILLES = { session: null, tables: { fetes: MOCK.tables.fetes, publications: [{ id: 'p', titre: 'Actu de test', texte: 'Texte', publie_le: '2026-11-01T10:00:00Z', urgent: false }] }, rpc: { fete_ma_reponse: { participation: null, tickets: [], familles: 0 } } };
 async function brancherFaux(ctx, mock) {
