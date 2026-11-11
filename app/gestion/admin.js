@@ -1325,14 +1325,14 @@ function vueCordage(m) {
   var charger = function () {
     q(sb.from('cordage_demandes').select('*, cordages(nom)').or('statut.eq.attente,statut.eq.fini,and(statut.eq.recupere,paye.eq.false)').order('created_at')).then(function (l) {
       var ligne = function (d) {
-        var w = telWa(d.telephone), msg = 'Bonjour ! C\'est le club CLOCA Tennis 🎾 La raquette de ' + d.nom.split(' ')[0] + ' est cordée et t\'attend au club house' + (d.prix != null ? ' (' + euros(d.prix) + ')' : '') + '. À bientôt !';
         return '<tr><td><b>' + esc(d.nom) + '</b>' + (d.depose_par ? '<div class="mut xs">déposée par ' + esc(d.depose_par) + '</div>' : '') + '<div class="mut xs">Déposée le ' + esc(fmtJour(new Date(d.created_at))) + (d.besoin_avant ? ' · <b style="color:var(--ac)">pour le ' + esc(fmtJour(new Date(d.besoin_avant + 'T12:00:00'))) + '</b>' : '') + '</div></td>' +
           '<td class="small">' + esc(d.fourni_par === 'club' ? (d.cordages ? d.cordages.nom : 'Club') : 'Perso : ' + (d.cordage_perso || '')) + (d.tension ? '<br><span class="mut">' + esc(d.tension) + '</span>' : '') + (d.raquette ? '<br><span class="mut">' + esc(d.raquette) + '</span>' : '') + (d.note ? '<br><i>' + esc(d.note) + '</i>' : '') + '</td>' +
-          '<td class="small">' + esc(d.telephone || '') + (w ? '<br><a target="_blank" rel="noopener" href="https://wa.me/' + w + '?text=' + encodeURIComponent(msg) + '">WhatsApp</a>' : '') + '</td><td><b>' + euros(d.prix) + '</b></td><td class="act">' +
+          '<td><b>' + euros(d.prix) + '</b></td><td class="act">' +
+          (d.personne_id ? '<a class="btn sm ghost" href="../#/contacter/' + d.personne_id + '/' + encodeURIComponent((d.pour_tiers && d.depose_par) || d.nom) + '">Contacter</a> ' : '') +
           (d.statut === 'attente' ? '<button class="btn sm ok" data-cof="' + d.id + '">Prête ✓</button>' : '') +
           (d.statut === 'fini' ? '<button class="btn sm line" data-cor="' + d.id + '">Récupérée</button> ' : '') + (d.statut !== 'attente' && !d.paye ? '<button class="btn sm navy" data-cop="' + d.id + '">Réglée</button>' : '') + (d.statut !== 'attente' && d.paye ? '<span class="badge">Réglée</span>' : '') + '</td></tr>';
       };
-      var tab = function (t, liste) { return '<div class="sect">' + t + ' (' + liste.length + ')</div>' + (liste.length ? '<div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Cordage</th><th>Contact</th><th>Prix</th><th></th></tr></thead><tbody>' + liste.map(ligne).join('') + '</tbody></table></div>' : '<div class="card empty">Rien ici.</div>'); };
+      var tab = function (t, liste) { return '<div class="sect">' + t + ' (' + liste.length + ')</div>' + (liste.length ? '<div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Cordage</th><th>Prix</th><th></th></tr></thead><tbody>' + liste.map(ligne).join('') + '</tbody></table></div>' : '<div class="card empty">Rien ici.</div>'); };
       $('co-l').innerHTML = tab('À corder', l.filter(function (d) { return d.statut === 'attente'; })) + tab('Prêtes, à récupérer', l.filter(function (d) { return d.statut === 'fini'; })) + tab('Récupérées, à régler', l.filter(function (d) { return d.statut === 'recupere'; }));
       var maj = function (id, ch, msg) { return q(sb.from('cordage_demandes').update(ch).eq('id', id)).then(function () { toast(msg); charger(); }).catch(function () { toast('Action impossible'); }); };
       all('[data-cof]').forEach(function (b) {

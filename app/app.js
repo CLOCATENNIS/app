@@ -2488,7 +2488,7 @@ function appliquerMemoCordage(F, pid) {
   var g = m.reglages || {}, actifs = C.cordages.filter(function (c) { return c.actif; });
   F.raquette = g.raquette || ''; F.fourni = g.fourni === 'joueur' ? 'joueur' : 'club';
   F.cordage = g.cordage && actifs.some(function (c) { return c.id === g.cordage; }) ? g.cordage : '';
-  F.perso = g.perso || ''; F.tension = g.tension || ''; F.note = g.note || ''; if (g.tel) F.tel = g.tel;
+  F.perso = g.perso || ''; F.tension = g.tension || ''; F.note = g.note || '';
   var p = S.pers.filter(function (x) { return x.id === pid; })[0];
   F.memo = true; F.memoNom = p ? p.prenom : ''; F.memoPerdu = g.fourni !== 'joueur' && !!g.cordage && !F.cordage;
   return true;
@@ -2540,8 +2540,7 @@ function cordDeposer(box) {
   var cordeur = estCordeur();
   if (!S.pers.length && !cordeur) { box.innerHTML = '<section class="card empty">Ton adresse n\'est rattachée à aucun adhérent. Contacte le club.</section>'; return; }
   if (!CF) {
-    var dernier = C.dem.filter(function (d) { return d.cree_par === S.user.id && d.telephone; }).slice(-1)[0];
-    CF = { qui: S.pers.length === 1 ? S.pers[0].id : '', autre: false, autreNom: '', nomExt: '', raquette: '', fourni: 'club', cordage: '', perso: '', tension: '', avant: '', tel: dernier ? dernier.telephone : '', note: '', memo: false };
+    CF = { qui: S.pers.length === 1 ? S.pers[0].id : '', autre: false, autreNom: '', nomExt: '', raquette: '', fourni: 'club', cordage: '', perso: '', tension: '', avant: '', note: '', memo: false };
     if (CF.qui) appliquerMemoCordage(CF, CF.qui);
   }
   var F = CF, actifs = C.cordages.filter(function (c) { return c.actif; });
@@ -2569,11 +2568,11 @@ function cordDeposer(box) {
     '<label class="f">Tension (facultatif)<input class="f" data-cf="tension" value="' + esc(F.tension) + '" placeholder="Ex. 24 kg / 23 kg, ou « comme d\'habitude »"></label></section>' +
     '<section class="card stack" style="gap:10px"><label class="f">J\'en ai besoin pour (facultatif)<input class="f" type="date" data-cf="avant" min="' + isoJour(new Date()) + '" value="' + esc(F.avant) + '"></label>' +
     '<div class="small" style="background:var(--soft);border-left:4px solid var(--ac);border-radius:10px;padding:10px 12px">⚠️ ' + esc(reg('cordage_dispo_msg', 'Cette date est indicative : le cordage se fait selon la disponibilité du cordeur. Nous ne pouvons pas garantir qu\'elle sera prête à temps.')) + '</div>' +
-    '<label class="f">Téléphone (pour te prévenir)<input class="f" type="tel" inputmode="tel" autocomplete="tel" data-cf="tel" value="' + esc(F.tel) + '" placeholder="06 12 34 56 78"></label>' +
+    '<div class="small" style="background:var(--soft);border-radius:10px;padding:10px 12px">Tu recevras une notification dans l\'appli dès que ta raquette est prête 🎾</div>' +
     '<label class="f">Un mot pour le cordeur (facultatif)<textarea class="f" data-cf="note" placeholder="Ex. garder le même grip">' + esc(F.note) + '</textarea></label></section>' +
     '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span>Prix</span><b class="disp" style="font-size:28px">' + (prix != null ? euros(prix) : '—') + '</b></div>' +
     '<span class="mut xs">À régler au club house en récupérant la raquette.</span>' +
-    (F.qui && F.qui !== 'ext' && !F.autre ? '<label class="check"><input type="checkbox" id="cf-memo"' + (F.memo ? ' checked' : '') + '><span>Enregistrer ces réglages pour mes prochaines demandes<span class="mut xs" style="display:block">Raquette, cordage, tension, téléphone et mot au cordeur seront remplis tout seuls la prochaine fois.</span></span></label>' : '') +
+    (F.qui && F.qui !== 'ext' && !F.autre ? '<label class="check"><input type="checkbox" id="cf-memo"' + (F.memo ? ' checked' : '') + '><span>Enregistrer ces réglages pour mes prochaines demandes<span class="mut xs" style="display:block">Raquette, cordage, tension et mot au cordeur seront remplis tout seuls la prochaine fois.</span></span></label>' : '') +
     '<button class="btn" id="cf-go">Déposer ma raquette</button></section>';
   box.innerHTML = h;
   Array.prototype.forEach.call(box.querySelectorAll('[data-cf]'), function (i) { i.oninput = function () { F[i.dataset.cf] = i.value; }; });
@@ -2585,7 +2584,7 @@ function cordDeposer(box) {
       var d = C.dem.filter(function (x) { return x.id === b.dataset.crefaire; })[0]; if (!d) return;
       var encore = d.cordage_id && actifs.some(function (c) { return c.id === d.cordage_id; });
       CF = { qui: d.personne_id || (cordeur ? 'ext' : ''), nomExt: d.personne_id ? '' : d.nom, raquette: d.raquette || '', fourni: d.fourni_par, cordage: encore ? d.cordage_id : '', perso: d.cordage_perso || '',
-        tension: d.tension || '', avant: '', tel: d.telephone || F.tel, note: '' };
+        tension: d.tension || '', avant: '', note: '' };
       cordDeposer(box); window.scrollTo(0, document.querySelector('[data-cfour]').getBoundingClientRect().top + window.scrollY - 120);
       toast(d.fourni_par === 'club' && !encore ? 'Ce cordage n\'est plus proposé : choisis-en un autre' : 'Formulaire rempli comme la dernière fois');
     };
@@ -2599,15 +2598,14 @@ function cordDeposer(box) {
     if (F.qui === 'ext' && !F.nomExt.trim()) return toast('Indique le nom du joueur');
     if (F.fourni === 'club' && !F.cordage) return toast('Choisis un cordage');
     if (F.fourni === 'joueur' && !F.perso.trim()) return toast('Indique ton cordage');
-    if (!telWa(F.tel)) return toast('Vérifie le numéro de téléphone');
     var row = {
-      personne_id: F.qui === 'ext' ? null : F.qui, nom: F.qui === 'ext' ? F.nomExt.trim() : F.autre ? F.autreNom.trim() : '-', pour_tiers: !!F.autre && F.qui !== 'ext', telephone: F.tel.trim(), raquette: F.raquette.trim() || null,
+      personne_id: F.qui === 'ext' ? null : F.qui, nom: F.qui === 'ext' ? F.nomExt.trim() : F.autre ? F.autreNom.trim() : '-', pour_tiers: !!F.autre && F.qui !== 'ext', raquette: F.raquette.trim() || null,
       fourni_par: F.fourni, cordage_id: F.fourni === 'club' ? F.cordage : null, cordage_perso: F.fourni === 'joueur' ? F.perso.trim() : null,
       tension: F.tension.trim() || null, besoin_avant: F.avant || null, note: F.note.trim() || null
     };
     $('cf-go').disabled = true;
     var memoPid = F.qui !== 'ext' && !F.autre ? F.qui : null, garder = !!F.memo, avait = !!memoCordage(memoPid);
-    var reglages = { raquette: row.raquette || '', fourni: F.fourni, cordage: row.cordage_id || '', perso: row.cordage_perso || '', tension: row.tension || '', tel: row.telephone, note: row.note || '' };
+    var reglages = { raquette: row.raquette || '', fourni: F.fourni, cordage: row.cordage_id || '', perso: row.cordage_perso || '', tension: row.tension || '', note: row.note || '' };
     q(sb.from('cordage_demandes').insert(row)).then(function () {
       CF = null;
       if (!memoPid) return;
@@ -3106,8 +3104,8 @@ function coachDuGroupe(gid) {
   return S.gere.indexOf(gid) >= 0 || (!!nc && ((AG && AG.creneaux) || []).some(function (c) { return c.groupe_id === gid && encadrePar(c.encadrant || '', nc); }));
 }
 function peutEcrireGroupe(gid) { return !S.apercu && (aAcces('ecrire_groupes') || coachDuGroupe(gid)); }
-function nouveauMessage() {
-  var E = { res: [], choisi: null, t: 0, q: '' };
+function nouveauMessage(choisi) {
+  var E = { res: [], choisi: choisi || null, t: 0, q: '' };
   var ligneRes = function (d, i) {
     var dest = !d.comptes ? 'Pas de compte dans l\'appli : passe par WhatsApp ou mail' : quiRecoit(d);
     return '<button class="pick" data-dst="' + i + '"' + (d.comptes ? '' : ' disabled') + ' style="width:100%;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;height:auto' + (d.comptes ? '' : ';opacity:.55') + '">' +
@@ -3154,6 +3152,27 @@ function nouveauMessage() {
   var lierRes = function () { Array.prototype.forEach.call(document.querySelectorAll('[data-dst]'), function (b) { b.onclick = function () { E.choisi = E.res[+b.dataset.dst]; dessiner(); }; }); };
   modale('<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">Nouveau message</h2><div id="nm-corps" class="stack" style="gap:10px"></div></div>', dessiner);
 }
+// Bouton « Contacter » de l'atelier cordage (gestion) : ouvre la conversation privée déjà en cours avec la personne,
+// sinon la fenêtre « Nouveau message » avec la personne déjà choisie (la discussion s'ouvre après l'envoi)
+function pageContacter(pid, nom) {
+  var h = '<div class="pagehead wrap">' + backLink('#/messages', 'Messages') + '<h1 style="font-size:26px">Contacter</h1></div><main>';
+  if (!S.user) return h + '<section class="card empty">Connecte-toi pour envoyer un message.</section></main>';
+  if (!S.peutPrive) return h + '<section class="card empty">Tu n\'as pas l\'accès aux messages privés.</section></main>';
+  nom = nom ? decodeURIComponent(nom) : '';
+  var vers = function (x) { location.replace('#/' + x); };
+  setTimeout(function () {
+    q(sb.from('discussions').select('id').eq('type', 'prive').eq('source', 'equipe').eq('personne_id', pid).eq('created_by', S.user.id).eq('archive', false).limit(1)).then(function (l) {
+      if (l && l[0]) return vers('discussion/' + l[0].id);
+      return (nom.length >= 2 ? q(sb.rpc('destinataires_chercher', { p_q: nom })) : Promise.resolve([])).then(function (r) {
+        var d = (r || []).filter(function (x) { return x.id === pid; })[0];
+        vers('messages');
+        if (d && !d.comptes) return toast(d.prenom + ' n\'a pas de compte dans l\'appli : passe par WhatsApp ou mail');
+        setTimeout(function () { nouveauMessage(d || null); }, 50);
+      });
+    }).catch(function () { vers('messages'); toast('Impossible d\'ouvrir la conversation'); });
+  });
+  return h + '<section class="card empty">Ouverture de la conversation…</section></main>';
+}
 function pageMessages() {
   var h = '<div class="pagehead wrap"><h1>Messages</h1></div><main>';
   if (!S.user) return h + '<section class="card empty">Connecte-toi pour voir tes messages.</section></main>';
@@ -3184,7 +3203,7 @@ function pageMessages() {
   h += '</main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-msgf]'), function (b) { b.onclick = function () { MSGF = b.dataset.msgf; render(); }; });
-    if ($('msg-new')) $('msg-new').onclick = nouveauMessage;
+    if ($('msg-new')) $('msg-new').onclick = function () { nouveauMessage(); };
     if ($('msg-tout')) $('msg-tout').onclick = function () {
       var ids = nonLus().map(function (x) { return x.messages.id; });
       q(sb.rpc('messages_lus', { ids: ids })).then(function () { nonLus().forEach(function (x) { x.lu_le = new Date().toISOString(); }); render(); });
@@ -4086,7 +4105,7 @@ function pageDiscussion(id) {
   var h = '<div class="pagehead wrap" style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:18;background:var(--bg)">' +
     '<a class="back" href="#/messages" aria-label="Retour aux messages" style="color:var(--tx);margin:0">' + ic('back', 22) + '</a>' + discAvatar(d, 38) +
     '<span class="stack"' + (prive ? '' : ' id="disc-infos" role="button" tabindex="0" aria-label="Voir les infos et les membres du fil"') + ' style="flex:1;min-width:0;gap:0' + (prive ? '' : ';cursor:pointer') + '"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-    (prive ? esc(d.annonce_titre || 'Annonce n°' + d.annonce_num) : d.membres + ' membre' + (d.membres > 1 ? 's' : '')) + (d.expire_le ? ' · se ferme le ' + esc(discFin(d)) : '') + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
+    (prive ? (d.annonce_id ? esc(d.annonce_titre || 'Annonce n°' + d.annonce_num) : 'Conversation privée') : d.membres + ' membre' + (d.membres > 1 ? 's' : '')) + (d.expire_le ? ' · se ferme le ' + esc(discFin(d)) : '') + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
     '<button class="chip" id="disc-muet" aria-label="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '" title="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '">' + ic(d.muet ? 'bell' : 'mute', 18) + '</button>' +
     (prive ? '<button class="chip" id="disc-signal" style="color:var(--ac);border-color:var(--ac)">' + ic('flag', 16) + 'Signaler</button>' : '') +
     (d.expire_le && !d.admin ? '<button class="chip" id="disc-quitter" aria-label="Quitter la discussion" title="Quitter la discussion">' + ic('sortie', 18) + '</button>' : '') + '</div><main style="gap:0">';
@@ -4098,8 +4117,8 @@ function pageDiscussion(id) {
       (reste < 864e5 ? '<b style="color:var(--ac)">Elle se ferme ' + (reste < 0 ? 'bientôt' : 'dans moins de 24 h') + '.</b>' : 'Elle sera fermée le ' + esc(discFin(d, true)) + '.') + '</div>';
   }
   // Conversation privée liée à une petite annonce : rappel des règles et lien vers l'annonce
-  if (prive) h += '<div class="card small stack" style="gap:6px;margin:10px 0 4px;background:var(--soft);border-color:var(--soft)"><span>' + ic('lock', 15) + ' Conversation privée avec <b>' + esc(d.nom) + '</b>, à propos de son annonce. Reste courtois : en cas de signalement, la direction du club peut lire cette conversation.</span>' +
-    '<a href="#/club/annonces" style="color:var(--ac);font-weight:600">Voir l\'annonce n°' + d.annonce_num + (d.annonce_prix ? ' · ' + esc(d.annonce_prix) : '') + '</a></div>';
+  if (prive) h += '<div class="card small stack" style="gap:6px;margin:10px 0 4px;background:var(--soft);border-color:var(--soft)"><span>' + ic('lock', 15) + ' Conversation privée avec <b>' + esc(d.nom) + '</b>' + (d.annonce_id ? ', à propos de son annonce' : '') + '. Reste courtois : en cas de signalement, la direction du club peut lire cette conversation.</span>' +
+    (d.annonce_id ? '<a href="#/club/annonces" style="color:var(--ac);font-weight:600">Voir l\'annonce n°' + d.annonce_num + (d.annonce_prix ? ' · ' + esc(d.annonce_prix) : '') + '</a>' : '') + '</div>';
   if (!d.ouvert && d.type !== 'prive') h += '<div class="card small" style="background:var(--sun);border-color:var(--peach);color:#5a2a14;margin-bottom:10px"><b>Hors ligne</b> : ce fil n\'apparaît dans l\'appli pour personne. Tu le vois ici parce que tu l\'as ouvert depuis la gestion ; mets-le en ligne depuis Gestion → Discussions.</div>';
   if (d.description) h += '<p class="xs mut" style="text-align:center;margin:4px 0 8px">' + esc(d.description) + '</p>';
   h += '<div id="disc-fil" class="dfil"><div class="card empty">Chargement…</div></div></main>';
@@ -4284,6 +4303,7 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') { html = pageCoach(); actif = 'gestion'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'messages'; }
+  else if (p === 'contacter') { html = pageContacter(arg, parts[2]); actif = 'messages'; }
   else if (p === 'discussions') { MSGF = 'club'; html = pageMessages(); actif = 'messages'; }
   else if (p === 'discussion') { html = pageDiscussion(arg); actif = 'messages'; }
   else if (p === 'aide') { html = pageAide(); actif = 'profil'; }
