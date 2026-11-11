@@ -207,3 +207,9 @@ end $$;
 revoke all on function public.mes_acces(), public.equipe_acces(), public.message_repondre(uuid, text) from public, anon;
 grant execute on function public.mes_acces(), public.equipe_acces(), public.message_repondre(uuid, text) to authenticated;
 revoke all on function prive.direction_de(uuid), prive.a_acces(uuid, text), prive.signature(uuid) from public, anon;
+
+-- Correctif du 11/11 : sur cette base, les droits de table ne sont pas donnés par défaut aux comptes connectés
+-- (sans ça, l'écran Gestion → Rôles et accès affiche « Impossible de charger les accès »). La RLS ci-dessus fait le tri.
+grant select, insert, update, delete on public.acces_roles to authenticated;
+grant select, insert, update, delete on public.acces_personnes to authenticated;
+grant select on public.messages_parent_retrait to authenticated;
