@@ -1123,10 +1123,16 @@ function annonceForm(box, m) {
 // Chaque fil a une source (tout le monde, des groupes, une poule du double, Next Gen, ou à la main).
 // Les membres se mettent à jour à partir de la source ; les ajouts et retraits manuels sont gardés.
 // Un fil « hors ligne » n'apparaît dans l'appli pour personne (direction comprise) : on le met en ligne quand il est prêt.
+// Discussions éphémères : le fil entier se ferme à la date choisie (archivé ou supprimé, au choix), pas les messages
+var EPH_SVG = function (t, c) { return '<svg width="' + (t || 16) + '" height="' + (t || 16) + '" viewBox="0 0 24 24" fill="none" stroke="' + (c || 'currentColor') + '" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M12 3a9 9 0 1 1-9 9"/><path d="M3.6 8.5h.01M5.6 5.6h.01M8.5 3.6h.01" stroke-width="2.6"/><path d="M12 7.5V12l3 2"/></svg>'; };
+var EPH_DUREES = [[3, '3 j'], [5, '5 j'], [7, '7 j'], [14, '2 sem.'], [30, '1 mois']];
+function ephFinDans(jours) { var j = new Date(); j.setDate(j.getDate() + jours); j.setHours(23, 59, 0, 0); return j.toISOString(); }
+function ephJourIso(iso) { var j = new Date(iso); return j.getFullYear() + '-' + String(j.getMonth() + 1).padStart(2, '0') + '-' + String(j.getDate()).padStart(2, '0'); }
 var SRC_DISC = { tous: 'Tous les comptes', groupe: 'Un ou plusieurs groupes', double: 'Une poule du double interne', nextgen: 'Les jeunes Next Gen', manuel: 'Choisis à la main' };
 function vueDiscussions(m) {
-  m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>hors ligne</b> n\'apparaît dans l\'appli pour personne, direction comprise (« Voir le fil » permet de le prévisualiser) ; mets-le en ligne quand il est prêt.', '<button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Discussions', 'Les fils de l\'appli qui remplacent les groupes WhatsApp. Un fil <b>hors ligne</b> n\'apparaît dans l\'appli pour personne, direction comprise (« Voir le fil » permet de le prévisualiser) ; mets-le en ligne quand il est prêt.', '<button class="btn line" id="dg-eph">' + EPH_SVG(16) + ' Discussion éphémère</button> <button class="btn" id="dg-new">Nouveau fil</button>') + '<div id="dg-l"><div class="skel"></div></div>';
   $('dg-new').onclick = function () { discForm(null, function () { vueDiscussions(m); }); };
+  $('dg-eph').onclick = function () { discForm(null, function () { vueDiscussions(m); }, true); };
   q(sb.rpc('discussions_synchroniser_tout')).catch(function () { }).then(function () {
     return Promise.all([q(sb.from('discussions').select('*, discussion_membres(user_id, exclu)').neq('type', 'prive').order('categorie', { nullsFirst: false }).order('ordre').order('nom')), chargerGroupes(),
       q(sb.from('discussion_messages').select('discussion_id, created_at').is('supprime_le', null).order('created_at', { ascending: false }).limit(500))]);
@@ -1145,7 +1151,8 @@ function vueDiscussions(m) {
         return '<tr><td>' + (d.categorie ? '<span class="xs mut" style="text-transform:uppercase;letter-spacing:.5px">' + esc(d.categorie) + '</span><br>' : '') + '<b>' + esc(d.nom) + '</b>' + (der[d.id] ? '<div class="mut xs">Dernier message le ' + esc(fmtJ(new Date(der[d.id]))) + '</div>' : '<div class="mut xs">Pas encore de message</div>') + '</td>' +
           '<td class="small">' + esc(srcTxt(d)) + (d.jeunes ? '<div class="xs mut">Comptes jeunes acceptés</div>' : '') + '</td><td><button class="btn sm ghost" data-dgm="' + d.id + '">' + n + ' membre' + (n > 1 ? 's' : '') + '</button></td>' +
           '<td class="small">' + (d.ecriture === 'admins' ? 'L\'équipe du club seulement' : 'Tout le monde') + '</td>' +
-          '<td>' + (d.archive ? '<span class="badge">Archivé</span>' : d.ouvert ? '<span class="badge b-ok">En ligne</span>' : '<span class="badge b-warn">Hors ligne</span>') + '</td>' +
+          '<td>' + (d.archive ? '<span class="badge">Archivé</span>' : d.ouvert ? '<span class="badge b-ok">En ligne</span>' : '<span class="badge b-warn">Hors ligne</span>') +
+            (d.expire_le ? '<div class="xs mut" style="margin-top:4px;white-space:nowrap">' + EPH_SVG(13) + ' ' + (d.archive ? 'Fermé le ' : (d.fin_action === 'supprimer' ? 'Supprimé le ' : 'Archivé le ')) + esc(fmtJ(new Date(d.expire_le))) + '</div>' : '') + '</td>' +
           '<td class="act">' + (!d.archive ? '<button class="btn sm ' + (d.ouvert ? 'line' : 'ok') + '" data-dgo="' + d.id + '">' + (d.ouvert ? 'Retirer de l\'appli' : 'Mettre en ligne') + '</button> ' : '') +
           '<a class="btn sm line" href="../#/discussion/' + d.id + '" target="_blank" rel="noopener">Voir le fil</a> <button class="btn sm line" data-dge="' + d.id + '">Modifier</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun fil pour le moment. Crée le premier avec « Nouveau fil ».</div>') +
@@ -1164,10 +1171,13 @@ function vueDiscussions(m) {
     etiqueterTableaux();
   }).catch(function () { $('dg-l').innerHTML = '<div class="card empty">Impossible de charger les discussions.</div>'; });
 }
-function discForm(d, apres) {
-  var F = d ? JSON.parse(JSON.stringify(d)) : { nom: '', categorie: '', description: '', source: 'groupe', groupes: [], double_categorie: '', double_poule: null, ecriture: 'tous', jeunes: false, ouvert: false, archive: false, ordre: 100 };
+function discForm(d, apres, eph) {
+  var F = d ? JSON.parse(JSON.stringify(d)) : { nom: '', categorie: '', description: '', source: 'groupe', groupes: [], double_categorie: '', double_poule: null, ecriture: 'tous', jeunes: false, ouvert: false, archive: false, ordre: 100, expire_le: null, fin_action: 'archiver' };
+  // Raccourci « Discussion éphémère » : membres choisis à la main, en ligne tout de suite, fermeture dans 7 jours
+  if (!d && eph) Object.assign(F, { source: 'manuel', categorie: 'Interclub', ouvert: true, expire_le: ephFinDans(7) });
+  F.fin_action = F.fin_action || 'archiver';
   Promise.all([q(sb.from('double_equipes').select('categorie, poule')).catch(function () { return []; }), q(sb.from('discussions').select('categorie')).catch(function () { return []; })]).then(function (rr) {
-    var eqs = rr[0], catsDisc = ['Club', 'CLOC\'ARENA', 'Double interne', 'Interclubs', 'CLOCA Next Gen'];
+    var eqs = rr[0], catsDisc = ['Club', 'CLOC\'ARENA', 'Double interne', 'Interclub', 'CLOCA Next Gen'];
     (rr[1] || []).forEach(function (x) { if (x.categorie && catsDisc.indexOf(x.categorie) < 0) catsDisc.push(x.categorie); });
     var cats = [], poules = {};
     (eqs || []).forEach(function (e) { if (cats.indexOf(e.categorie) < 0) cats.push(e.categorie); (poules[e.categorie] = poules[e.categorie] || []); if (poules[e.categorie].indexOf(e.poule) < 0) poules[e.categorie].push(e.poule); });
@@ -1177,7 +1187,7 @@ function discForm(d, apres) {
       panneau(d ? 'Modifier le fil' : 'Nouveau fil', '<div class="stack">' +
         '<label class="l">Nom du fil<input class="f" id="dgf-nom" maxlength="80" value="' + esc(F.nom) + '" placeholder="Ex. Interclub Senior Eq.1 H"></label>' +
         '<label class="l">Description (facultatif)<input class="f" id="dgf-desc" maxlength="200" value="' + esc(F.description || '') + '" placeholder="Ex. Organisation des rencontres, covoiturage…"></label>' +
-        '<label class="l">Catégorie (dossier dans l\'appli)<input class="f" id="dgf-cat2" list="dgf-cats" maxlength="40" value="' + esc(F.categorie || '') + '" placeholder="Ex. Interclubs"><datalist id="dgf-cats">' + catsDisc.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></label>' +
+        '<label class="l">Catégorie (dossier dans l\'appli)<input class="f" id="dgf-cat2" list="dgf-cats" maxlength="40" value="' + esc(F.categorie || '') + '" placeholder="Ex. Interclub"><datalist id="dgf-cats">' + catsDisc.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></label>' +
         '<span class="mut xs" style="margin-top:-6px">Les fils d\'une même catégorie sont rangés dans un dossier repliable. Choisis-en une dans la liste ou tape un nouveau nom.</span>' +
         '<label class="l">Qui est dedans ?<select class="f" id="dgf-src">' + Object.keys(SRC_DISC).map(function (k) { return '<option value="' + k + '"' + (src === k ? ' selected' : '') + '>' + SRC_DISC[k] + '</option>'; }).join('') + '</select></label>' +
         (src === 'groupe' ? '<div><span class="mut xs">Coche un ou plusieurs groupes. Les familles des joueurs et les coachs responsables du groupe sont ajoutés.</span>' + choixGroupes(F.groupes || [], 'dgf-g') + '</div>' : '') +
@@ -1185,6 +1195,12 @@ function discForm(d, apres) {
           '<label class="l">Poule<select class="f" id="dgf-poule"><option value="">Toutes les poules</option>' + (poules[F.double_categorie] || []).map(function (p) { return '<option value="' + p + '"' + (F.double_poule === p ? ' selected' : '') + '>Poule ' + p + '</option>'; }).join('') + '</select></label></div>' : '') +
         (src === 'manuel' ? '<span class="mut xs">Après l\'enregistrement, ajoute les membres un par un avec le bouton « membres ».</span>' : '') +
         (src === 'tous' ? '<span class="mut xs">Tous les comptes de l\'appli, y compris les nouveaux.</span>' : '') +
+        '<div class="card stack" style="gap:8px;padding:12px"><label class="c" style="margin:0"><input type="checkbox" id="dgf-eph"' + (F.expire_le ? ' checked' : '') + '>' + EPH_SVG(16) + ' Discussion éphémère (le fil se ferme tout seul à une date)</label>' +
+          (F.expire_le ? '<div class="chips">' + EPH_DUREES.map(function (x) { return '<button type="button" class="chip' + (ephJourIso(F.expire_le) === ephJourIso(ephFinDans(x[0])) ? ' on' : '') + '" data-dur="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+            '<label class="l">Se ferme le<input class="f" id="dgf-date" type="date" value="' + ephJourIso(F.expire_le) + '"></label>' +
+            '<span class="mut xs" style="margin-top:-4px">Fermeture le ' + esc(new Date(F.expire_le).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + ' à 23h59. Tu peux prolonger à tout moment en changeant la date.</span>' +
+            '<span class="small" style="font-weight:600">À la fin</span><div class="chips"><button type="button" class="chip' + (F.fin_action === 'archiver' ? ' on' : '') + '" data-fin="archiver">Archiver</button><button type="button" class="chip' + (F.fin_action === 'supprimer' ? ' on' : '') + '" data-fin="supprimer">Supprimer</button></div>' +
+            '<span class="mut xs">' + (F.fin_action === 'supprimer' ? 'Le fil et tous ses messages seront effacés définitivement.' : 'Le fil disparaît de l\'appli des joueurs ; tu le gardes ici, en archive, pour relire.') + ' Les participants peuvent quitter le fil eux-mêmes.</span>' : '') + '</div>' +
         '<label class="l">Qui peut écrire ?<select class="f" id="dgf-ecr"><option value="tous"' + (F.ecriture === 'tous' ? ' selected' : '') + '>Tout le monde dans le fil</option><option value="admins"' + (F.ecriture === 'admins' ? ' selected' : '') + '>L\'équipe du club seulement (fil d\'annonces)</option></select></label>' +
         '<label class="c"><input type="checkbox" id="dgf-jeunes"' + (F.jeunes ? ' checked' : '') + '>Accepter les comptes jeunes (mineurs avec leur propre compte)</label>' +
         '<label class="c"><input type="checkbox" id="dgf-ouvert"' + (F.ouvert ? ' checked' : '') + '>En ligne dans l\'appli (sinon : hors ligne, invisible pour tout le monde, direction comprise)</label>' +
@@ -1195,10 +1211,15 @@ function discForm(d, apres) {
         var lire = function () {
           F.nom = $('dgf-nom').value; F.categorie = $('dgf-cat2').value.trim(); F.description = $('dgf-desc').value; F.ecriture = $('dgf-ecr').value; F.jeunes = $('dgf-jeunes').checked; F.ouvert = $('dgf-ouvert').checked;
           F.archive = $('dgf-arch') ? $('dgf-arch').checked : false; F.ordre = +$('dgf-ordre').value || 100;
+          if ($('dgf-date') && $('dgf-date').value) { var jj = new Date($('dgf-date').value + 'T23:59:00'); if (!isNaN(jj)) F.expire_le = jj.toISOString(); }
           if (F.source === 'groupe') F.groupes = lus(root, 'dgf-g');
           if ($('dgf-cat')) { F.double_categorie = $('dgf-cat').value; F.double_poule = $('dgf-poule') && $('dgf-poule').value ? +$('dgf-poule').value : null; }
         };
         $('dgf-src').onchange = function () { lire(); F.source = this.value; dessiner(); };
+        $('dgf-eph').onchange = function () { lire(); F.expire_le = this.checked ? ephFinDans(7) : null; dessiner(); };
+        all('[data-dur]', root).forEach(function (b) { b.onclick = function () { lire(); F.expire_le = ephFinDans(+b.dataset.dur); dessiner(); }; });
+        all('[data-fin]', root).forEach(function (b) { b.onclick = function () { lire(); F.fin_action = b.dataset.fin; dessiner(); }; });
+        if ($('dgf-date')) $('dgf-date').onchange = function () { lire(); dessiner(); };
         if ($('dgf-cat')) $('dgf-cat').onchange = function () { lire(); F.double_poule = null; if (!F.categorie) F.categorie = 'Double interne'; if (!F.nom.trim()) F.nom = 'Double interne · ' + F.double_categorie; dessiner(); };
         if ($('dgf-poule')) $('dgf-poule').onchange = function () { lire(); if (!F.nom.trim() || /^Double interne · /.test(F.nom)) F.nom = 'Double interne · ' + F.double_categorie + (F.double_poule ? ' poule ' + F.double_poule : ''); dessiner(); };
         $('dgf-ok').onclick = function () {
@@ -1206,14 +1227,23 @@ function discForm(d, apres) {
           if (!F.nom.trim()) return toast('Donne un nom au fil');
           if (F.source === 'groupe' && !F.groupes.length) return toast('Coche au moins un groupe');
           if (F.source === 'double' && !F.double_categorie) return toast('Choisis la catégorie du double');
+          if (F.expire_le && new Date(F.expire_le) <= new Date()) return toast('Choisis une date de fin dans le futur');
+          // prolonger un fil déjà fermé par l'échéance le rouvre
+          if (d && d.expire_le && d.archive && F.archive && F.expire_le && new Date(F.expire_le) > new Date() && new Date(d.expire_le) <= new Date()) F.archive = false;
           var row = { nom: F.nom.trim(), categorie: F.categorie || (F.source === 'double' ? 'Double interne' : F.source === 'nextgen' ? 'CLOCA Next Gen' : null), description: F.description.trim() || null, source: F.source, groupes: F.source === 'groupe' ? F.groupes : [],
             double_categorie: F.source === 'double' ? F.double_categorie : null, double_poule: F.source === 'double' ? F.double_poule : null,
             type: F.ecriture === 'admins' && F.source === 'tous' ? 'annonce' : F.source === 'tous' ? 'general' : 'groupe',
-            ecriture: F.ecriture, jeunes: F.jeunes, ouvert: F.ouvert, archive: F.archive, ordre: F.ordre };
+            ecriture: F.ecriture, jeunes: F.jeunes, ouvert: F.ouvert, archive: F.archive, ordre: F.ordre, expire_le: F.expire_le || null, fin_action: F.fin_action || 'archiver' };
           var b = this; b.disabled = true;
+          var xid = null;
           (d ? q(sb.from('discussions').update(row).eq('id', d.id).select('id').single()) : q(sb.from('discussions').insert(row).select('id').single())).then(function (x) {
+            xid = x.id;
             return q(sb.rpc('discussion_synchroniser', { p_disc: x.id }));
-          }).then(function (n) { toast((d ? 'Fil enregistré' : 'Fil créé') + ' · ' + n + ' membre' + (n > 1 ? 's' : '')); fermer(); if (apres) apres(); })
+          }).then(function (n) {
+            toast((d ? 'Fil enregistré' : 'Fil créé') + ' · ' + n + ' membre' + (n > 1 ? 's' : '')); fermer(); if (apres) apres();
+            // nouveau fil choisi à la main : on ouvre directement l'ajout des participants
+            if (!d && F.source === 'manuel' && xid) discMembres({ id: xid, nom: row.nom }, apres);
+          })
             .catch(function (e) { b.disabled = false; toast('Enregistrement impossible' + (e && e.message ? ' : ' + e.message : '')); });
         };
         if ($('dgf-sup')) $('dgf-sup').onclick = function () {
@@ -1226,7 +1256,7 @@ function discForm(d, apres) {
   });
 }
 function discMembres(d, apres) {
-  Promise.all([q(sb.from('discussion_membres').select('user_id, role, origine, exclu, muet').eq('discussion_id', d.id)), q(sb.rpc('comptes_liste')), chargerPers()]).then(function (r) {
+  Promise.all([q(sb.from('discussion_membres').select('user_id, role, origine, exclu, muet, quitte_le').eq('discussion_id', d.id)), q(sb.rpc('comptes_liste')), chargerPers()]).then(function (r) {
     var M = r[0] || [], C = {}, P = {};
     (r[1] || []).forEach(function (c) { C[c.user_id] = c; });
     A.pers.forEach(function (p) { P[p.id] = p; });
@@ -1242,19 +1272,19 @@ function discMembres(d, apres) {
     var ligne = function (x) {
       var n = nomC(x.user_id);
       return '<div class="row" style="align-items:flex-start"><span class="stack" style="gap:2px;min-width:0"><b class="small">' + esc(n.nom) + '</b><span class="xs mut" style="overflow-wrap:anywhere">' + esc(n.det) + '</span>' +
-        '<span>' + (x.role === 'admin' ? '<span class="badge b-ac">Admin</span> ' : '') + (x.origine === 'manuel' ? '<span class="badge">Ajouté à la main</span> ' : '') + (x.muet ? '<span class="badge">Notifs coupées</span>' : '') + '</span></span>' +
+        '<span>' + (x.role === 'admin' ? '<span class="badge b-ac">Admin</span> ' : '') + (x.exclu && x.quitte_le ? '<span class="badge">A quitté le fil</span> ' : x.origine === 'manuel' ? '<span class="badge">Ajouté à la main</span> ' : '') + (x.muet ? '<span class="badge">Notifs coupées</span>' : '') + '</span></span>' +
         '<span class="chips" style="flex:none">' + (x.exclu ? '<button class="btn sm line" data-dmr="' + x.user_id + '">Réintégrer</button>' :
           '<button class="btn sm ghost" data-dma="' + x.user_id + '">' + (x.role === 'admin' ? 'Retirer admin' : 'Admin') + '</button> <button class="btn sm ko" data-dmx="' + x.user_id + '">Retirer</button>') + '</span></div>';
     };
     panneau(d.nom + ' · membres', '<div class="stack"><span class="mut small">' + actifs.length + ' membre' + (actifs.length > 1 ? 's' : '') + '. Les <b>admins</b> peuvent écrire même dans un fil d\'annonces et retirer des messages. Un membre retiré à la main ne revient pas avec la mise à jour automatique.</span>' +
       '<div class="card stack" style="gap:6px"><b class="small">Ajouter un compte</b><input class="f" id="dmm-q" placeholder="Nom, prénom ou adresse mail (2 lettres minimum)"><div id="dmm-r"></div></div>' +
       '<div class="card tight">' + (actifs.length ? actifs.map(ligne).join('') : '<div class="empty">Personne pour le moment.</div>') + '</div>' +
-      (exclus.length ? '<div class="sect">Retirés à la main (' + exclus.length + ')</div><div class="card tight">' + exclus.map(ligne).join('') + '</div>' : '') + '</div>', function (root) {
+      (exclus.length ? '<div class="sect">Retirés ou partis (' + exclus.length + ')</div><div class="card tight">' + exclus.map(ligne).join('') + '</div>' : '') + '</div>', function (root) {
       var maj = function (uid, champs) {
         return q(sb.from('discussion_membres').upsert(Object.assign({ discussion_id: d.id, user_id: uid, origine: 'manuel' }, champs), { onConflict: 'discussion_id,user_id' })).then(function () { discMembres(d, apres); if (apres) apres(); }).catch(function () { toast('Action impossible'); });
       };
       all('[data-dmx]', root).forEach(function (b) { b.onclick = function () { maj(b.dataset.dmx, { exclu: true }); }; });
-      all('[data-dmr]', root).forEach(function (b) { b.onclick = function () { maj(b.dataset.dmr, { exclu: false }); }; });
+      all('[data-dmr]', root).forEach(function (b) { b.onclick = function () { maj(b.dataset.dmr, { exclu: false, quitte_le: null }); }; });
       all('[data-dma]', root).forEach(function (b) { b.onclick = function () { var x = M.filter(function (y) { return y.user_id === b.dataset.dma; })[0]; maj(b.dataset.dma, { role: x.role === 'admin' ? 'membre' : 'admin' }); }; });
       $('dmm-q').oninput = function () {
         var t = norm(this.value).trim();

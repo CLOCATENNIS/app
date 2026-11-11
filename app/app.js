@@ -78,7 +78,10 @@ var IC = {
   phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
   wa: '<path d="M3 21l1.7-4.6A8.5 8.5 0 1 1 8 19.6L3 21z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1.2-1.6-2-1-.9.9a4.5 4.5 0 0 1-2.6-2.6l.9-.9-1-2L9 8.5z"/>',
   cam: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
-  flag: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>'
+  flag: '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>',
+  // discussion éphémère : cercle en pointillés avec une aiguille
+  eph: '<path d="M12 3a9 9 0 1 1-9 9"/><path d="M3.6 8.5h.01M5.6 5.6h.01M8.5 3.6h.01" stroke-width="2.6"/><path d="M12 7.5V12l3 2"/>',
+  sortie: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'
 };
 function ic(n, size, color) {
   return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + (color || 'currentColor') +
@@ -101,7 +104,7 @@ if (sb) (function () {
     if (S.apercu) ['insert', 'update', 'delete', 'upsert'].forEach(function (m) { b[m] = bloque; });
     return b;
   };
-  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|deposer|notifier|envoyer|messages_lus|declarer/.test(n) ? bloque() : rpc(n, a); };
+  sb.rpc = function (n, a) { return S.apercu && /enregistrer|nouveau_lien|changer|ajouter|retirer|quitter|deposer|notifier|envoyer|messages_lus|declarer/.test(n) ? bloque() : rpc(n, a); };
 })();
 
 function chargerPublic() {
@@ -3064,7 +3067,7 @@ var MSGF = 'annonces';
 var MSG_ORDRE = ['annonces', 'club', 'Interclub'];
 var MSG_NOM = { annonces: 'Annonces', club: 'Club', prives: 'Privés' };
 var MSG_CLUB = ['CLOC\'ARENA', 'CLOCA Next Gen', 'Double interne', 'Club'];
-function msgCat(d) { return d.type === 'prive' ? 'prives' : d.type === 'annonce' ? 'annonces' : MSG_CLUB.indexOf(d.categorie) >= 0 || !d.categorie ? 'club' : d.categorie; }
+function msgCat(d) { return d.type === 'prive' ? 'prives' : d.type === 'annonce' ? 'annonces' : MSG_CLUB.indexOf(d.categorie) >= 0 || !d.categorie ? 'club' : d.categorie === 'Interclubs' ? 'Interclub' : d.categorie; }
 function ligneMsgClub(x) {
   var m = x.messages, nl = !x.lu_le;
   return '<a class="row" href="#/message/' + m.id + '" style="text-decoration:none;color:inherit;gap:12px;align-items:flex-start">' +
@@ -3948,7 +3951,17 @@ function chargerDiscussions() {
 }
 function discNonLus() { return (S.discs || []).reduce(function (s, d) { return s + (d.muet ? 0 : d.non_lus || 0); }, 0); }
 function discCouleur(t) { var h = 0; String(t || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 360; }); return 'hsl(' + h + ',45%,42%)'; }
+// Discussion éphémère : c'est le fil entier qui se ferme à la date choisie par la direction (archivé ou supprimé), pas les messages
+function discFin(d, long) {
+  var j = new Date(d.expire_le);
+  return long ? j.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : j.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
 function discAvatar(d, taille) {
+  if (d.expire_le) {
+    var tt = taille || 44, b = Math.max(17, Math.round(tt * 0.46));
+    return '<span style="position:relative;flex:none;display:inline-flex" title="Discussion éphémère">' + discAvatar(Object.assign({}, d, { expire_le: null }), tt) +
+      '<span style="position:absolute;right:-3px;bottom:-3px;width:' + b + 'px;height:' + b + 'px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center">' + ic('eph', Math.round(b * 0.86), 'var(--tx)') + '</span></span>';
+  }
   var t = taille || 44, txt = d.type === 'annonce' ? '📣' : esc(String(d.nom).replace(/^[^A-Za-zÀ-ÿ0-9]+/, '').charAt(0).toUpperCase());
   return '<span style="width:' + t + 'px;height:' + t + 'px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:' + Math.round(t * 0.42) + 'px;color:#fff;background:' + (d.type === 'annonce' ? 'var(--ac)' : d.couleur || discCouleur(d.nom)) + '">' + txt + '</span>';
 }
@@ -4059,9 +4072,17 @@ function pageDiscussion(id) {
   var h = '<div class="pagehead wrap" style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:18;background:var(--bg)">' +
     '<a class="back" href="#/messages" aria-label="Retour aux messages" style="color:var(--tx);margin:0">' + ic('back', 22) + '</a>' + discAvatar(d, 38) +
     '<span class="stack" style="flex:1;min-width:0;gap:0"><b style="font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.nom) + '</b><span class="xs mut" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-    (prive ? esc(d.annonce_titre || 'Annonce n°' + d.annonce_num) : d.membres + ' membre' + (d.membres > 1 ? 's' : '')) + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
+    (prive ? esc(d.annonce_titre || 'Annonce n°' + d.annonce_num) : d.membres + ' membre' + (d.membres > 1 ? 's' : '')) + (d.expire_le ? ' · se ferme le ' + esc(discFin(d)) : '') + (d.muet ? ' · notifications coupées' : '') + '</span></span>' +
     '<button class="chip" id="disc-muet" aria-label="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '" title="' + (d.muet ? 'Réactiver les notifications' : 'Couper les notifications') + '">' + ic(d.muet ? 'bell' : 'mute', 18) + '</button>' +
-    (prive ? '<button class="chip" id="disc-signal" style="color:var(--ac);border-color:var(--ac)">' + ic('flag', 16) + 'Signaler</button>' : '') + '</div><main style="gap:0">';
+    (prive ? '<button class="chip" id="disc-signal" style="color:var(--ac);border-color:var(--ac)">' + ic('flag', 16) + 'Signaler</button>' : '') +
+    (d.expire_le && !d.admin ? '<button class="chip" id="disc-quitter" aria-label="Quitter la discussion" title="Quitter la discussion">' + ic('sortie', 18) + '</button>' : '') + '</div><main style="gap:0">';
+  // Bulle grise en haut du fil, comme WhatsApp
+  if (d.expire_le) {
+    var reste = new Date(d.expire_le) - new Date();
+    h += '<div class="small" style="margin:10px auto 6px;max-width:440px;padding:8px 14px;border-radius:12px;background:var(--soft);color:var(--mut);text-align:center;line-height:1.45">' + ic('eph', 14) + ' ' +
+      'Discussion éphémère' + (d.createur ? ' créée par ' + esc(d.createur) : '') + '. ' +
+      (reste < 864e5 ? '<b style="color:var(--ac)">Elle se ferme ' + (reste < 0 ? 'bientôt' : 'dans moins de 24 h') + '.</b>' : 'Elle sera fermée le ' + esc(discFin(d, true)) + '.') + '</div>';
+  }
   // Conversation privée liée à une petite annonce : rappel des règles et lien vers l'annonce
   if (prive) h += '<div class="card small stack" style="gap:6px;margin:10px 0 4px;background:var(--soft);border-color:var(--soft)"><span>' + ic('lock', 15) + ' Conversation privée avec <b>' + esc(d.nom) + '</b>, à propos de son annonce. Reste courtois : en cas de signalement, la direction du club peut lire cette conversation.</span>' +
     '<a href="#/club/annonces" style="color:var(--ac);font-weight:600">Voir l\'annonce n°' + d.annonce_num + (d.annonce_prix ? ' · ' + esc(d.annonce_prix) : '') + '</a></div>';
@@ -4131,6 +4152,10 @@ function ouvrirFil(d) {
     if (document.visibilityState === 'visible') discMarquerLu(d);
   }).subscribe();
   if ($('disc-signal')) $('disc-signal').onclick = function () { signalerDiscussion(d); };
+  if ($('disc-quitter')) $('disc-quitter').onclick = function () {
+    if (!confirm('Quitter « ' + d.nom + ' » ?\n\nTu ne verras plus ce fil ni ses messages. La direction pourra te rajouter si besoin.')) return;
+    q(sb.rpc('discussion_quitter', { p_disc: d.id })).then(function () { toast('Tu as quitté la discussion'); return chargerDiscussions(); }).then(function () { go('#/messages'); }).catch(function () { toast('Action impossible'); });
+  };
   if ($('disc-muet')) $('disc-muet').onclick = function () {
     q(sb.rpc('discussion_muet', { p_disc: d.id, p_muet: !d.muet })).then(function () { d.muet = !d.muet; toast(d.muet ? 'Notifications coupées pour ce fil' : 'Notifications réactivées'); render(); }).catch(function () { toast('Action impossible'); });
   };
