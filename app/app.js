@@ -3121,7 +3121,7 @@ function lierNotifs() {
 function chargerMessages() {
   S.msgs = [];
   if (!S.user) return Promise.resolve();
-  var champs = 'user_id, pour, lu_le, messages(id, created_at, auteur, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source)';
+  var champs = 'user_id, pour, lu_le, messages(id, created_at, auteur, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source, evenement_id)';
   // En aperçu, la direction voit les messages reçus par les comptes de cette famille (sans les marquer comme lus)
   var req = S.apercu ? q(sb.rpc('comptes_liste')).then(function (l) {
       var ids = (l || []).filter(function (c) { return c.foyer_id === S.apercu.foyer; }).map(function (c) { return c.user_id; });
@@ -3312,7 +3312,14 @@ function pageMessage(id) {
     (m.lien ? '<a class="btn ghost" href="' + esc(m.lien) + '">Voir le détail</a>' : '') + '</section>';
   var sujet = 'Re : ' + m.titre, corps = '\n\n\n— En réponse au message « ' + m.titre + ' » (' + m.expediteur + ', ' + fmtCourt(d) + ')' + (x.pour ? ' · concernant ' + x.pour : '');
   var mail = m.repondre_a ? '<a class="small" href="mailto:' + esc(m.repondre_a) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(corps) + '" style="color:var(--mut)">ou répondre par mail (' + esc(m.repondre_a) + ')</a>' : '';
-  if (m.auteur && m.auteur !== S.user.id && !S.apercu) {
+  // Message lié à un événement qui demande Présent / Absent : on répond avec les boutons, pas par message
+  var evM = m.evenement_id ? (S.evts || []).filter(function (e) { return e.id === m.evenement_id; })[0] : null;
+  if (evM && peutRepondre(evM) && eligibles(evM).length && !S.apercu) {
+    h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Tu viens ?</span><span class="mut small">Pas besoin d\'écrire : indique simplement ta présence ici, le club la voit tout de suite.</span>' + boutonsPart(evM, eligibles(evM)) + '</section>';
+    setTimeout(lierPart);
+  } else if (evM) {
+    h += '<section class="card"><span class="mut small">Pas besoin de répondre à ce message : toutes les infos sont dans l\'agenda.</span></section>';
+  } else if (m.auteur && m.auteur !== S.user.id && !S.apercu) {
     var qui = String(m.expediteur || '').split(' · ')[0];
     h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre à ' + esc(qui) + '</span><span class="mut small">Ta réponse arrive directement à ' + esc(qui) + ', dans une conversation privée (Messages → Privés).</span>' +
       '<textarea class="f" id="rp-t" rows="3" maxlength="2000" placeholder="Ta réponse…"></textarea><button class="btn" id="rp-go">' + ic('send', 18, '#fff') + ' Envoyer ma réponse</button>' + mail + '</section>';
