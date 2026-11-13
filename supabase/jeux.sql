@@ -112,3 +112,12 @@ grant execute on function public.jeu_inscrire(uuid, uuid, boolean) to authentica
 
 -- Correctif du 13/11 : sur cette base, les droits se donnent table par table (« Création impossible » sans cette ligne)
 grant select, insert, update, delete on public.jeux to authenticated;
+
+-- Correctif du 13/11 (2) : les comptes connectés ne peuvent pas appeler prive.a_acces directement
+-- (« permission denied for function a_acces ») : la règle passe par une petite fonction dédiée.
+create or replace function prive.jeux_peut() returns boolean
+language sql stable security definer set search_path = '' as $$ select prive.a_acces(auth.uid(), 'fetes') $$;
+revoke all on function prive.jeux_peut() from public, anon;
+grant execute on function prive.jeux_peut() to authenticated;
+drop policy if exists jeux_gerer on public.jeux;
+create policy jeux_gerer on public.jeux for all to authenticated using (prive.jeux_peut()) with check (prive.jeux_peut());

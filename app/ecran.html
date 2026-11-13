@@ -89,7 +89,7 @@ body.petit .scene::before,body.petit .scene::after{display:none}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="jeux-moteur.js?v=202611131500"></script>
+<script src="jeux-moteur.js?v=202611131500b"></script>
 <script>
 (function () {
 'use strict';
@@ -105,14 +105,14 @@ function rendre(D) {
   var mal = function (k, i) { var t = J.malusDe(D.manches, D.config || {}, k, i), ac = J.accDe(D.manches[i] && D.manches[i].etat, k); return (t ? '<div><span class="malus">' + esc(t) + '</span></div>' : '') + (ac.length ? '<div><span class="malus" style="background:#6b3fa0">🎭 ' + ac.map(esc).join(' + ') + '</span></div>' : ''); };
   var i = Math.min(D.actuelle || 0, D.manches.length - 1), M = D.manches[i] || {}, e = M.etat, fmt = (e && e.fmt) || M.fmt || 'ops';
   document.getElementById('titre').textContent = D.titre;
-  document.getElementById('sous').textContent = 'Manche ' + (i + 1) + ' sur ' + D.manches.length + ' · ' + F[fmt].nom;
+  document.getElementById('sous').textContent = (M.titre ? J.nomManche(M, i) + ' · manche ' : 'Manche ') + (i + 1) + ' sur ' + D.manches.length + ' · ' + F[fmt].nom;
   var lot = document.getElementById('lot'); lot.hidden = !M.lot; lot.textContent = M.lot ? 'À gagner : ' + M.lot : '';
   var h = '', c = '';
   if (!e) {
     h = '<div class="vide"><div class="role">Prochaine manche</div><div class="nom" style="color:var(--tx)">Tirage au sort</div><div style="margin-top:2vh">' + D.joueurs.length + ' joueurs inscrits</div>' + (function () { var RR = J.resumeRegles(J.regles(M, D.config)); return '<div class="serie" style="margin-top:2vh;line-height:1.5">' + (RR.length ? RR.map(esc).join('<br>') : 'Sans malus : on joue normalement') + '</div>'; })() + '</div>';
     c = bloc('Inscrits', '<ul class="liste">' + D.joueurs.slice(0, 14).map(function (p) { return '<li>' + esc(p.nom) + '</li>'; }).join('') + (D.joueurs.length > 14 ? '<li class="v">+ ' + (D.joueurs.length - 14) + ' autres</li>' : '') + '</ul>');
   } else if (e.statut === 'finie') {
-    h = '<div class="gagnant"><div class="role">Vainqueur de la manche ' + (i + 1) + '</div><div class="nom">' + nom(e.gagnant) + '</div>' + (M.lot ? '<div class="serie">Remporte <b style="font-size:1em">' + esc(M.lot) + '</b></div>' : '') +
+    h = '<div class="gagnant"><div class="role">Vainqueur · ' + esc(J.nomManche(M, i)) + '</div><div class="nom">' + nom(e.gagnant) + '</div>' + (M.lot ? '<div class="serie">Remporte <b style="font-size:1em">' + esc(M.lot) + '</b></div>' : '') +
       (e.best ? '<div class="serie" style="margin-top:1vh">Plus longue série : ' + nom(e.best.k) + ' · <b>' + e.best.n + '</b></div>' : '') + '</div>';
     c = bloc('Classement', '<ul class="liste">' + J.classement(e).slice(0, 8).map(function (x, n) { return '<li><span>' + (n + 1) + '. ' + nom(x.k) + '</span><span class="v">' + esc(x.txt) + '</span></li>'; }).join('') + '</ul>');
   } else if (fmt === 'ops' || fmt === 'roi') {
@@ -132,12 +132,12 @@ function rendre(D) {
       cl.slice(0, 10).map(function (x, n) { return '<tr><td>' + (n + 1) + '</td><td>' + nom(x.k) + '</td>' + e.defis.map(function (d, j) { var v = e.scores[x.k] && e.scores[x.k][j]; return '<td>' + (v == null ? '·' : v) + '</td>'; }).join('') + '<td><b>' + x.val + '</b></td></tr>'; }).join('') + '</tbody></table></div>';
   }
   var fins = D.manches.map(function (mm, j) { return [mm, j]; }).filter(function (x) { return x[0].etat && x[0].etat.statut === 'finie'; });
-  if (fins.length) c += bloc('Palmarès', '<ul class="liste">' + fins.map(function (x) { return '<li><span>M' + (x[1] + 1) + ' · ' + nom(x[0].etat.gagnant) + '</span><span class="v">' + esc(x[0].lot || '') + '</span></li>'; }).join('') + '</ul>');
+  if (fins.length) c += bloc('Palmarès', '<ul class="liste">' + fins.map(function (x) { return '<li><span>' + esc(x[0].titre ? x[0].titre : 'M' + (x[1] + 1)) + ' · ' + nom(x[0].etat.gagnant) + '</span><span class="v">' + esc(x[0].lot || '') + '</span></li>'; }).join('') + '</ul>');
   if (petit) {
     var it = function (q, m, live, sous) { return '<li class="' + (live ? 'live' : '') + '"><span class="q">' + q + '</span><span class="m">' + m + (sous ? '<small>' + sous + '</small>' : '') + '</span></li>'; };
     var L = [];
-    if (!e) L.push(it('', 'Tirage au sort', false, 'La manche ' + (i + 1) + ' va commencer'));
-    else if (e.statut === 'finie') L.push(it('🏆', nom(e.gagnant), true, 'gagne la manche ' + (i + 1) + (M.lot ? ' · ' + esc(M.lot) : '')));
+    if (!e) L.push(it('', 'Tirage au sort', false, esc(J.nomManche(M, i)) + ' va commencer'));
+    else if (e.statut === 'finie') L.push(it('🏆', nom(e.gagnant), true, 'gagne « ' + esc(J.nomManche(M, i)) + ' »' + (M.lot ? ' · ' + esc(M.lot) : '')));
     else if (fmt === 'ops' || fmt === 'roi') {
       L.push(it('Live', nom(e.champ) + ' <span style="color:var(--ac)">vs</span> ' + nom(e.file[0]), true, 'série en cours : ' + e.serie + (J.malusSerie(J.regles(M, D.config), e.serie) ? ' · ' + nom(e.champ) + ' joue avec malus : ' + esc(J.malusSerie(J.regles(M, D.config), e.serie)) : '')));
       if (e.mode === 'surprise') L.push(it('Puis', 'Tiré au hasard', false, 'parmi ' + Math.max(0, e.file.length - 1) + ' joueur' + (e.file.length > 2 ? 's' : '')));

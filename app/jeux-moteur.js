@@ -155,5 +155,6 @@ function accDe(e, k) { return (e && e.acc && e.acc[k]) || []; }
 function malusDe(manches, cfg, k, i) { var v = victoiresAvant(manches, k, i); return v ? palier(regles(manches[i], cfg).manche, v) : ''; }
 // Série : R = regles(...) (ou ancienne config) ; le joueur sur le terrain prend le malus dès n points d'affilée, il le perd en perdant un point
 function malusSerie(R, serie) { if (!R || !serie) return ''; var l = Array.isArray(R.serie) ? R.serie : (R.malus_serie_on ? R.paliers_serie : []); return palier(l, serie); }
-G.JEUX = { FORMATS: FORMATS, regles: regles, resumeRegles: resumeRegles, accDe: accDe, malusSerie: malusSerie, demarrer: demarrer, point: point, choisir: choisir, tourPret: tourPret, validerTour: validerTour, noter: noter, total: total, classement: classement, terminer: terminer, annuler: annuler, victoiresAvant: victoiresAvant, malusDe: malusDe, melange: melange };
+function nomManche(M, i) { var t = M && M.titre ? String(M.titre).trim() : ''; return t || 'Manche ' + (i + 1); }
+G.JEUX = { FORMATS: FORMATS, nomManche: nomManche, regles: regles, resumeRegles: resumeRegles, accDe: accDe, malusSerie: malusSerie, demarrer: demarrer, point: point, choisir: choisir, tourPret: tourPret, validerTour: validerTour, noter: noter, total: total, classement: classement, terminer: terminer, annuler: annuler, victoiresAvant: victoiresAvant, malusDe: malusDe, melange: melange };
 })(typeof window !== 'undefined' ? window : globalThis);
