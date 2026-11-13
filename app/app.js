@@ -630,6 +630,7 @@ function pageAccueil() {
   P.rdv = '';
   // Sur ordinateur et tablette : deux colonnes. Sur téléphone : exactement l'ordre d'origine.
   // Ordre réglable : messages, questionnaires et alertes restent juste après la présence (ou en haut si elle est masquée)
+  P.urgent += S.user && S.pers.length ? '<div id="jeux-une"></div>' : '';
   var auto = P.msg + P.disc + P.qst + P.urgent, ordre = cfg.blocs.filter(function (b) { return b.on && b.k !== 'presence' && b.k !== 'rdv' && b.k !== 'partners'; }).map(function (b) { return b.k; });
   if (vueLarge()) {
     var col1 = ['fete', 'actu'], c1 = P.presence, c2 = '';
@@ -671,7 +672,35 @@ function carteArenaAccueil() {
     lignesSeance +
     '<span class="small" style="font-weight:700">Classement et programme →</span></a>';
 }
+// ---------- Jeux à la une (One Point Slam…) : la carte apparaît à l'heure d'ouverture choisie par le club ----------
+var JEUX_UNE_T = null;
+function chargerJeuxUne() {
+  var box = $('jeux-une'); if (!box || !S.user) return;
+  q(sb.rpc('jeux_a_la_une')).then(function (l) {
+    box = $('jeux-une'); if (!box) return;
+    l = (l || []).filter(function (j) { return j.moi && j.moi.length; });
+    box.innerHTML = l.map(function (j) {
+      var tous = j.moi.every(function (p) { return p.inscrit; }), un = j.moi.length === 1;
+      return '<section class="card stack jeu-une" style="gap:10px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">🎾 Ce soir au club · adultes</span>' +
+        '<b style="font-size:19px;line-height:1.2">' + esc(j.titre) + '</b>' +
+        '<span class="mut small">' + (j.lieu ? esc(j.lieu) + ' · ' : '') + j.inscrits + ' inscrit' + (j.inscrits > 1 ? 's' : '') + ' pour l\'instant. Le tirage au sort décide de l\'ordre de passage.</span>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' + j.moi.map(function (p) {
+          return '<button class="btn' + (p.inscrit ? ' line' : '') + '" data-jeu="' + esc(j.id) + '|' + esc(p.id) + '|' + (p.inscrit ? '0' : '1') + '">' +
+            (p.inscrit ? '✅ ' + (un ? 'Inscription faite' : esc(p.prenom) + ' joue') + ' · annuler' : (un ? 'Je participe' : esc(p.prenom) + ' participe')) + '</button>';
+        }).join('') + '</div>' + (tous ? '<span class="small">Rendez-vous sur le terrain, l\'écran du club affiche quand c\'est ton tour.</span>' : '') + '</section>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('[data-jeu]'), function (b) {
+      b.onclick = function () {
+        var v = b.dataset.jeu.split('|'); b.disabled = true;
+        q(sb.rpc('jeu_inscrire', { p_jeu: v[0], p_pers: v[1], p_oui: v[2] === '1' })).then(function () { toast(v[2] === '1' ? 'Inscrit, à tout de suite sur le terrain !' : 'Inscription annulée'); chargerJeuxUne(); })
+          .catch(function (e) { b.disabled = false; toast((e && e.message) || 'Inscription impossible'); });
+      };
+    });
+  }).catch(function () { });
+  clearTimeout(JEUX_UNE_T); JEUX_UNE_T = setTimeout(chargerJeuxUne, 60000);
+}
 function lierAccueilAide() {
+  chargerJeuxUne();
   Array.prototype.forEach.call(document.querySelectorAll('[data-guide]'), function (b) { b.onclick = function () { ouvrirGuide(0); }; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-identite]'), function (b) { b.onclick = function () { modale(formIdentite(false), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; });
   if ($('inst-masq')) $('inst-masq').onclick = function () { localStorageSet('cloca-install-masque', '1'); render(); };

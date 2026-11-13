@@ -2971,6 +2971,7 @@ function vueRetours(m) {
 // La logique des jeux est dans ../jeux-moteur.js (partagée avec l'écran du club ../ecran.html).
 var JX = { onglet: 'jouer' };
 function jxNomCourt(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0).toUpperCase() + '.'; }
+function jxLocal(iso) { if (!iso) return ''; var d = new Date(iso); return isoJour(d) + 'T' + hhmm(d); }
 function jxLienEcran(cle) { return new URL('../ecran.html?k=' + cle, location.href).href; }
 function vueJeux(m, id) {
   var J = window.JEUX, F = J ? J.FORMATS : {};
@@ -2994,13 +2995,27 @@ function vueJeux(m, id) {
   var nom = function (k) { var p = JE.joueurs.filter(function (x) { return x.k === k; })[0]; return p ? p.nom : '?'; };
   var malus = function (k, i) { var t = J.malusDe(JE.manches, JE.config.malus || [], k, i); return t ? ' <span class="badge b-warn">' + esc(t) + '</span>' : ''; };
   var enregistrer = function (champs, quiet) {
-    var row = champs || { joueurs: JE.joueurs, manches: JE.manches, config: JE.config, actuelle: JE.actuelle };
+    var row = champs || { manches: JE.manches, config: JE.config, actuelle: JE.actuelle };
     return q(sb.from('jeux').update(row).eq('id', JE.id)).catch(function () { toast('Pas enregistré : vérifie la connexion'); });
+  };
+  // Les adhérents peuvent s'inscrire depuis l'appli pendant que tu pilotes : on relit la liste avant chaque modification
+  var majJoueurs = function (fn) {
+    return q(sb.from('jeux').select('joueurs').eq('id', JE.id).single()).then(function (r) {
+      JE.joueurs = r.joueurs || []; var res = fn(JE.joueurs);
+      return q(sb.from('jeux').update({ joueurs: JE.joueurs }).eq('id', JE.id)).then(function () { entetes(); if (JX.onglet === 'joueurs') joueurs(); return res; });
+    }).catch(function () { toast('Pas enregistré : vérifie la connexion'); });
+  };
+  var suivre = function () {
+    if (location.hash.indexOf(JE.id) < 0) return;
+    q(sb.from('jeux').select('joueurs').eq('id', JE.id).single()).then(function (r) {
+      var avant = JE.joueurs.length; JE.joueurs = r.joueurs || [];
+      if (JE.joueurs.length !== avant) { entetes(); if (JX.onglet !== 'jouer' || !JE.manches[JE.actuelle || 0].etat) vue(); if (JE.joueurs.length > avant) toast((JE.joueurs.length - avant) + ' inscription' + (JE.joueurs.length - avant > 1 ? 's' : '') + ' depuis l\'appli'); }
+    }).catch(function () { }).then(function () { setTimeout(suivre, 5000); });
   };
   var plusTard = function () { clearTimeout(timer); timer = setTimeout(function () { enregistrer(); }, 600); };
   var entetes = function () {
     var lien = jxLienEcran(JE.cle);
-    $('jx-h').innerHTML = entete(JE.titre, (JE.jour ? esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ' · ' : '') + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' · ' + JE.manches.length + ' manche' + (JE.manches.length > 1 ? 's' : ''),
+    $('jx-h').innerHTML = entete(JE.titre, (JE.jour ? esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ' · ' : '') + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' · ' + JE.manches.length + ' manche' + (JE.manches.length > 1 ? 's' : '') + (JE.insc_appli && JE.insc_ouvre_le ? ' · carte dans l\'appli dès le ' + esc(fmtJ(new Date(JE.insc_ouvre_le))) + ' à ' + fmtH(new Date(JE.insc_ouvre_le)) + (JE.public_cible === 'tous' ? '' : ' (adultes)') : ''),
       '<a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button>');
     $('jx-cp').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié : ouvre-le sur l\'ordi ou la TV du club'); }).catch(function () { window.prompt('Lien de l\'écran', lien); }); };
     $('jx-tabs').innerHTML = [['jouer', 'Jouer'], ['joueurs', 'Joueurs (' + JE.joueurs.length + ')'], ['reglages', 'Réglages']].map(function (x) { return '<button class="chip' + (JX.onglet === x[0] ? ' on' : '') + '" data-jxt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
@@ -3079,7 +3094,7 @@ function vueJeux(m, id) {
     C().innerHTML = '<div class="card stack" style="margin-bottom:12px"><b>Ajouter un adhérent</b>' + CHERCHEUR + '</div>' +
       '<div class="card stack" style="margin-bottom:12px"><b>Ajouter un invité ou plusieurs noms</b><textarea class="f" id="jx-noms" placeholder="Un nom par ligne (conjoints, amis, joueurs pas encore dans l\'appli)"></textarea><div><button class="btn sm" id="jx-addn">Ajouter</button></div></div>' +
       '<div class="card"><b>' + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + '</b><div class="list" style="margin-top:6px">' + (JE.joueurs.length ? JE.joueurs.map(function (p) {
-        return '<div class="it"><span>' + esc(p.nom) + ' ' + (p.pid ? '<span class="badge">adhérent</span>' : '<span class="badge">invité</span>') + (enJeu[p.k] ? ' <span class="badge b-ac">dans la manche en cours</span>' : '') + '</span><button class="btn sm ko" data-jxd="' + esc(p.k) + '"' + (enJeu[p.k] ? ' disabled title="Termine ou refais la manche en cours d\'abord"' : '') + '>Retirer</button></div>';
+        return '<div class="it"><span>' + esc(p.nom) + ' ' + (p.appli ? '<span class="badge b-ok">inscrit par l\'appli</span>' : p.pid ? '<span class="badge">adhérent</span>' : '<span class="badge">invité</span>') + (enJeu[p.k] ? ' <span class="badge b-ac">dans la manche en cours</span>' : '') + '</span><button class="btn sm ko" data-jxd="' + esc(p.k) + '"' + (enJeu[p.k] ? ' disabled title="Termine ou refais la manche en cours d\'abord"' : '') + '>Retirer</button></div>';
       }).join('') : '<div class="it mut">Personne pour l\'instant.</div>') + '</div></div>' +
       '<p class="mut xs" style="margin-top:10px">Les joueurs ajoutés pendant une manche jouent à partir de la manche suivante.</p>';
     var ajouter = function (n, pid) {
@@ -3089,10 +3104,10 @@ function vueJeux(m, id) {
       JE.joueurs.push({ k: 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), nom: n, pid: pid || null }); return true;
     };
     chargerPers().then(function () {
-      chercheurPers(C(), function (p) { if (ajouter(jxNomCourt(p), p.id)) { enregistrer(); entetes(); joueurs(); toast(jxNomCourt(p) + ' ajouté'); } }, function (p) { return p.actif !== false; });
+      chercheurPers(C(), function (p) { majJoueurs(function () { return ajouter(jxNomCourt(p), p.id); }).then(function (ok) { if (ok) toast(jxNomCourt(p) + ' ajouté'); }); }, function (p) { return p.actif !== false; });
     });
-    $('jx-addn').onclick = function () { var n = 0; $('jx-noms').value.split('\n').forEach(function (x) { if (ajouter(x)) n++; }); if (n) { enregistrer(); entetes(); joueurs(); toast(n + ' joueur' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '')); } };
-    all('[data-jxd]').forEach(function (b) { b.onclick = function () { JE.joueurs = JE.joueurs.filter(function (p) { return p.k !== b.dataset.jxd; }); enregistrer(); entetes(); joueurs(); }; });
+    $('jx-addn').onclick = function () { var l = $('jx-noms').value.split('\n'); majJoueurs(function () { var n = 0; l.forEach(function (x) { if (ajouter(x)) n++; }); return n; }).then(function (n) { if (n) toast(n + ' joueur' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '')); }); };
+    all('[data-jxd]').forEach(function (b) { b.onclick = function () { majJoueurs(function (l) { JE.joueurs = l.filter(function (p) { return p.k !== b.dataset.jxd; }); }); }; });
   };
 
   // ----- Réglages -----
@@ -3100,6 +3115,9 @@ function vueJeux(m, id) {
     var cf = JE.config;
     C().innerHTML = '<div class="card stack"><label class="l">Nom du jeu<input class="f" id="jr-t" maxlength="80" value="' + esc(JE.titre) + '"></label>' +
       '<div class="row2"><label class="l">Date<input class="f" type="date" id="jr-j" value="' + esc(JE.jour || '') + '"></label><label class="l">Format par défaut des manches<select class="f" id="jr-f">' + Object.keys(F).map(function (k) { return '<option value="' + k + '"' + (k === JE.format ? ' selected' : '') + '>' + esc(F[k].nom) + '</option>'; }).join('') + '</select></label></div>' +
+      '<div class="card" style="background:var(--soft);border:0"><label class="check" style="display:flex;gap:8px;font-weight:600"><input type="checkbox" id="jr-ia"' + (JE.insc_appli ? ' checked' : '') + '> Carte d\'inscription dans l\'appli (comme la fête de Noël)</label>' +
+      '<div class="row2" style="margin-top:10px"><label class="l">Apparaît le<input class="f" type="datetime-local" id="jr-io" value="' + esc(jxLocal(JE.insc_ouvre_le) || (JE.jour ? JE.jour + 'T18:30' : '')) + '"></label><label class="l">Disparaît le (vide = fin de journée)<input class="f" type="datetime-local" id="jr-if" value="' + esc(jxLocal(JE.insc_ferme_le)) + '"></label></div>' +
+      '<div class="row2" style="margin-top:10px"><label class="l">Qui peut s\'inscrire<select class="f" id="jr-pc"><option value="adultes"' + (JE.public_cible !== 'tous' ? ' selected' : '') + '>Adultes uniquement</option><option value="tous"' + (JE.public_cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label><label class="l">Lieu (affiché sur la carte)<input class="f" id="jr-li" maxlength="60" value="' + esc(JE.lieu || '') + '" placeholder="Ex. Couvert 1"></label></div></div>' +
       '<label class="l">Malus selon le nombre de manches gagnées (une ligne = 1 victoire, 2 victoires…)<textarea class="f" id="jr-m">' + esc((cf.malus || []).join('\n')) + '</textarea></label>' +
       '<div class="row2"><label class="l">Terrains (montante-descendante)<input class="f" type="number" min="1" max="7" id="jr-te" value="' + (cf.terrains || 2) + '"></label><label class="l">Défis (une ligne par défi)<textarea class="f" id="jr-d" style="min-height:70px">' + esc((cf.defis || ['Cible', 'Service', 'Précision']).join('\n')) + '</textarea></label></div>' +
       '<div class="chips"><button class="btn" id="jr-ok">Enregistrer</button><button class="btn ghost" id="jr-ar">' + (JE.archive ? 'Désarchiver' : 'Archiver le jeu') + '</button><button class="btn ko" id="jr-sup">Supprimer</button></div>' +
@@ -3108,7 +3126,9 @@ function vueJeux(m, id) {
     $('jr-ok').onclick = function () {
       JE.titre = $('jr-t').value.trim() || JE.titre; JE.jour = $('jr-j').value || null; JE.format = $('jr-f').value;
       JE.config = { malus: lignes('jr-m'), terrains: Math.max(1, Math.min(7, parseInt($('jr-te').value, 10) || 2)), defis: lignes('jr-d') };
-      enregistrer({ titre: JE.titre, jour: JE.jour, format: JE.format, config: JE.config }).then(function () { toast('Réglages enregistrés'); entetes(); });
+      JE.insc_appli = $('jr-ia').checked; JE.insc_ouvre_le = $('jr-io').value ? new Date($('jr-io').value).toISOString() : null; JE.insc_ferme_le = $('jr-if').value ? new Date($('jr-if').value).toISOString() : null; JE.public_cible = $('jr-pc').value; JE.lieu = $('jr-li').value.trim() || null;
+      if (JE.insc_appli && !JE.insc_ouvre_le) { toast('Indique quand la carte apparaît dans l\'appli'); return; }
+      enregistrer({ titre: JE.titre, jour: JE.jour, format: JE.format, config: JE.config, insc_appli: JE.insc_appli, insc_ouvre_le: JE.insc_ouvre_le, insc_ferme_le: JE.insc_ferme_le, public_cible: JE.public_cible, lieu: JE.lieu }).then(function () { toast('Réglages enregistrés'); entetes(); });
     };
     $('jr-ar').onclick = function () { JE.archive = !JE.archive; enregistrer({ archive: JE.archive }).then(function () { toast(JE.archive ? 'Jeu archivé' : 'Jeu désarchivé'); reglages(); }); };
     $('jr-sup').onclick = function () { if (confirm('Supprimer définitivement « ' + JE.titre + ' » et ses résultats ?')) q(sb.from('jeux').delete().eq('id', JE.id)).then(function () { toast('Jeu supprimé'); location.hash = '#/fetes/jeux'; }).catch(function () { toast('Suppression impossible'); }); };
@@ -3120,7 +3140,7 @@ function vueJeux(m, id) {
 
   q(sb.from('jeux').select('*').eq('id', id).single()).then(function (r) {
     JE = r; JE.joueurs = JE.joueurs || []; JE.manches = JE.manches && JE.manches.length ? JE.manches : [{ fmt: JE.format, lot: '' }]; JE.config = JE.config || {};
-    entetes(); vue();
+    entetes(); vue(); setTimeout(suivre, 5000);
   }).catch(function () { C().innerHTML = '<div class="card empty">Jeu introuvable.</div>'; });
 }
 function jxFormulaire() {
@@ -3128,6 +3148,7 @@ function jxFormulaire() {
   panneau('Nouveau jeu', '<div class="stack"><label class="l">Nom<input class="f" id="jn-t" maxlength="80" placeholder="Ex. One Point Slam · apéro de Noël"></label>' +
     '<div class="row2"><label class="l">Date<input class="f" type="date" id="jn-j"></label><label class="l">Nombre de manches<input class="f" type="number" min="1" max="10" id="jn-n" value="3"></label></div>' +
     '<label class="l">Format<select class="f" id="jn-f">' + Object.keys(F).map(function (k) { return '<option value="' + k + '">' + esc(F[k].nom) + '</option>'; }).join('') + '</select></label><p class="mut small" id="jn-d" style="margin:0"></p>' +
+    '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="jn-ia" checked> Carte d\'inscription dans l\'appli le jour J à <input class="f" type="time" id="jn-h" value="18:30" style="width:110px;min-height:30px;padding:2px 6px"> (adultes uniquement)</label>' +
     '<label class="l">Malus après 1 victoire, 2 victoires… (une ligne chacun, vide = pas de malus)<textarea class="f" id="jn-m">Mini raquette\nMini raquette + main faible</textarea></label>' +
     '<button class="btn" id="jn-ok">Créer le jeu</button></div>', function () {
     var d = function () { $('jn-d').textContent = F[$('jn-f').value].desc; }; $('jn-f').onchange = d; d();
@@ -3135,7 +3156,9 @@ function jxFormulaire() {
       var t = $('jn-t').value.trim(); if (!t) { toast('Donne un nom au jeu'); return; }
       var n = Math.max(1, Math.min(10, parseInt($('jn-n').value, 10) || 1)), f = $('jn-f').value, man = [];
       for (var i = 0; i < n; i++) man.push({ fmt: f, lot: '' });
-      q(sb.from('jeux').insert({ titre: t, jour: $('jn-j').value || null, format: f, manches: man, config: { malus: $('jn-m').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean), terrains: 2, defis: ['Cible', 'Service', 'Précision'] } }).select('id').single())
+      var jr = $('jn-j').value, ia = $('jn-ia').checked;
+      if (ia && !jr) { toast('Indique la date pour que la carte apparaisse dans l\'appli'); return; }
+      q(sb.from('jeux').insert({ titre: t, jour: jr || null, format: f, insc_appli: ia, insc_ouvre_le: ia ? new Date(jr + 'T' + ($('jn-h').value || '18:30')).toISOString() : null, public_cible: 'adultes', manches: man, config: { malus: $('jn-m').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean), terrains: 2, defis: ['Cible', 'Service', 'Précision'] } }).select('id').single())
         .then(function (r) { fermer(); JX.onglet = 'joueurs'; location.hash = '#/fetes/jeux/' + r.id; }).catch(function () { toast('Création impossible'); });
     };
   });
