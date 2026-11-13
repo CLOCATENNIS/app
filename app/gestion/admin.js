@@ -2971,6 +2971,7 @@ function vueRetours(m) {
 // La logique des jeux est dans ../jeux-moteur.js (partagée avec l'écran du club ../ecran.html).
 var JX = { onglet: 'jouer' };
 function jxNomCourt(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0).toUpperCase() + '.'; }
+function jxErr(t) { return function (e) { toast(t + ((e && (e.message || e.code)) ? ' : ' + (e.message || e.code) : '')); }; }
 function jxLocal(iso) { if (!iso) return ''; var d = new Date(iso); return isoJour(d) + 'T' + hhmm(d); }
 function jxLienEcran(cle) { return new URL('../ecran.html?k=' + cle, location.href).href; }
 function vueJeux(m, id) {
@@ -2986,7 +2987,7 @@ function vueJeux(m, id) {
       };
       $('jx-l').innerHTML = (actifs.length ? '<div class="hub">' + actifs.map(carte).join('') + '</div>' : '<div class="card empty">Aucun jeu pour l\'instant. Crée le premier avec « Nouveau jeu » : par exemple le One Point Slam de l\'apéro de Noël.</div>') +
         (arch.length ? '<h3 style="margin:22px 0 10px">Archivés</h3><div class="hub">' + arch.map(carte).join('') + '</div>' : '');
-    }).catch(function () { $('jx-l').innerHTML = '<div class="card empty">Impossible de charger les jeux.</div>'; });
+    }).catch(function (e) { $('jx-l').innerHTML = '<div class="card empty">Impossible de charger les jeux' + (e && e.message ? ' : ' + esc(e.message) : '') + '.</div>'; });
     $('jx-new').onclick = function () { jxFormulaire(null); };
     return;
   }
@@ -2996,14 +2997,14 @@ function vueJeux(m, id) {
   var malus = function (k, i) { var t = J.malusDe(JE.manches, JE.config, k, i), ac = J.accDe(JE.manches[i] && JE.manches[i].etat, k); return (t ? ' <span class="badge b-warn">' + esc(t) + '</span>' : '') + (ac.length ? ' <span class="badge jx-acc" title="Accessoires à porter">🎭 ' + ac.map(esc).join(' + ') + '</span>' : ''); };
   var enregistrer = function (champs, quiet) {
     var row = champs || { manches: JE.manches, config: JE.config, actuelle: JE.actuelle };
-    return q(sb.from('jeux').update(row).eq('id', JE.id)).catch(function () { toast('Pas enregistré : vérifie la connexion'); });
+    return q(sb.from('jeux').update(row).eq('id', JE.id)).catch(jxErr('Pas enregistré'));
   };
   // Les adhérents peuvent s'inscrire depuis l'appli pendant que tu pilotes : on relit la liste avant chaque modification
   var majJoueurs = function (fn) {
     return q(sb.from('jeux').select('joueurs').eq('id', JE.id).single()).then(function (r) {
       JE.joueurs = r.joueurs || []; var res = fn(JE.joueurs);
       return q(sb.from('jeux').update({ joueurs: JE.joueurs }).eq('id', JE.id)).then(function () { entetes(); if (JX.onglet === 'joueurs') joueurs(); return res; });
-    }).catch(function () { toast('Pas enregistré : vérifie la connexion'); });
+    }).catch(jxErr('Pas enregistré'));
   };
   var suivre = function () {
     if (location.hash.indexOf(JE.id) < 0) return;
@@ -3016,7 +3017,9 @@ function vueJeux(m, id) {
   var entetes = function () {
     var lien = jxLienEcran(JE.cle);
     $('jx-h').innerHTML = entete(JE.titre, (JE.jour ? esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ' · ' : '') + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' · ' + JE.manches.length + ' manche' + (JE.manches.length > 1 ? 's' : '') + (JE.insc_appli && JE.insc_ouvre_le ? ' · carte dans l\'appli dès le ' + esc(fmtJ(new Date(JE.insc_ouvre_le))) + ' à ' + fmtH(new Date(JE.insc_ouvre_le)) + (JE.public_cible === 'tous' ? '' : ' (adultes)') : ''),
-      '<a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button>');
+      '<button class="btn sm ghost" id="jx-arch">' + (JE.archive ? 'Désarchiver' : 'Archiver') + '</button><button class="btn sm ko" id="jx-del">Supprimer le jeu</button><a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button>');
+    $('jx-del').onclick = function () { if (confirm('Supprimer définitivement « ' + JE.titre + ' », ses joueurs et ses résultats ? La carte disparaît aussi de l\'appli.')) q(sb.from('jeux').delete().eq('id', JE.id)).then(function () { toast('Jeu supprimé'); location.hash = '#/fetes/jeux'; }).catch(jxErr('Suppression impossible')); };
+    $('jx-arch').onclick = function () { var v = !JE.archive; q(sb.from('jeux').update({ archive: v }).eq('id', JE.id)).then(function () { JE.archive = v; toast(v ? 'Jeu archivé : la carte de l\'appli et l\'écran sont coupés' : 'Jeu désarchivé'); entetes(); }).catch(jxErr('Action impossible')); };
     $('jx-cp').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié : ouvre-le sur l\'ordi ou la TV du club'); }).catch(function () { window.prompt('Lien de l\'écran', lien); }); };
     $('jx-tabs').innerHTML = [['jouer', 'Jouer'], ['joueurs', 'Joueurs (' + JE.joueurs.length + ')'], ['reglages', 'Réglages']].map(function (x) { return '<button class="chip' + (JX.onglet === x[0] ? ' on' : '') + '" data-jxt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     all('[data-jxt]').forEach(function (b) { b.onclick = function () { JX.onglet = b.dataset.jxt; entetes(); vue(); }; });
@@ -3135,10 +3138,10 @@ function vueJeux(m, id) {
       enregistrer({ titre: JE.titre, jour: JE.jour, format: JE.format, config: JE.config, manches: JE.manches, insc_appli: JE.insc_appli, insc_ouvre_le: JE.insc_ouvre_le, insc_ferme_le: JE.insc_ferme_le, public_cible: JE.public_cible, lieu: JE.lieu }).then(function () { toast('Réglages enregistrés'); entetes(); });
     };
     $('jr-ar').onclick = function () { JE.archive = !JE.archive; enregistrer({ archive: JE.archive }).then(function () { toast(JE.archive ? 'Jeu archivé' : 'Jeu désarchivé'); reglages(); }); };
-    $('jr-sup').onclick = function () { if (confirm('Supprimer définitivement « ' + JE.titre + ' » et ses résultats ?')) q(sb.from('jeux').delete().eq('id', JE.id)).then(function () { toast('Jeu supprimé'); location.hash = '#/fetes/jeux'; }).catch(function () { toast('Suppression impossible'); }); };
+    $('jr-sup').onclick = function () { if (confirm('Supprimer définitivement « ' + JE.titre + ' » et ses résultats ?')) q(sb.from('jeux').delete().eq('id', JE.id)).then(function () { toast('Jeu supprimé'); location.hash = '#/fetes/jeux'; }).catch(jxErr('Suppression impossible')); };
     $('jr-dup').onclick = function () {
       q(sb.from('jeux').insert({ titre: JE.titre + ' (copie)', format: JE.format, config: JE.config, joueurs: JE.joueurs, manches: JE.manches.map(function (mm) { return { fmt: mm.fmt, lot: mm.lot || '' }; }) }).select('id').single())
-        .then(function (r) { toast('Jeu dupliqué'); location.hash = '#/fetes/jeux/' + r.id; }).catch(function () { toast('Duplication impossible'); });
+        .then(function (r) { toast('Jeu dupliqué'); location.hash = '#/fetes/jeux/' + r.id; }).catch(jxErr('Duplication impossible'));
     };
   };
 
