@@ -593,7 +593,7 @@ function pageAccueil() {
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
   var tDisc = ''; // les discussions sont dans l'onglet Messages
-  var top = h, P = { presence: '', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
+  var top = h, P = { presence: '', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil() + carteAnimAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -605,6 +605,7 @@ function pageAccueil() {
   else prochain = (S.evts || []).filter(function (e) { return e.public && new Date(e.fin || e.debut) > now && e.statut !== 'annule'; }).map(function (e) { return { d: new Date(e.debut), f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, gs: evGroupes(e).gs, qui: [], id: e.id }; })[0];
   P.rdv = caseRdv(prochain);
   var rep = prochain && prochain.id ? boutonsPart((S.evts || []).filter(function (x) { return x.id === prochain.id; })[0] || {}, prochain.qui) : '';
+  if (prochain && prochain.id && P.fete.indexOf('#/evenement/' + prochain.id + '"') >= 0) rep = ''; // déjà dans la carte « Rendez-vous du club »
   P.repRdv = rep ? '<section class="card stack" style="gap:6px;padding:12px 14px"><span class="small">Tu viens à <b>' + esc(prochain.titre) + '</b> ?</span>' + rep + '</section>' : '';
 
   var cfg = accueilPerso(accueilCfg());
@@ -3723,6 +3724,18 @@ function feteConcerne(f) {
   var c = f && f.public_cible || 'tous';
   if (c === 'tous' || !S.user || !S.pers.length || S.isStaff) return true;
   return S.pers.some(function (p) { return c === 'jeunes' ? p.profil === 'jeune' : p.profil !== 'jeune'; });
+}
+// Animations du club dans les 30 jours qui demandent Présent / Absent (ex. Apéro de Noël des adultes) : carte à la une pour les personnes concernées
+function carteAnimAccueil() {
+  if (!S.user || !S.pers.length) return '';
+  var now = new Date(), lim = new Date(now.getTime() + 30 * 864e5);
+  return (S.evts || []).filter(function (ev) { var d = new Date(ev.debut); return ev.type === 'animation' && d > now && d < lim && peutRepondre(ev) && eligibles(ev).length; }).map(function (ev) {
+    var d = new Date(ev.debut), fin = ev.fin ? new Date(ev.fin) : null, qui = eligibles(ev);
+    return '<section class="card stack anim-carte" style="gap:8px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">🥂 Rendez-vous du club</span>' +
+      '<a href="#/evenement/' + esc(ev.id) + '" style="text-decoration:none;color:inherit"><b style="font-size:18px;line-height:1.2">' + esc(ev.titre) + '</b></a>' +
+      '<span class="mut small">' + esc(fmtJour(d)) + ' · ' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + (ev.lieu ? ' · ' + esc(ev.lieu) : '') + '</span>' +
+      '<span class="small">Tu viens ?</span>' + boutonsPart(ev, qui) + '</section>';
+  }).join('');
 }
 function carteFeteAccueil() {
   var f = feteActive(); if (!f || !feteConcerne(f)) return '';

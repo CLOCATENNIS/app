@@ -3136,15 +3136,17 @@ function vueJeux(m, id) {
       '<div class="card" style="background:var(--soft);border:0"><label class="check" style="display:flex;gap:8px;font-weight:600"><input type="checkbox" id="jr-ia"' + (JE.insc_appli ? ' checked' : '') + '> Carte d\'inscription dans l\'appli (comme la fête de Noël)</label>' +
       '<div class="row2" style="margin-top:10px"><label class="l">Apparaît le<input class="f" type="datetime-local" id="jr-io" value="' + esc(jxLocal(JE.insc_ouvre_le) || (JE.jour ? JE.jour + 'T18:30' : '')) + '"></label><label class="l">Disparaît le (vide = fin de journée)<input class="f" type="datetime-local" id="jr-if" value="' + esc(jxLocal(JE.insc_ferme_le)) + '"></label></div>' +
       '<div class="row2" style="margin-top:10px"><label class="l">Qui peut s\'inscrire<select class="f" id="jr-pc"><option value="adultes"' + (JE.public_cible !== 'tous' ? ' selected' : '') + '>Adultes uniquement</option><option value="tous"' + (JE.public_cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label><label class="l">Lieu (affiché sur la carte)<input class="f" id="jr-li" maxlength="60" value="' + esc(JE.lieu || '') + '" placeholder="Ex. Couvert 1"></label></div></div>' +
+      '<div class="card stack" style="background:var(--soft);border:0;gap:8px" id="jr-ag"></div>' +
       '<div class="stack" style="gap:6px"><b>Règles de chaque manche</b><span class="mut xs">Choisis la manche, puis ses malus et accessoires. Une manche déjà jouée garde ses résultats.</span><div id="jr-rg"></div></div>' +
       '<div class="row2"><label class="l">Terrains (montante-descendante)<input class="f" type="number" min="1" max="7" id="jr-te" value="' + (cf.terrains || 2) + '"></label><label class="l">Défis (une ligne par défi)<textarea class="f" id="jr-d" style="min-height:70px">' + esc((cf.defis || ['Cible', 'Service', 'Précision']).join('\n')) + '</textarea></label></div>' +
       '<div class="chips"><button class="btn" id="jr-ok">Enregistrer</button><button class="btn ghost" id="jr-ar">' + (JE.archive ? 'Désarchiver' : 'Archiver le jeu') + '</button><button class="btn ko" id="jr-sup">Supprimer</button></div>' +
       '<p class="mut xs">Archiver coupe aussi l\'écran du club. Tu peux dupliquer un jeu pour réutiliser les réglages et les joueurs une autre fois.</p><div><button class="btn sm line" id="jr-dup">Dupliquer ce jeu</button></div></div>';
+    jxAgenda($('jr-ag'), JE, enregistrer);
     var ED = jxEditeurManches($('jr-rg'), JE.manches.map(function (M) { return Object.assign({}, M.regles || cf, { titre: M.titre || '', fmt: M.fmt || JE.format }); }), 'jrm', JX.manche || 0); JX.manche = 0;
     var lignes = function (id) { return $(id).value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 12); };
     $('jr-ok').onclick = function () {
       JE.titre = $('jr-t').value.trim() || JE.titre; JE.jour = $('jr-j').value || null; JE.format = $('jr-f').value;
-      JE.config = { terrains: Math.max(1, Math.min(7, parseInt($('jr-te').value, 10) || 2)), defis: lignes('jr-d') }; var RG = ED.lire(); JE.manches.forEach(function (M, n) { M.regles = RG[n]; M.titre = RG[n].titre || ''; if (!M.etat && RG[n].fmt) M.fmt = RG[n].fmt; });
+      JE.config = { terrains: Math.max(1, Math.min(7, parseInt($('jr-te').value, 10) || 2)), defis: lignes('jr-d'), evt_id: JE.config.evt_id, evt_h: JE.config.evt_h }; var RG = ED.lire(); JE.manches.forEach(function (M, n) { M.regles = RG[n]; M.titre = RG[n].titre || ''; if (!M.etat && RG[n].fmt) M.fmt = RG[n].fmt; });
       JE.insc_appli = $('jr-ia').checked; JE.insc_ouvre_le = $('jr-io').value ? new Date($('jr-io').value).toISOString() : null; JE.insc_ferme_le = $('jr-if').value ? new Date($('jr-if').value).toISOString() : null; JE.public_cible = $('jr-pc').value; JE.lieu = $('jr-li').value.trim() || null;
       if (JE.insc_appli && !JE.insc_ouvre_le) { toast('Indique quand la carte apparaît dans l\'appli'); return; }
       enregistrer({ titre: JE.titre, jour: JE.jour, format: JE.format === 'ops2' ? 'ops' : JE.format, config: JE.config, manches: JE.manches, insc_appli: JE.insc_appli, insc_ouvre_le: JE.insc_ouvre_le, insc_ferme_le: JE.insc_ferme_le, public_cible: JE.public_cible, lieu: JE.lieu }).then(function () { toast('Réglages enregistrés'); entetes(); });
@@ -3167,6 +3169,57 @@ var JX_DEF_MANCHE = [{ n: 1, t: 'Mini raquette' }, { n: 2, t: 'Mini raquette + m
 var JX_DEF_ACC = ['Bonnet de Noël', 'Lunettes de soleil', 'Boa', 'Nez rouge', 'Serre-tête de renne', 'Cape', 'Couronne', 'Fausse moustache', 'Perruque', 'Tutu'];
 var JX_DEF_SERIE = [{ n: 3, t: 'Main faible' }, { n: 5, t: 'Revers interdit' }, { n: 8, t: 'Service à la cuillère' }];
 function jxLignePalier(p, x, unite) { return '<div class="jx-pal"><span class="small">Dès</span><input class="f" type="number" min="1" max="50" value="' + (x.n || '') + '" aria-label="Seuil"><span class="small">' + unite + '</span><input class="f" maxlength="60" value="' + esc(x.t || '') + '" placeholder="Malus" aria-label="Malus"><button type="button" class="btn sm ko" data-palx="1" aria-label="Retirer ce palier">×</button></div>'; }
+// Agenda et présence : un événement « animation » relié au jeu, visible dans l'agenda des adultes (ou de tout le club) avec Présent / Absent.
+// Ça ne touche pas aux inscriptions au jeu, qui se font le jour J.
+function jxAgenda(box, JE, enregistrer) {
+  var id = JE.config && JE.config.evt_id;
+  var heures = (JE.config && JE.config.evt_h) || ['19:00', '20:30'];
+  var dessiner = function (ev, parts) {
+    if (!JE.jour) { box.innerHTML = '<b>Agenda et présence</b><span class="mut small">Indique d\'abord la date du jeu (plus haut) et enregistre.</span>'; return; }
+    var champs = '<div class="row2"><label class="l">Début<input class="f" type="time" id="ja-hd" value="' + esc(ev ? hhmm(new Date(ev.debut)) : heures[0]) + '"></label><label class="l">Fin<input class="f" type="time" id="ja-hf" value="' + esc(ev && ev.fin ? hhmm(new Date(ev.fin)) : heures[1]) + '"></label></div>';
+    if (!ev) {
+      box.innerHTML = '<b>Agenda et présence</b><span class="mut small">Ajoute l\'événement dans l\'agenda des ' + (JE.public_cible === 'tous' ? 'adhérents' : 'adultes') + ' : chacun répond Présent ou Absent, et une carte apparaît sur leur accueil. Les inscriptions au jeu restent à part, le jour J.</span>' + champs +
+        '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="ja-n" checked> Prévenir par notification</label><div><button type="button" class="btn sm" id="ja-go">Ajouter à l\'agenda</button></div>';
+      $('ja-go').onclick = creer; return;
+    }
+    var oui = parts.filter(function (x) { return x.reponse === 'oui'; }), non = parts.filter(function (x) { return x.reponse === 'non'; });
+    var nm = function (x) { return x.personnes ? esc(x.personnes.prenom + ' ' + String(x.personnes.nom || '').charAt(0) + '.') : '?'; };
+    box.innerHTML = '<b>Agenda et présence</b><span class="small">Dans l\'agenda : <b>' + esc(ev.titre) + '</b> · ' + esc(fmtJour(new Date(ev.debut))) + ' ' + fmtH(new Date(ev.debut)) + (ev.fin ? ' – ' + fmtH(new Date(ev.fin)) : '') + '</span>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap"><b style="color:var(--ok)">✓ ' + oui.length + ' présent' + (oui.length > 1 ? 's' : '') + '</b><b style="color:var(--ko)">✗ ' + non.length + ' absent' + (non.length > 1 ? 's' : '') + '</b></div>' +
+      (oui.length ? '<span class="small"><b>Présents :</b> ' + oui.map(nm).join(', ') + '</span>' : '') + (non.length ? '<span class="small"><b>Absents :</b> ' + non.map(nm).join(', ') + '</span>' : '') + champs +
+      '<div class="chips"><button type="button" class="btn sm line" id="ja-maj">Mettre à jour l\'horaire et le titre</button><button type="button" class="btn sm ko" id="ja-del">Retirer de l\'agenda</button></div>';
+    $('ja-maj').onclick = function () { var r = ligne(); q(sb.from('evenements').update(r).eq('id', ev.id)).then(function () { toast('Agenda mis à jour'); charger(); }).catch(jxErr('Mise à jour impossible')); };
+    $('ja-del').onclick = function () { if (!confirm('Retirer l\'événement de l\'agenda ? Les réponses Présent / Absent seront perdues.')) return; q(sb.from('evenements').delete().eq('id', ev.id)).then(function () { delete JE.config.evt_id; return enregistrer({ config: JE.config }); }).then(function () { toast('Retiré de l\'agenda'); charger(); }).catch(jxErr('Suppression impossible')); };
+  };
+  var ligne = function () {
+    var hd = $('ja-hd').value || '19:00', hf = $('ja-hf').value || '';
+    JE.config.evt_h = [hd, hf];
+    return { titre: JE.titre, type: 'animation', debut: combine(JE.jour, hd).toISOString(), fin: hf ? combine(JE.jour, hf).toISOString() : null, lieu: JE.lieu || null, public: true, inscription_ouverte: false, groupe_id: null,
+      description: 'Inscriptions aux jeux le jour J dans l\'appli. Ici, indique seulement si tu viens.' };
+  };
+  var creer = function () {
+    var r = ligne(); r.statut = 'prevu'; r.created_by = A.user.id;
+    var noms = JE.public_cible === 'tous' ? ['Adultes', 'Jeunes'] : ['Adultes'], nid;
+    $('ja-go').disabled = true;
+    chargerGroupes().then(function () {
+      var gs = A.groupes.filter(function (g) { return noms.indexOf(g.nom) >= 0; });
+      if (!gs.length) throw { message: 'groupe « Adultes » introuvable (Adhérents → Groupes)' };
+      return q(sb.from('evenements').insert(r).select('id').single()).then(function (x) {
+        nid = x.id; return q(sb.from('evenement_groupes').insert(gs.map(function (g) { return { evenement_id: nid, groupe_id: g.id }; })));
+      }).then(function () { JE.config.evt_id = nid; return enregistrer({ config: JE.config }); }).then(function () {
+        if ($('ja-n') && $('ja-n').checked) diffuser({ titre: JE.titre, texte: JE.titre + ' le ' + fmtJour(new Date(r.debut)) + ' à ' + fmtH(new Date(r.debut)) + '. Dis-nous si tu viens (Présent / Absent) dans ton agenda.', cible: 'evenement', evt: nid, lien: '#/evenement/' + nid, source: 'seance' });
+        toast('Ajouté à l\'agenda'); charger();
+      });
+    }).catch(function (e) { $('ja-go').disabled = false; jxErr('Ajout impossible')(e); });
+  };
+  var charger = function () {
+    if (!JE.config.evt_id) return dessiner(null, []);
+    Promise.all([q(sb.from('evenements').select('id, titre, debut, fin').eq('id', JE.config.evt_id).maybeSingle()), q(sb.from('participations').select('reponse, personne_id, personnes(prenom, nom)').eq('evenement_id', JE.config.evt_id)).catch(function () { return []; })])
+      .then(function (r) { if (!r[0]) { delete JE.config.evt_id; return dessiner(null, []); } dessiner(r[0], r[1] || []); })
+      .catch(function () { dessiner(null, []); });
+  };
+  box.innerHTML = '<div class="skel"></div>'; charger();
+}
 function jxBlocMalus(cf, p) {
   var pm = cf.paliers_manche || ((cf.malus || []).length ? cf.malus.map(function (t, i) { return { n: i + 1, t: t }; }) : JX_DEF_MANCHE);
   var on1 = cf.malus_manche_on !== false, on2 = !!cf.malus_serie_on, ps = cf.paliers_serie || JX_DEF_SERIE;
