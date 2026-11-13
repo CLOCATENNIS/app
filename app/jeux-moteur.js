@@ -35,13 +35,14 @@ function demarrer(fmt, cles, cfg, mode) {
 }
 
 // One Point Slam et roi du terrain : qui gagne le point ('champ' ou 'chal')
-function point(e, qui) {
+function point(e, qui, R) {
   if (e.statut !== 'en_cours' || !e.file || !e.file.length) return e;
-  sauver(e);
+  sauver(e); delete e.dernierAcc;
   var ch = e.file.shift(), perdant;
   if (qui === 'chal') { perdant = e.champ; e.champ = ch; e.serie = 1; } else { perdant = ch; e.serie++; }
   e.pts[e.champ] = (e.pts[e.champ] || 0) + 1;
   if (!e.best || e.serie > e.best.n) e.best = { k: e.champ, n: e.serie };
+  accGagne(e, e.champ, e.pts[e.champ], R);
   if (e.fmt === 'ops') { e.out.push(perdant); if (!e.file.length) { e.statut = 'finie'; e.gagnant = e.champ; e.fin = new Date().toISOString(); } }
   else e.file.push(perdant);
   // Mode surprise : le prochain adversaire est tiré au sort parmi ceux qui attendent
@@ -52,11 +53,11 @@ function point(e, qui) {
 // Montante-descendante : choisir le gagnant d'un terrain, puis valider le tour
 function choisir(e, i, k) { if (e.statut !== 'en_cours') return e; e.choix = e.choix || {}; e.choix[i] = k; return e; }
 function tourPret(e) { return e.terrains && e.terrains.every(function (t, i) { return e.choix && e.choix[i]; }); }
-function validerTour(e) {
+function validerTour(e, R) {
   if (!tourPret(e)) return e;
-  sauver(e);
+  sauver(e); delete e.dernierAcc;
   var n = e.terrains.length, W = [], L = [];
-  e.terrains.forEach(function (t, i) { var w = e.choix[i]; W.push(w); L.push(t[0] === w ? t[1] : t[0]); e.vic[w] = (e.vic[w] || 0) + 1; });
+  e.terrains.forEach(function (t, i) { var w = e.choix[i]; W.push(w); L.push(t[0] === w ? t[1] : t[0]); e.vic[w] = (e.vic[w] || 0) + 1; accGagne(e, w, e.vic[w], R); });
   var T = [];
   if (n === 1) { T.push([W[0], L[0]]); }
   else for (var i = 0; i < n; i++) T.push([i === 0 ? W[0] : L[i - 1], i === n - 1 ? L[n - 1] : W[i + 1]]);
@@ -128,9 +129,31 @@ function paliersManche(cfg) {
   if (cfg.paliers_manche) return cfg.paliers_manche;
   return (cfg.malus || []).map(function (t, i) { return { n: i + 1, t: t }; }); // anciens jeux
 }
-// cfg = config du jeu (ou ancienne liste de malus)
-function malusDe(manches, cfg, k, i) { var v = victoiresAvant(manches, k, i); return v ? palier(paliersManche(cfg), v) : ''; }
-// Série : le joueur sur le terrain prend le malus dès qu'il a gagné n points d'affilée dans la manche, il le perd en perdant un point
-function malusSerie(cfg, serie) { return cfg && cfg.malus_serie_on && serie ? palier(cfg.paliers_serie, serie) : ''; }
-G.JEUX = { FORMATS: FORMATS, malusSerie: malusSerie, demarrer: demarrer, point: point, choisir: choisir, tourPret: tourPret, validerTour: validerTour, noter: noter, total: total, classement: classement, terminer: terminer, annuler: annuler, victoiresAvant: victoiresAvant, malusDe: malusDe, melange: melange };
+// Règles d'une manche : celles réglées pour la manche, sinon celles du jeu (anciens jeux)
+function regles(M, cfg) {
+  var r = (M && M.regles) || cfg || {};
+  return { manche: Array.isArray(r) || r.malus_manche_on !== false ? paliersManche(r) : [], serie: !Array.isArray(r) && r.malus_serie_on ? (r.paliers_serie || []) : [],
+    acc: !Array.isArray(r) && r.acc_on ? (r.acc_lot || []).filter(Boolean) : [], accTous: Math.max(1, (r && r.acc_tous) || 1), accMode: (r && r.acc_mode) || 'hasard' };
+}
+function resumeRegles(R) {
+  var l = [];
+  if (R.manche.length) l.push('Malus de manche gagnée : ' + R.manche.map(function (x) { return 'dès ' + x.n + ' → ' + x.t; }).join(', '));
+  if (R.serie.length) l.push('Malus de série : ' + R.serie.map(function (x) { return 'dès ' + x.n + ' d\'affilée → ' + x.t; }).join(', '));
+  if (R.acc.length) l.push('Un accessoire obligatoire ' + (R.accTous > 1 ? 'tous les ' + R.accTous + ' points gagnés' : 'à chaque point gagné') + ' (lot de ' + R.acc.length + ')');
+  return l;
+}
+// Accessoires (déguisements) : un de plus tous les N points gagnés, tiré dans le lot sans doublon pour le joueur tant que c'est possible
+function accGagne(e, k, n, R) {
+  if (!R || !R.acc || !R.acc.length || !n || n % R.accTous) return;
+  e.acc = e.acc || {}; var a = e.acc[k] = (e.acc[k] || []).slice();
+  var dispo = R.acc.filter(function (x) { return a.indexOf(x) < 0; }), src = dispo.length ? dispo : R.acc;
+  var x = R.accMode === 'ordre' ? src[0] : src[Math.floor(Math.random() * src.length)];
+  a.push(x); e.dernierAcc = { k: k, t: x, n: a.length };
+}
+function accDe(e, k) { return (e && e.acc && e.acc[k]) || []; }
+// cfg = config du jeu ; le malus de manche dépend des règles de la manche jouée (i)
+function malusDe(manches, cfg, k, i) { var v = victoiresAvant(manches, k, i); return v ? palier(regles(manches[i], cfg).manche, v) : ''; }
+// Série : R = regles(...) (ou ancienne config) ; le joueur sur le terrain prend le malus dès n points d'affilée, il le perd en perdant un point
+function malusSerie(R, serie) { if (!R || !serie) return ''; var l = Array.isArray(R.serie) ? R.serie : (R.malus_serie_on ? R.paliers_serie : []); return palier(l, serie); }
+G.JEUX = { FORMATS: FORMATS, regles: regles, resumeRegles: resumeRegles, accDe: accDe, malusSerie: malusSerie, demarrer: demarrer, point: point, choisir: choisir, tourPret: tourPret, validerTour: validerTour, noter: noter, total: total, classement: classement, terminer: terminer, annuler: annuler, victoiresAvant: victoiresAvant, malusDe: malusDe, melange: melange };
 })(typeof window !== 'undefined' ? window : globalThis);
