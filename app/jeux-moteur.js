@@ -15,11 +15,12 @@ function copie(o) { return JSON.parse(JSON.stringify(o)); }
 function sauver(e) { var s = copie(e); delete s.hist; e.hist = (e.hist || []).concat([JSON.stringify(s)]).slice(-60); }
 
 // Lancer une manche : tirage au sort de l'ordre de passage
-function demarrer(fmt, cles, cfg) {
+function demarrer(fmt, cles, cfg, mode) {
   cfg = cfg || {};
-  var o = melange(cles), e = { fmt: fmt, statut: 'en_cours', ordre: o, hist: [], debut: new Date().toISOString() };
+  var o = melange(cles), e = { fmt: fmt, statut: 'en_cours', ordre: o, hist: [], debut: new Date().toISOString(), mode: mode === 'surprise' ? 'surprise' : 'liste' };
   if (fmt === 'ops' || fmt === 'roi') {
     e.champ = o[0]; e.file = o.slice(1); e.serie = 0; e.best = null; e.out = []; e.pts = {};
+    if (e.mode === 'surprise') e.file = melange(e.file);
     o.forEach(function (k) { e.pts[k] = 0; });
   } else if (fmt === 'montante') {
     var n = Math.max(1, Math.min(cfg.terrains || 2, Math.floor(o.length / 2)));
@@ -43,6 +44,8 @@ function point(e, qui) {
   if (!e.best || e.serie > e.best.n) e.best = { k: e.champ, n: e.serie };
   if (e.fmt === 'ops') { e.out.push(perdant); if (!e.file.length) { e.statut = 'finie'; e.gagnant = e.champ; e.fin = new Date().toISOString(); } }
   else e.file.push(perdant);
+  // Mode surprise : le prochain adversaire est tiré au sort parmi ceux qui attendent
+  if (e.mode === 'surprise' && e.file.length > 1) { var r = Math.floor(Math.random() * (e.file.length - (e.fmt === 'roi' ? 1 : 0))), t = e.file[0]; e.file[0] = e.file[r]; e.file[r] = t; }
   return e;
 }
 

@@ -3022,7 +3022,7 @@ function vueJeux(m, id) {
     if (!e) {
       var avec = JE.joueurs.filter(function (p) { return J.malusDe(JE.manches, JE.config.malus || [], p.k, i); });
       h += '<div class="card stack"><b>Prêt pour le tirage</b><div class="mut small">' + esc(F[fmt].desc) + '</div><div class="small">' + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' inscrit' + (JE.joueurs.length > 1 ? 's' : '') + (avec.length ? ' · avec malus : ' + avec.map(function (p) { return esc(p.nom) + malus(p.k, i); }).join(', ') : '') + '</div>' +
-        '<div><button class="btn ok" id="jx-tirage"' + (JE.joueurs.length < 2 ? ' disabled' : '') + '>Lancer le tirage au sort</button>' + (JE.joueurs.length < 2 ? ' <span class="mut small">Ajoute au moins 2 joueurs dans l\'onglet Joueurs.</span>' : '') + '</div></div>';
+        ((fmt === 'ops' || fmt === 'roi') ? '<div class="chips" role="radiogroup" aria-label="Prochain adversaire">' + [['liste', 'Ordre tiré au sort au départ', 'tout le monde voit qui passe après'], ['surprise', 'Adversaire tiré au hasard à chaque point', 'surprise jusqu\'au dernier moment']].map(function (x) { return '<button class="chip' + ((M.mode || 'liste') === x[0] ? ' on' : '') + '" data-jxmo="' + x[0] + '" title="' + x[2] + '">' + x[1] + '</button>'; }).join('') + '</div>' : '') + '<div><button class="btn ok" id="jx-tirage"' + (JE.joueurs.length < 2 ? ' disabled' : '') + '>Lancer le tirage au sort</button>' + (JE.joueurs.length < 2 ? ' <span class="mut small">Ajoute au moins 2 joueurs dans l\'onglet Joueurs.</span>' : '') + '</div></div>';
     } else if (e.statut === 'finie') {
       var c = J.classement(e);
       h += '<div class="card jx-court" style="text-align:center"><div class="jx-lbl">Vainqueur de la manche ' + (i + 1) + '</div><div class="jx-big">' + esc(nom(e.gagnant)) + '</div>' +
@@ -3033,13 +3033,13 @@ function vueJeux(m, id) {
         '<div class="chips" style="margin-top:12px"><button class="btn sm ghost" id="jx-undo">Annuler la fin de manche</button>' + (i < JE.manches.length - 1 ? '<button class="btn sm" id="jx-next">Manche ' + (i + 2) + ' →</button>' : '') + '</div>';
     } else if (fmt === 'ops' || fmt === 'roi') {
       var ch = e.file[0];
-      h += '<div class="card jx-court"><div class="jx-vs"><button class="jx-pick" data-jxw="champ"><span class="jx-lbl">Sur le terrain</span><span class="jx-nom">' + esc(nom(e.champ)) + '</span>' + malus(e.champ, i) + '<span class="jx-tap">Gagne le point</span></button><span class="jx-x">VS</span>' +
-        '<button class="jx-pick" data-jxw="chal"><span class="jx-lbl">Challenger</span><span class="jx-nom">' + esc(nom(ch)) + '</span>' + malus(ch, i) + '<span class="jx-tap">Gagne le point</span></button></div>' +
+      h += '<div class="card jx-court"><div class="jx-vs"><button class="jx-pick" data-jxw="champ"><span class="jx-lbl">Sur le terrain</span><span class="jx-nom">' + esc(nom(e.champ)) + '</span>' + malus(e.champ, i) + '<span class="jx-tap">Gagnant</span></button><span class="jx-x">VS</span>' +
+        '<button class="jx-pick" data-jxw="chal"><span class="jx-lbl">Challenger</span><span class="jx-nom">' + esc(nom(ch)) + '</span>' + malus(ch, i) + '<span class="jx-tap">Gagnant</span></button></div>' +
         '<div style="text-align:center;margin-top:12px">Série : <b>' + e.serie + '</b>' + (e.best ? ' · record ' + esc(nom(e.best.k)) + ' (' + e.best.n + ')' : '') + (fmt === 'ops' ? ' · reste ' + e.file.length + ' challenger' + (e.file.length > 1 ? 's' : '') : '') + '</div></div>' +
         '<div class="chips" style="margin:12px 0"><button class="btn sm ghost" id="jx-undo"' + (e.hist && e.hist.length ? '' : ' disabled') + '>Annuler le dernier point</button>' + (fmt === 'roi' ? '<button class="btn sm ok" id="jx-fin">Terminer la manche</button>' : '') + '<button class="btn sm ko" id="jx-redraw">Refaire le tirage</button></div>' +
-        '<div class="card"><b>' + (fmt === 'ops' ? 'Ordre de passage' : 'File d\'attente') + '</b><div class="list" style="margin-top:6px">' +
+        (e.mode === 'surprise' ? '<div class="card"><b>Adversaire suivant tiré au hasard</b> <span class="mut small">' + (e.file.length > 1 ? 'parmi ' + (e.file.length - 1) + ' : ' : 'dernier challenger') + e.file.slice(1).map(function (k) { return esc(nom(k)) + malus(k, i); }).join(', ') + '</span>' + (fmt === 'ops' && e.out.length ? '<div class="mut small" style="margin-top:6px">Éliminés : ' + e.out.map(function (k) { return esc(nom(k)); }).join(', ') + '</div>' : '') + '</div>' : '<div class="card"><b>' + (fmt === 'ops' ? 'Ordre de passage' : 'File d\'attente') + '</b><div class="list" style="margin-top:6px">' +
         e.file.map(function (k, n) { return '<div class="it"><span>' + (n + 1) + '. ' + esc(nom(k)) + (n === 0 ? ' <span class="badge b-ac">au service</span>' : '') + malus(k, i) + '</span>' + (fmt === 'roi' ? '<span class="mut small">' + (e.pts[k] || 0) + ' pt' + ((e.pts[k] || 0) > 1 ? 's' : '') + '</span>' : '') + '</div>'; }).join('') +
-        (fmt === 'ops' && e.out.length ? '<div class="it mut small">Éliminés : ' + e.out.map(function (k) { return esc(nom(k)); }).join(', ') + '</div>' : '') + '</div></div>';
+        (fmt === 'ops' && e.out.length ? '<div class="it mut small">Éliminés : ' + e.out.map(function (k) { return esc(nom(k)); }).join(', ') + '</div>' : '') + '</div></div>');
     } else if (fmt === 'montante') {
       h += '<div class="card"><b>Tour ' + e.tour + '</b> <span class="mut small">· touche le gagnant de chaque terrain, puis valide le tour</span><div class="stack" style="margin-top:10px">' +
         e.terrains.map(function (t, n) { return '<div class="jx-ter"><span class="jx-tn">T' + (n + 1) + '</span>' + t.map(function (k) { return '<button class="jx-pick sm' + (e.choix[n] === k ? ' on' : '') + '" data-jxc="' + n + '|' + esc(k) + '"><span class="jx-nom">' + esc(nom(k)) + '</span>' + malus(k, i) + '</button>'; }).join('<span class="jx-x">vs</span>') + '</div>'; }).join('') + '</div>' +
@@ -3060,8 +3060,9 @@ function vueJeux(m, id) {
     all('[data-jxm]').forEach(function (b) { b.onclick = function () { JE.actuelle = +b.dataset.jxm; enregistrer({ actuelle: JE.actuelle }); jouer(); }; });
     $('jx-add').onclick = function () { JE.manches.push({ fmt: JE.format, lot: '' }); JE.actuelle = JE.manches.length - 1; enregistrer(); entetes(); jouer(); };
     $('jx-lot').oninput = function () { M.lot = this.value; plusTard(); };
+    all('[data-jxmo]').forEach(function (b) { b.onclick = function () { M.mode = b.dataset.jxmo; enregistrer(); jouer(); }; });
     if ($('jx-fmt')) $('jx-fmt').onchange = function () { M.fmt = this.value; enregistrer(); jouer(); };
-    if ($('jx-tirage')) $('jx-tirage').onclick = function () { maj(J.demarrer(M.fmt || JE.format, JE.joueurs.map(function (p) { return p.k; }), JE.config)); toast('Tirage fait : premier match sur le terrain'); };
+    if ($('jx-tirage')) $('jx-tirage').onclick = function () { maj(J.demarrer(M.fmt || JE.format, JE.joueurs.map(function (p) { return p.k; }), JE.config, M.mode)); toast('Tirage fait : premier match sur le terrain'); };
     all('[data-jxw]').forEach(function (b) { b.onclick = function () { maj(J.point(e, b.dataset.jxw)); }; });
     all('[data-jxc]').forEach(function (b) { b.onclick = function () { var v = b.dataset.jxc.split('|'); J.choisir(e, +v[0], v.slice(1).join('|')); maj(e); }; });
     if ($('jx-tour')) $('jx-tour').onclick = function () { maj(J.validerTour(e)); };
