@@ -109,3 +109,6 @@ begin
 end $$;
 revoke all on function public.jeu_inscrire(uuid, uuid, boolean) from public, anon;
 grant execute on function public.jeu_inscrire(uuid, uuid, boolean) to authenticated;
+
+-- Correctif du 13/11 : sur cette base, les droits se donnent table par table (« Création impossible » sans cette ligne)
+grant select, insert, update, delete on public.jeux to authenticated;
