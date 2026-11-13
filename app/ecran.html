@@ -14,6 +14,7 @@
 :root{--bg:#0b1c2c;--panel:#12293f;--line:#24425e;--tx:#f2f6fa;--mut:#9fb3c6;--ac:#e0763f;--ball:#d9e021;--ok:#2f9a68;
   --disp:'Barlow Condensed','Arial Narrow',sans-serif;--font:'Inter',system-ui,sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:16px/1.4 var(--font)}
 .ecran{min-height:100%;display:grid;grid-template-rows:auto 1fr auto;gap:2.2vh;padding:3vh max(3vw,16px)}
 header{display:flex;justify-content:space-between;align-items:flex-end;gap:2vw;flex-wrap:wrap}
@@ -56,21 +57,46 @@ footer b{font-family:var(--disp);letter-spacing:.08em;color:var(--tx)}
 .flash{animation:flash .8s ease-out}
 @keyframes flash{0%{background:rgba(217,224,33,.25)}100%{background:var(--panel)}}
 @media (prefers-reduced-motion:reduce){.flash{animation:none}}
+.qr{display:flex;align-items:center;gap:1vw;background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:1vh 1vw}
+.qr #qr{background:#fff;padding:6px;border-radius:8px;line-height:0}
+.qr #qr img,.qr #qr canvas{width:clamp(70px,7vw,120px)!important;height:auto!important}
+.qr span{font-size:clamp(12px,1.2vw,20px);color:var(--mut);max-width:16ch}
+body.petit .corps{grid-template-columns:1fr}
+@media (max-width:800px){.scene{min-height:0}}
+body.petit .scene{min-height:0;padding:2.4vh 3vw}
+body.petit .scene::before,body.petit .scene::after{display:none}
+.pm{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.4vh}
+.pm li{display:grid;grid-template-columns:minmax(4.5em,auto) minmax(0,1fr);gap:2vw;align-items:center;border-bottom:1px solid var(--line);padding-bottom:1.2vh}
+.pm li:last-child{border-bottom:0}
+.pm .q{font-family:var(--disp);font-weight:800;font-size:clamp(14px,1.8vw,30px);line-height:1.1;color:var(--mut);text-transform:uppercase}
+.pm .m{font-family:var(--disp);font-weight:800;font-size:clamp(24px,5vw,84px);line-height:1;overflow-wrap:anywhere}
+.pm li.live .q{color:var(--ball)}
+.pm li.suiv{align-items:start}
+.dix{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-flow:column;grid-template-rows:repeat(5,auto);gap:.8vh 3vw;font-size:clamp(18px,2.8vw,48px);font-weight:600;grid-column:2}
+.dix li{display:block;border:0;padding:0;overflow-wrap:anywhere}
+.dix li b{font-family:var(--disp);color:var(--mut);margin-right:.4em}
+.dix li.prep{color:var(--ball)}
+.reste{grid-column:2;color:var(--mut);font-size:clamp(14px,1.6vw,26px)}
+@media (max-width:600px){.dix{grid-template-columns:1fr;grid-auto-flow:row;grid-template-rows:none}}
+.pm .m small{font-family:var(--font);font-weight:400;font-size:.32em;color:var(--mut);display:block;margin-top:.6vh}
 </style>
 </head>
 <body>
 <div class="ecran">
   <header><div><h1 id="titre">Écran du club</h1><div class="sous" id="sous">Connexion…</div></div><span class="lot" id="lot" hidden></span></header>
   <div class="corps"><section class="scene" id="scene" aria-live="polite"><div class="vide">Chargement…</div></section><aside class="cote" id="cote"></aside></div>
-  <footer><span><b>VAMOS HR!</b> · CLOCA Tennis</span><span id="maj"></span></footer>
+  <footer><span><b>VAMOS HR!</b> · CLOCA Tennis</span><span class="qr" id="qrb" hidden><span id="qr"></span><span>Suis le jeu en direct sur ton téléphone</span></span><span id="maj"></span></footer>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="jeux-moteur.js?v=202611130100"></script>
 <script>
 (function () {
 'use strict';
 var sb = window.supabase.createClient('https://ccvfdsriogqerdcopuuv.supabase.co', 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM', { auth: { persistSession: false } });
-var J = window.JEUX, F = J.FORMATS, cle = new URLSearchParams(location.search).get('k') || '', dernier = '', scene = document.getElementById('scene'), cote = document.getElementById('cote');
+var P = new URLSearchParams(location.search), petit = P.get('vue') === 'prochains', tel = P.get('vue') === 'tel';
+if (petit) document.body.classList.add('petit');
+var J = window.JEUX, F = J.FORMATS, cle = P.get('k') || '', dernier = '', scene = document.getElementById('scene'), cote = document.getElementById('cote');
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function bloc(t, h) { return '<div class="bloc"><h2>' + t + '</h2>' + h + '</div>'; }
 function rendre(D) {
@@ -94,7 +120,7 @@ function rendre(D) {
     h = '<div class="vs"><div><div class="role">Sur le terrain</div><div class="nom">' + nom(e.champ) + '</div>' + mal(e.champ, i) + '</div><div class="x">VS</div><div><div class="role">Challenger</div><div class="nom">' + nom(ch) + '</div>' + mal(ch, i) + '</div></div>' +
       '<div class="serie">Série en cours <b>' + e.serie + '</b>' + (e.best ? ' · record : ' + nom(e.best.k) + ' (' + e.best.n + ')' : '') + '</div>';
     if (e.mode === 'surprise') c = bloc('Prochain adversaire', '<div class="nom" style="font-size:clamp(28px,3.4vw,60px);color:var(--ball)">Tiré au hasard</div><div class="liste" style="margin-top:1vh">parmi ' + e.file.length + ' joueur' + (e.file.length > 1 ? 's' : '') + '</div>');
-    else c = bloc(fmt === 'ops' ? 'Ordre de passage · ' + e.file.length + ' restant' + (e.file.length > 1 ? 's' : '') : 'File d\'attente', '<ul class="liste">' + e.file.slice(0, 9).map(function (k, n) { return '<li class="' + (n === 0 ? 'next' : '') + '"><span>' + (n + 1) + '. ' + nom(k) + (J.malusDe(D.manches, (D.config || {}).malus || [], k, i) ? ' <span class="malus" style="margin:0">' + esc(J.malusDe(D.manches, D.config.malus, k, i)) + '</span>' : '') + '</span>' + (fmt === 'roi' ? '<span class="v">' + (e.pts[k] || 0) + ' pt' + ((e.pts[k] || 0) > 1 ? 's' : '') + '</span>' : '') + '</li>'; }).join('') + (e.file.length > 9 ? '<li class="v">+ ' + (e.file.length - 9) + '</li>' : '') + '</ul>');
+    else c = bloc(fmt === 'ops' ? 'Ordre de passage · ' + e.file.length + ' restant' + (e.file.length > 1 ? 's' : '') : 'File d\'attente', '<ul class="liste">' + e.file.slice(0, 11).map(function (k, n) { return '<li class="' + (n === 0 ? 'next' : '') + '"><span>' + (n + 1) + '. ' + nom(k) + (J.malusDe(D.manches, (D.config || {}).malus || [], k, i) ? ' <span class="malus" style="margin:0">' + esc(J.malusDe(D.manches, D.config.malus, k, i)) + '</span>' : '') + '</span>' + (fmt === 'roi' ? '<span class="v">' + (e.pts[k] || 0) + ' pt' + ((e.pts[k] || 0) > 1 ? 's' : '') + '</span>' : '') + '</li>'; }).join('') + (e.file.length > 11 ? '<li class="v">+ ' + (e.file.length - 11) + '</li>' : '') + '</ul>');
     if (fmt === 'roi') c += bloc('Points gagnés', '<ul class="liste">' + J.classement(e).slice(0, 5).map(function (x, n) { return '<li><span>' + (n + 1) + '. ' + nom(x.k) + '</span><span class="v">' + esc(x.txt) + '</span></li>'; }).join('') + '</ul>');
   } else if (fmt === 'montante') {
     h = '<div class="role" style="text-align:center">Tour ' + e.tour + '</div><div class="ters">' + e.terrains.map(function (t, n) { return '<div class="ter"><span class="n">T' + (n + 1) + '</span>' + t.map(function (k) { return '<div><div class="nom' + (e.choix && e.choix[n] === k ? ' ok' : '') + '">' + nom(k) + '</div>' + mal(k, i) + '</div>'; }).join('<span class="x">vs</span>') + '</div>'; }).join('') + '</div>' +
@@ -107,6 +133,19 @@ function rendre(D) {
   }
   var fins = D.manches.map(function (mm, j) { return [mm, j]; }).filter(function (x) { return x[0].etat && x[0].etat.statut === 'finie'; });
   if (fins.length) c += bloc('Palmarès', '<ul class="liste">' + fins.map(function (x) { return '<li><span>M' + (x[1] + 1) + ' · ' + nom(x[0].etat.gagnant) + '</span><span class="v">' + esc(x[0].lot || '') + '</span></li>'; }).join('') + '</ul>');
+  if (petit) {
+    var it = function (q, m, live, sous) { return '<li class="' + (live ? 'live' : '') + '"><span class="q">' + q + '</span><span class="m">' + m + (sous ? '<small>' + sous + '</small>' : '') + '</span></li>'; };
+    var L = [];
+    if (!e) L.push(it('', 'Tirage au sort', false, 'La manche ' + (i + 1) + ' va commencer'));
+    else if (e.statut === 'finie') L.push(it('🏆', nom(e.gagnant), true, 'gagne la manche ' + (i + 1) + (M.lot ? ' · ' + esc(M.lot) : '')));
+    else if (fmt === 'ops' || fmt === 'roi') {
+      L.push(it('Live', nom(e.champ) + ' <span style="color:var(--ac)">vs</span> ' + nom(e.file[0]), true, 'série en cours : ' + e.serie));
+      if (e.mode === 'surprise') L.push(it('Puis', 'Tiré au hasard', false, 'parmi ' + Math.max(0, e.file.length - 1) + ' joueur' + (e.file.length > 2 ? 's' : '')));
+      else if (e.file.length > 1) L.push('<li class="suiv"><span class="q">À suivre</span><ol class="dix">' + e.file.slice(1, 11).map(function (k, n) { return '<li' + (n === 0 ? ' class="prep"' : '') + '><b>' + (n + 1) + '.</b> ' + nom(k) + (J.malusDe(D.manches, (D.config || {}).malus || [], k, i) ? ' <span class="malus" style="margin:0">' + esc(J.malusDe(D.manches, D.config.malus, k, i)) + '</span>' : '') + '</li>'; }).join('') + '</ol>' + (e.file.length > 11 ? '<span class="reste">+ ' + (e.file.length - 11) + ' après</span>' : '') + '</li>');
+    } else if (fmt === 'montante') e.terrains.forEach(function (t, n) { L.push(it('T' + (n + 1), nom(t[0]) + ' <span style="color:var(--ac)">vs</span> ' + nom(t[1]), true)); });
+    else if (fmt === 'defis') J.classement(e).slice(0, 5).forEach(function (x, n) { L.push(it(n + 1 + '.', nom(x.k), n === 0, esc(x.txt))); });
+    h = '<ul class="pm">' + L.join('') + '</ul>'; c = '';
+  }
   scene.innerHTML = h; cote.innerHTML = c;
   scene.classList.remove('flash'); void scene.offsetWidth; scene.classList.add('flash');
 }
@@ -121,6 +160,9 @@ function charger() {
   }).catch(function () { document.getElementById('maj').textContent = 'Connexion perdue, nouvel essai…'; });
 }
 charger(); setInterval(charger, 1500);
+if (!petit && !tel && cle && window.QRCode && window.innerWidth > 800) {
+  try { new QRCode(document.getElementById('qr'), { text: location.origin + location.pathname + '?k=' + encodeURIComponent(cle) + '&vue=tel', width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); document.getElementById('qrb').hidden = false; } catch (x) {}
+}
 try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); }); } catch (x) {}
 })();
 </script>

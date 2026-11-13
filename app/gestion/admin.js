@@ -3001,7 +3001,7 @@ function vueJeux(m, id) {
   var entetes = function () {
     var lien = jxLienEcran(JE.cle);
     $('jx-h').innerHTML = entete(JE.titre, (JE.jour ? esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ' · ' : '') + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' · ' + JE.manches.length + ' manche' + (JE.manches.length > 1 ? 's' : ''),
-      '<a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button>');
+      '<a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button>');
     $('jx-cp').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié : ouvre-le sur l\'ordi ou la TV du club'); }).catch(function () { window.prompt('Lien de l\'écran', lien); }); };
     $('jx-tabs').innerHTML = [['jouer', 'Jouer'], ['joueurs', 'Joueurs (' + JE.joueurs.length + ')'], ['reglages', 'Réglages']].map(function (x) { return '<button class="chip' + (JX.onglet === x[0] ? ' on' : '') + '" data-jxt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     all('[data-jxt]').forEach(function (b) { b.onclick = function () { JX.onglet = b.dataset.jxt; entetes(); vue(); }; });
