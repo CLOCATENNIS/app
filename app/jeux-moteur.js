@@ -4,6 +4,7 @@
 'use strict';
 
 var FORMATS = {
+  ops2: { nom: 'One Point Slam en double', court: 'OPS double', desc: 'Équipes de deux, un seul point par duel. Les gagnants restent. Dans l\'équipe qui perd, un seul joueur sort : le plus ancien sur le terrain (tirage au sort quand ils sont arrivés ensemble), remplacé par le suivant de la file.', serie: true, double: true },
   ops: { nom: 'One Point Slam', court: 'One Point Slam', desc: 'Un seul point par duel. Le gagnant reste sur le terrain, le perdant est éliminé. Le dernier debout gagne.', serie: true },
   roi: { nom: 'Roi du terrain', court: 'Roi du terrain', desc: 'Le gagnant du point reste, le perdant repasse en fin de file. On joue au temps : celui qui a gagné le plus de points l\'emporte.', serie: true },
   montante: { nom: 'Montante-descendante', court: 'Montante', desc: 'Plusieurs terrains. À chaque tour, le gagnant monte d\'un terrain, le perdant descend. Les victoires font le classement.', terrains: true },
@@ -22,6 +23,11 @@ function demarrer(fmt, cles, cfg, mode) {
     e.champ = o[0]; e.file = o.slice(1); e.serie = 0; e.best = null; e.out = []; e.pts = {};
     if (e.mode === 'surprise') e.file = melange(e.file);
     o.forEach(function (k) { e.pts[k] = 0; });
+  } else if (fmt === 'ops2') {
+    // A = l'équipe sur le terrain (tenante), B = les challengers ; arr = ordre d'arrivée sur le terrain (même valeur = arrivés ensemble)
+    e.eqA = o.slice(0, 2); e.eqB = o.slice(2, 4); e.file = o.slice(4); e.serie = 0; e.best = null; e.out = []; e.pts = {}; e.arr = {}; e.tick = 0;
+    if (e.mode === 'surprise') e.file = melange(e.file);
+    o.forEach(function (k) { e.pts[k] = 0; }); o.slice(0, 4).forEach(function (k) { e.arr[k] = 0; });
   } else if (fmt === 'montante') {
     var n = Math.max(1, Math.min(cfg.terrains || 2, Math.floor(o.length / 2)));
     e.terrains = []; for (var i = 0; i < n; i++) e.terrains.push([o[2 * i], o[2 * i + 1]]);
@@ -36,6 +42,7 @@ function demarrer(fmt, cles, cfg, mode) {
 
 // One Point Slam et roi du terrain : qui gagne le point ('champ' ou 'chal')
 function point(e, qui, R) {
+  if (e.fmt === 'ops2') return pointDouble(e, qui, R);
   if (e.statut !== 'en_cours' || !e.file || !e.file.length) return e;
   sauver(e); delete e.dernierAcc;
   var ch = e.file.shift(), perdant;
@@ -52,6 +59,23 @@ function point(e, qui, R) {
 
 // Montante-descendante : choisir le gagnant d'un terrain, puis valider le tour
 function choisir(e, i, k) { if (e.statut !== 'en_cours') return e; e.choix = e.choix || {}; e.choix[i] = k; return e; }
+// Double : l'équipe gagnante reste ; dans l'équipe perdante, le plus ancien sur le terrain sort (tirage au sort s'ils sont arrivés ensemble)
+function pointDouble(e, qui, R) {
+  if (e.statut !== 'en_cours' || !e.eqB || e.eqB.length < 2) return e;
+  sauver(e); delete e.dernierAcc; delete e.sortie;
+  var W = qui === 'chal' ? e.eqB : e.eqA, L = qui === 'chal' ? e.eqA : e.eqB;
+  e.serie = qui === 'chal' ? 1 : e.serie + 1;
+  W.forEach(function (k) { e.pts[k] = (e.pts[k] || 0) + 1; accGagne(e, k, e.pts[k], R); });
+  if (!e.best || e.serie > e.best.n) e.best = { k: W[0], k2: W[1], n: e.serie };
+  var a0 = e.arr[L[0]] || 0, a1 = e.arr[L[1]] || 0, egal = a0 === a1, i = egal ? Math.floor(Math.random() * 2) : (a0 < a1 ? 0 : 1);
+  var sortant = L[i], reste = L[1 - i];
+  e.out.push(sortant); e.sortie = { k: sortant, tirage: egal };
+  if (e.file.length) {
+    var j = e.mode === 'surprise' ? Math.floor(Math.random() * e.file.length) : 0, nv = e.file.splice(j, 1)[0];
+    e.arr[nv] = ++e.tick; e.eqA = W.slice(); e.eqB = [reste, nv];
+  } else { e.eqA = W.slice(); e.eqB = [reste]; e.statut = 'finie'; e.gagnant = W[0]; e.gagnants = W.slice(); e.fin = new Date().toISOString(); }
+  return e;
+}
 function tourPret(e) { return e.terrains && e.terrains.every(function (t, i) { return e.choix && e.choix[i]; }); }
 function validerTour(e, R) {
   if (!tourPret(e)) return e;
@@ -81,6 +105,12 @@ function classement(e) {
   if (!e) return [];
   var pos = {}; (e.ordre || []).forEach(function (k, i) { pos[k] = i; });
   var L;
+  if (e.fmt === 'ops2') {
+    var top = (e.eqA || []).concat(e.eqB || []).concat((e.out || []).slice().reverse());
+    L = top.map(function (k) { return { k: k, val: e.pts[k] || 0, txt: (e.pts[k] || 0) + ' pt' + ((e.pts[k] || 0) > 1 ? 's' : '') }; });
+    (e.file || []).forEach(function (k) { L.push({ k: k, val: 0, txt: 'à jouer' }); });
+    return L;
+  }
   if (e.fmt === 'ops') {
     var rang = (e.out || []).slice(); if (e.champ) rang.push(e.champ);
     L = rang.reverse().map(function (k, i) { return { k: k, val: e.pts[k] || 0, txt: (e.pts[k] || 0) + ' pt' + ((e.pts[k] || 0) > 1 ? 's' : '') }; });
@@ -104,6 +134,7 @@ function terminer(e) {
   var c = classement(e);
   e.statut = 'finie'; e.gagnant = c.length ? c[0].k : null; e.fin = new Date().toISOString();
   if (e.fmt === 'ops' && e.champ) e.gagnant = e.champ;
+  if (e.fmt === 'ops2' && e.eqA) { e.gagnant = e.eqA[0]; e.gagnants = e.eqA.slice(); }
   return e;
 }
 function annuler(e) {
@@ -114,7 +145,7 @@ function annuler(e) {
 
 // Victoires gagnées avant la manche i (pour les malus)
 function victoiresAvant(manches, k, i) {
-  var n = 0; for (var j = 0; j < i; j++) { var e = manches[j] && manches[j].etat; if (e && e.statut === 'finie' && e.gagnant === k) n++; }
+  var n = 0; for (var j = 0; j < i; j++) { var e = manches[j] && manches[j].etat; if (e && e.statut === 'finie' && (e.gagnant === k || (e.gagnants && e.gagnants.indexOf(k) >= 0))) n++; }
   return n;
 }
 // Paliers de malus : [{ n, t }] = à partir de n (manches gagnées ou points d'affilée), malus t. Le palier atteint le plus haut gagne.
