@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Écran du club · CLOCA Tennis</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Écran du club : lisible à 5 mètres, sur TV ou vidéoprojecteur. Toujours sombre. */
+:root{--bg:#0b1c2c;--panel:#12293f;--line:#24425e;--tx:#f2f6fa;--mut:#9fb3c6;--ac:#e0763f;--ball:#d9e021;--ok:#2f9a68;
+  --disp:'Barlow Condensed','Arial Narrow',sans-serif;--font:'Inter',system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:16px/1.4 var(--font)}
+.ecran{min-height:100%;display:grid;grid-template-rows:auto 1fr auto;gap:2.2vh;padding:3vh max(3vw,16px)}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:2vw;flex-wrap:wrap}
+h1{font-family:var(--disp);font-weight:800;font-size:clamp(28px,4.6vw,72px);line-height:.95;margin:0;text-transform:uppercase;letter-spacing:.01em}
+.sous{color:var(--mut);font-size:clamp(14px,1.6vw,24px);margin-top:.4vh}
+.lot{background:var(--ball);color:#1b2208;font-weight:600;border-radius:999px;padding:.6vh 1.4vw;font-size:clamp(14px,1.6vw,26px)}
+.corps{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr);gap:2vw;min-height:0}
+@media (max-width:800px){.corps{grid-template-columns:1fr}}
+.scene{background:var(--panel);border:2px solid var(--line);border-radius:22px;padding:3vh 2vw;display:flex;flex-direction:column;justify-content:center;gap:2.5vh;position:relative;overflow:hidden;min-height:40vh}
+.scene::before{content:"";position:absolute;inset:2.2vh 1.6vw;border:2px solid rgba(255,255,255,.12);border-radius:8px;pointer-events:none}
+.scene::after{content:"";position:absolute;left:50%;top:2.2vh;bottom:2.2vh;border-left:2px solid rgba(255,255,255,.12);pointer-events:none}
+.scene>*{position:relative;z-index:1}
+.vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:2vw;align-items:center;text-align:center}
+.role{font-size:clamp(12px,1.3vw,20px);text-transform:uppercase;letter-spacing:.15em;color:var(--mut)}
+.nom{font-family:var(--disp);font-weight:800;font-size:clamp(34px,6.4vw,120px);line-height:.95;overflow-wrap:anywhere}
+.x{font-family:var(--disp);font-weight:800;font-size:clamp(24px,3vw,52px);color:var(--ac)}
+.malus{display:inline-block;margin-top:1vh;background:var(--ac);color:#fff;font-weight:600;border-radius:999px;padding:.3vh 1vw;font-size:clamp(12px,1.3vw,22px)}
+.serie{text-align:center;font-size:clamp(16px,2vw,32px)}
+.serie b{font-family:var(--disp);color:var(--ball);font-size:1.4em}
+.gagnant{text-align:center}
+.gagnant .nom{color:var(--ball);font-size:clamp(48px,9vw,170px)}
+.cote{display:flex;flex-direction:column;gap:2vh;min-height:0}
+.bloc{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:2vh 1.4vw}
+.bloc h2{font-family:var(--disp);font-weight:700;font-size:clamp(18px,2vw,32px);text-transform:uppercase;letter-spacing:.06em;margin:0 0 1vh;color:var(--mut)}
+.liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.8vh;font-size:clamp(15px,1.7vw,28px);font-variant-numeric:tabular-nums}
+.liste li{display:flex;justify-content:space-between;gap:1vw}
+.liste li.next{color:var(--ball);font-weight:600}
+.liste .v{color:var(--mut)}
+.ters{display:flex;flex-direction:column;gap:1.6vh}
+.ter{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);gap:1.4vw;align-items:center;text-align:center}
+.ter .n{font-family:var(--disp);font-weight:800;font-size:clamp(20px,2.4vw,40px);color:var(--mut)}
+.ter .nom{font-size:clamp(24px,3.6vw,64px)}
+.ter .nom.ok{color:var(--ball)}
+table{width:100%;border-collapse:collapse;font-size:clamp(15px,1.8vw,30px);font-variant-numeric:tabular-nums}
+td,th{padding:.8vh .8vw;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;font-size:.75em;text-transform:uppercase;letter-spacing:.08em}
+footer{display:flex;justify-content:space-between;color:var(--mut);font-size:clamp(12px,1.2vw,18px);gap:2vw;flex-wrap:wrap}
+footer b{font-family:var(--disp);letter-spacing:.08em;color:var(--tx)}
+.vide{text-align:center;color:var(--mut);font-size:clamp(18px,2.4vw,40px)}
+.flash{animation:flash .8s ease-out}
+@keyframes flash{0%{background:rgba(217,224,33,.25)}100%{background:var(--panel)}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+</style>
+</head>
+<body>
+<div class="ecran">
+  <header><div><h1 id="titre">Écran du club</h1><div class="sous" id="sous">Connexion…</div></div><span class="lot" id="lot" hidden></span></header>
+  <div class="corps"><section class="scene" id="scene" aria-live="polite"><div class="vide">Chargement…</div></section><aside class="cote" id="cote"></aside></div>
+  <footer><span><b>VAMOS HR!</b> · CLOCA Tennis</span><span id="maj"></span></footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="jeux-moteur.js?v=202611130100"></script>
+<script>
+(function () {
+'use strict';
+var sb = window.supabase.createClient('https://ccvfdsriogqerdcopuuv.supabase.co', 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM', { auth: { persistSession: false } });
+var J = window.JEUX, F = J.FORMATS, cle = new URLSearchParams(location.search).get('k') || '', dernier = '', scene = document.getElementById('scene'), cote = document.getElementById('cote');
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function bloc(t, h) { return '<div class="bloc"><h2>' + t + '</h2>' + h + '</div>'; }
+function rendre(D) {
+  var noms = {}; D.joueurs.forEach(function (p) { noms[p.k] = p.nom; });
+  var nom = function (k) { return esc(noms[k] || '?'); };
+  var mal = function (k, i) { var t = J.malusDe(D.manches, (D.config || {}).malus || [], k, i); return t ? '<div><span class="malus">' + esc(t) + '</span></div>' : ''; };
+  var i = Math.min(D.actuelle || 0, D.manches.length - 1), M = D.manches[i] || {}, e = M.etat, fmt = (e && e.fmt) || M.fmt || 'ops';
+  document.getElementById('titre').textContent = D.titre;
+  document.getElementById('sous').textContent = 'Manche ' + (i + 1) + ' sur ' + D.manches.length + ' · ' + F[fmt].nom;
+  var lot = document.getElementById('lot'); lot.hidden = !M.lot; lot.textContent = M.lot ? 'À gagner : ' + M.lot : '';
+  var h = '', c = '';
+  if (!e) {
+    h = '<div class="vide"><div class="role">Prochaine manche</div><div class="nom" style="color:var(--tx)">Tirage au sort</div><div style="margin-top:2vh">' + D.joueurs.length + ' joueurs inscrits</div></div>';
+    c = bloc('Inscrits', '<ul class="liste">' + D.joueurs.slice(0, 14).map(function (p) { return '<li>' + esc(p.nom) + '</li>'; }).join('') + (D.joueurs.length > 14 ? '<li class="v">+ ' + (D.joueurs.length - 14) + ' autres</li>' : '') + '</ul>');
+  } else if (e.statut === 'finie') {
+    h = '<div class="gagnant"><div class="role">Vainqueur de la manche ' + (i + 1) + '</div><div class="nom">' + nom(e.gagnant) + '</div>' + (M.lot ? '<div class="serie">Remporte <b style="font-size:1em">' + esc(M.lot) + '</b></div>' : '') +
+      (e.best ? '<div class="serie" style="margin-top:1vh">Plus longue série : ' + nom(e.best.k) + ' · <b>' + e.best.n + '</b></div>' : '') + '</div>';
+    c = bloc('Classement', '<ul class="liste">' + J.classement(e).slice(0, 8).map(function (x, n) { return '<li><span>' + (n + 1) + '. ' + nom(x.k) + '</span><span class="v">' + esc(x.txt) + '</span></li>'; }).join('') + '</ul>');
+  } else if (fmt === 'ops' || fmt === 'roi') {
+    var ch = e.file[0];
+    h = '<div class="vs"><div><div class="role">Sur le terrain</div><div class="nom">' + nom(e.champ) + '</div>' + mal(e.champ, i) + '</div><div class="x">VS</div><div><div class="role">Challenger</div><div class="nom">' + nom(ch) + '</div>' + mal(ch, i) + '</div></div>' +
+      '<div class="serie">Série en cours <b>' + e.serie + '</b>' + (e.best ? ' · record : ' + nom(e.best.k) + ' (' + e.best.n + ')' : '') + '</div>';
+    c = bloc(fmt === 'ops' ? 'Ordre de passage · ' + e.file.length + ' restant' + (e.file.length > 1 ? 's' : '') : 'File d\'attente', '<ul class="liste">' + e.file.slice(0, 9).map(function (k, n) { return '<li class="' + (n === 0 ? 'next' : '') + '"><span>' + (n + 1) + '. ' + nom(k) + (J.malusDe(D.manches, (D.config || {}).malus || [], k, i) ? ' <span class="malus" style="margin:0">' + esc(J.malusDe(D.manches, D.config.malus, k, i)) + '</span>' : '') + '</span>' + (fmt === 'roi' ? '<span class="v">' + (e.pts[k] || 0) + ' pt' + ((e.pts[k] || 0) > 1 ? 's' : '') + '</span>' : '') + '</li>'; }).join('') + (e.file.length > 9 ? '<li class="v">+ ' + (e.file.length - 9) + '</li>' : '') + '</ul>');
+    if (fmt === 'roi') c += bloc('Points gagnés', '<ul class="liste">' + J.classement(e).slice(0, 5).map(function (x, n) { return '<li><span>' + (n + 1) + '. ' + nom(x.k) + '</span><span class="v">' + esc(x.txt) + '</span></li>'; }).join('') + '</ul>');
+  } else if (fmt === 'montante') {
+    h = '<div class="role" style="text-align:center">Tour ' + e.tour + '</div><div class="ters">' + e.terrains.map(function (t, n) { return '<div class="ter"><span class="n">T' + (n + 1) + '</span>' + t.map(function (k) { return '<div><div class="nom' + (e.choix && e.choix[n] === k ? ' ok' : '') + '">' + nom(k) + '</div>' + mal(k, i) + '</div>'; }).join('<span class="x">vs</span>') + '</div>'; }).join('') + '</div>' +
+      (e.banc.length ? '<div class="serie">Sur le banc : ' + e.banc.map(nom).join(', ') + '</div>' : '');
+    c = bloc('Victoires', '<ul class="liste">' + J.classement(e).slice(0, 8).map(function (x, n) { return '<li><span>' + (n + 1) + '. ' + nom(x.k) + '</span><span class="v">' + esc(x.txt) + '</span></li>'; }).join('') + '</ul>');
+  } else if (fmt === 'defis') {
+    var cl = J.classement(e);
+    h = '<div style="overflow-x:auto"><table><thead><tr><th></th><th>Joueur</th>' + e.defis.map(function (d) { return '<th>' + esc(d) + '</th>'; }).join('') + '<th>Total</th></tr></thead><tbody>' +
+      cl.slice(0, 10).map(function (x, n) { return '<tr><td>' + (n + 1) + '</td><td>' + nom(x.k) + '</td>' + e.defis.map(function (d, j) { var v = e.scores[x.k] && e.scores[x.k][j]; return '<td>' + (v == null ? '·' : v) + '</td>'; }).join('') + '<td><b>' + x.val + '</b></td></tr>'; }).join('') + '</tbody></table></div>';
+  }
+  var fins = D.manches.map(function (mm, j) { return [mm, j]; }).filter(function (x) { return x[0].etat && x[0].etat.statut === 'finie'; });
+  if (fins.length) c += bloc('Palmarès', '<ul class="liste">' + fins.map(function (x) { return '<li><span>M' + (x[1] + 1) + ' · ' + nom(x[0].etat.gagnant) + '</span><span class="v">' + esc(x[0].lot || '') + '</span></li>'; }).join('') + '</ul>');
+  scene.innerHTML = h; cote.innerHTML = c;
+  scene.classList.remove('flash'); void scene.offsetWidth; scene.classList.add('flash');
+}
+function charger() {
+  if (!cle) { scene.innerHTML = '<div class="vide">Lien incomplet : ouvre l\'écran depuis la gestion (Jeux et animations).</div>'; return; }
+  sb.rpc('jeu_ecran', { p_cle: cle }).then(function (r) {
+    var D = r.data;
+    document.getElementById('maj').textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (r.error || !D) { scene.innerHTML = '<div class="vide">Ce jeu n\'existe pas ou a été archivé.</div>'; cote.innerHTML = ''; return; }
+    var s = JSON.stringify(D); if (s === dernier) return; dernier = s;
+    rendre(D);
+  }).catch(function () { document.getElementById('maj').textContent = 'Connexion perdue, nouvel essai…'; });
+}
+charger(); setInterval(charger, 1500);
+try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); }); } catch (x) {}
+})();
+</script>
+</body>
+</html>

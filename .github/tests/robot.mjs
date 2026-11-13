@@ -130,7 +130,7 @@ for (const [ecran, taille] of [['téléphone', { width: 390, height: 844 }], ['o
 const adminJs = readFileSync(join(RACINE, 'app/gestion/admin.js'), 'utf8');
 const blocModules = (adminJs.match(/var MODULES = \[([\s\S]*?)\n\];/) || [])[1] || '';
 const modules = [...blocModules.matchAll(/^\s*\['([a-z]+)', '((?:[^'\\]|\\.)*)', \[/gm)].map((m) => [m[1], m[2].replace(/\\'/g, '\'')]);
-const sousPages = [['fetes/tombola', 'Tombola'], ['fetes/stage', 'Stages'], ['fetes/noel-2026', 'Fête de Noël']];
+const sousPages = [['fetes/jeux', 'Jeux et animations'], ['fetes/tombola', 'Tombola'], ['fetes/stage', 'Stages'], ['fetes/noel-2026', 'Fête de Noël']];
 if (!modules.length) note('Gestion', 'liste des écrans', false, 'impossible de lire MODULES dans admin.js');
 {
   const ctx = await navigateur.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
