@@ -3186,7 +3186,7 @@ function jxFormulaire() {
       var jr = $('jn-j').value, ia = $('jn-ia').checked;
       if (ia && !jr) { toast('Indique la date pour que la carte apparaisse dans l\'appli'); return; }
       q(sb.from('jeux').insert({ titre: t, jour: jr || null, format: f, insc_appli: ia, insc_ouvre_le: ia ? new Date(jr + 'T' + ($('jn-h').value || '18:30')).toISOString() : null, public_cible: 'adultes', manches: man, config: Object.assign(jxLireMalus('jn'), { terrains: 2, defis: ['Cible', 'Service', 'Précision'] }) }).select('id').single())
-        .then(function (r) { fermer(); JX.onglet = 'joueurs'; location.hash = '#/fetes/jeux/' + r.id; }).catch(function () { toast('Création impossible'); });
+        .then(function (r) { fermer(); JX.onglet = 'joueurs'; location.hash = '#/fetes/jeux/' + r.id; }).catch(function (e) { toast('Création impossible : ' + ((e && (e.message || e.code)) || 'erreur inconnue')); });
     };
   });
 }
