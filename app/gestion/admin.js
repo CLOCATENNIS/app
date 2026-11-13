@@ -2993,7 +2993,7 @@ function vueJeux(m, id) {
   var JE = null, timer = null;
   m.innerHTML = '<a class="fil" href="#/fetes/jeux">← Jeux et animations</a><div id="jx-h"></div><div class="chips" id="jx-tabs" style="margin-bottom:14px"></div><div id="jx-c"><div class="skel"></div></div>';
   var nom = function (k) { var p = JE.joueurs.filter(function (x) { return x.k === k; })[0]; return p ? p.nom : '?'; };
-  var malus = function (k, i) { var t = J.malusDe(JE.manches, JE.config.malus || [], k, i); return t ? ' <span class="badge b-warn">' + esc(t) + '</span>' : ''; };
+  var malus = function (k, i) { var t = J.malusDe(JE.manches, JE.config, k, i); return t ? ' <span class="badge b-warn">' + esc(t) + '</span>' : ''; };
   var enregistrer = function (champs, quiet) {
     var row = champs || { manches: JE.manches, config: JE.config, actuelle: JE.actuelle };
     return q(sb.from('jeux').update(row).eq('id', JE.id)).catch(function () { toast('Pas enregistré : vérifie la connexion'); });
@@ -3035,7 +3035,7 @@ function vueJeux(m, id) {
     h += '<div class="card" style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="l" style="flex:1;min-width:200px">À gagner (affiché sur l\'écran)<input class="f" id="jx-lot" maxlength="80" value="' + esc(M.lot || '') + '" placeholder="Ex. un tube de balles"></label>' +
       (!e ? '<label class="l" style="min-width:200px">Format de la manche<select class="f" id="jx-fmt">' + Object.keys(F).map(function (k) { return '<option value="' + k + '"' + (k === fmt ? ' selected' : '') + '>' + esc(F[k].nom) + '</option>'; }).join('') + '</select></label>' : '<span class="badge">' + esc(F[fmt].nom) + '</span>') + '</div>';
     if (!e) {
-      var avec = JE.joueurs.filter(function (p) { return J.malusDe(JE.manches, JE.config.malus || [], p.k, i); });
+      var avec = JE.joueurs.filter(function (p) { return J.malusDe(JE.manches, JE.config, p.k, i); });
       h += '<div class="card stack"><b>Prêt pour le tirage</b><div class="mut small">' + esc(F[fmt].desc) + '</div><div class="small">' + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' inscrit' + (JE.joueurs.length > 1 ? 's' : '') + (avec.length ? ' · avec malus : ' + avec.map(function (p) { return esc(p.nom) + malus(p.k, i); }).join(', ') : '') + '</div>' +
         ((fmt === 'ops' || fmt === 'roi') ? '<div class="chips" role="radiogroup" aria-label="Prochain adversaire">' + [['liste', 'Ordre tiré au sort au départ', 'tout le monde voit qui passe après'], ['surprise', 'Adversaire tiré au hasard à chaque point', 'surprise jusqu\'au dernier moment']].map(function (x) { return '<button class="chip' + ((M.mode || 'liste') === x[0] ? ' on' : '') + '" data-jxmo="' + x[0] + '" title="' + x[2] + '">' + x[1] + '</button>'; }).join('') + '</div>' : '') + '<div><button class="btn ok" id="jx-tirage"' + (JE.joueurs.length < 2 ? ' disabled' : '') + '>Lancer le tirage au sort</button>' + (JE.joueurs.length < 2 ? ' <span class="mut small">Ajoute au moins 2 joueurs dans l\'onglet Joueurs.</span>' : '') + '</div></div>';
     } else if (e.statut === 'finie') {
@@ -3043,12 +3043,12 @@ function vueJeux(m, id) {
       h += '<div class="card jx-court" style="text-align:center"><div class="jx-lbl">Vainqueur de la manche ' + (i + 1) + '</div><div class="jx-big">' + esc(nom(e.gagnant)) + '</div>' +
         (e.best ? '<div>Plus longue série : <b>' + esc(nom(e.best.k)) + '</b> · ' + e.best.n + ' point' + (e.best.n > 1 ? 's' : '') + ' d\'affilée</div>' : '') +
         (M.lot ? '<div style="margin-top:6px">Remporte : <b>' + esc(M.lot) + '</b></div>' : '') +
-        ((JE.config.malus || []).length ? '<div style="margin-top:8px"><span class="badge b-warn">Prochaine manche : ' + esc(J.malusDe(JE.manches, JE.config.malus, e.gagnant, i + 1)) + '</span></div>' : '') + '</div>' +
+        (J.malusDe(JE.manches, JE.config, e.gagnant, i + 1) ? '<div style="margin-top:8px"><span class="badge b-warn">Prochaine manche : ' + esc(J.malusDe(JE.manches, JE.config, e.gagnant, i + 1)) + '</span></div>' : '') + '</div>' +
         '<div class="card" style="margin-top:12px"><b>Classement</b><div class="list" style="margin-top:6px">' + c.slice(0, 10).map(function (x, n) { return '<div class="it"><span>' + (n + 1) + '. ' + esc(nom(x.k)) + '</span><span class="mut small">' + esc(x.txt) + '</span></div>'; }).join('') + '</div></div>' +
         '<div class="chips" style="margin-top:12px"><button class="btn sm ghost" id="jx-undo">Annuler la fin de manche</button>' + (i < JE.manches.length - 1 ? '<button class="btn sm" id="jx-next">Manche ' + (i + 2) + ' →</button>' : '') + '</div>';
     } else if (fmt === 'ops' || fmt === 'roi') {
       var ch = e.file[0];
-      h += '<div class="card jx-court"><div class="jx-vs"><button class="jx-pick" data-jxw="champ"><span class="jx-lbl">Sur le terrain</span><span class="jx-nom">' + esc(nom(e.champ)) + '</span>' + malus(e.champ, i) + '<span class="jx-tap">Gagnant</span></button><span class="jx-x">VS</span>' +
+      h += '<div class="card jx-court"><div class="jx-vs"><button class="jx-pick" data-jxw="champ"><span class="jx-lbl">Sur le terrain</span><span class="jx-nom">' + esc(nom(e.champ)) + '</span>' + malus(e.champ, i) + (J.malusSerie(JE.config, e.serie) ? ' <span class="badge b-ko">Série ' + e.serie + ' : ' + esc(J.malusSerie(JE.config, e.serie)) + '</span>' : '') + '<span class="jx-tap">Gagnant</span></button><span class="jx-x">VS</span>' +
         '<button class="jx-pick" data-jxw="chal"><span class="jx-lbl">Challenger</span><span class="jx-nom">' + esc(nom(ch)) + '</span>' + malus(ch, i) + '<span class="jx-tap">Gagnant</span></button></div>' +
         '<div style="text-align:center;margin-top:12px">Série : <b>' + e.serie + '</b>' + (e.best ? ' · record ' + esc(nom(e.best.k)) + ' (' + e.best.n + ')' : '') + (fmt === 'ops' ? ' · reste ' + e.file.length + ' challenger' + (e.file.length > 1 ? 's' : '') : '') + '</div></div>' +
         '<div class="chips" style="margin:12px 0"><button class="btn sm ghost" id="jx-undo"' + (e.hist && e.hist.length ? '' : ' disabled') + '>Annuler le dernier point</button>' + (fmt === 'roi' ? '<button class="btn sm ok" id="jx-fin">Terminer la manche</button>' : '') + '<button class="btn sm ko" id="jx-redraw">Refaire le tirage</button></div>' +
@@ -3118,14 +3118,15 @@ function vueJeux(m, id) {
       '<div class="card" style="background:var(--soft);border:0"><label class="check" style="display:flex;gap:8px;font-weight:600"><input type="checkbox" id="jr-ia"' + (JE.insc_appli ? ' checked' : '') + '> Carte d\'inscription dans l\'appli (comme la fête de Noël)</label>' +
       '<div class="row2" style="margin-top:10px"><label class="l">Apparaît le<input class="f" type="datetime-local" id="jr-io" value="' + esc(jxLocal(JE.insc_ouvre_le) || (JE.jour ? JE.jour + 'T18:30' : '')) + '"></label><label class="l">Disparaît le (vide = fin de journée)<input class="f" type="datetime-local" id="jr-if" value="' + esc(jxLocal(JE.insc_ferme_le)) + '"></label></div>' +
       '<div class="row2" style="margin-top:10px"><label class="l">Qui peut s\'inscrire<select class="f" id="jr-pc"><option value="adultes"' + (JE.public_cible !== 'tous' ? ' selected' : '') + '>Adultes uniquement</option><option value="tous"' + (JE.public_cible === 'tous' ? ' selected' : '') + '>Tout le club</option></select></label><label class="l">Lieu (affiché sur la carte)<input class="f" id="jr-li" maxlength="60" value="' + esc(JE.lieu || '') + '" placeholder="Ex. Couvert 1"></label></div></div>' +
-      '<label class="l">Malus selon le nombre de manches gagnées (une ligne = 1 victoire, 2 victoires…)<textarea class="f" id="jr-m">' + esc((cf.malus || []).join('\n')) + '</textarea></label>' +
+      jxBlocMalus(cf, 'jr') +
       '<div class="row2"><label class="l">Terrains (montante-descendante)<input class="f" type="number" min="1" max="7" id="jr-te" value="' + (cf.terrains || 2) + '"></label><label class="l">Défis (une ligne par défi)<textarea class="f" id="jr-d" style="min-height:70px">' + esc((cf.defis || ['Cible', 'Service', 'Précision']).join('\n')) + '</textarea></label></div>' +
       '<div class="chips"><button class="btn" id="jr-ok">Enregistrer</button><button class="btn ghost" id="jr-ar">' + (JE.archive ? 'Désarchiver' : 'Archiver le jeu') + '</button><button class="btn ko" id="jr-sup">Supprimer</button></div>' +
       '<p class="mut xs">Archiver coupe aussi l\'écran du club. Tu peux dupliquer un jeu pour réutiliser les réglages et les joueurs une autre fois.</p><div><button class="btn sm line" id="jr-dup">Dupliquer ce jeu</button></div></div>';
+    jxLierMalus('jr');
     var lignes = function (id) { return $(id).value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 12); };
     $('jr-ok').onclick = function () {
       JE.titre = $('jr-t').value.trim() || JE.titre; JE.jour = $('jr-j').value || null; JE.format = $('jr-f').value;
-      JE.config = { malus: lignes('jr-m'), terrains: Math.max(1, Math.min(7, parseInt($('jr-te').value, 10) || 2)), defis: lignes('jr-d') };
+      JE.config = { terrains: Math.max(1, Math.min(7, parseInt($('jr-te').value, 10) || 2)), defis: lignes('jr-d') }; Object.assign(JE.config, jxLireMalus('jr'));
       JE.insc_appli = $('jr-ia').checked; JE.insc_ouvre_le = $('jr-io').value ? new Date($('jr-io').value).toISOString() : null; JE.insc_ferme_le = $('jr-if').value ? new Date($('jr-if').value).toISOString() : null; JE.public_cible = $('jr-pc').value; JE.lieu = $('jr-li').value.trim() || null;
       if (JE.insc_appli && !JE.insc_ouvre_le) { toast('Indique quand la carte apparaît dans l\'appli'); return; }
       enregistrer({ titre: JE.titre, jour: JE.jour, format: JE.format, config: JE.config, insc_appli: JE.insc_appli, insc_ouvre_le: JE.insc_ouvre_le, insc_ferme_le: JE.insc_ferme_le, public_cible: JE.public_cible, lieu: JE.lieu }).then(function () { toast('Réglages enregistrés'); entetes(); });
@@ -3143,22 +3144,48 @@ function vueJeux(m, id) {
     entetes(); vue(); setTimeout(suivre, 5000);
   }).catch(function () { C().innerHTML = '<div class="card empty">Jeu introuvable.</div>'; });
 }
+// Malus par paliers : à la victoire de manche (manches gagnées) et à la série (points gagnés d'affilée)
+var JX_DEF_MANCHE = [{ n: 1, t: 'Mini raquette' }, { n: 2, t: 'Mini raquette + main faible' }];
+var JX_DEF_SERIE = [{ n: 3, t: 'Main faible' }, { n: 5, t: 'Revers interdit' }, { n: 8, t: 'Service à la cuillère' }];
+function jxLignePalier(p, x, unite) { return '<div class="jx-pal"><span class="small">Dès</span><input class="f" type="number" min="1" max="50" value="' + (x.n || '') + '" aria-label="Seuil"><span class="small">' + unite + '</span><input class="f" maxlength="60" value="' + esc(x.t || '') + '" placeholder="Malus" aria-label="Malus"><button type="button" class="btn sm ko" data-palx="1" aria-label="Retirer ce palier">×</button></div>'; }
+function jxBlocMalus(cf, p) {
+  var pm = cf.paliers_manche || ((cf.malus || []).length ? cf.malus.map(function (t, i) { return { n: i + 1, t: t }; }) : JX_DEF_MANCHE);
+  var on1 = cf.malus_manche_on !== false, on2 = !!cf.malus_serie_on, ps = cf.paliers_serie || JX_DEF_SERIE;
+  var bloc = function (id, on, titre, aide, l, unite) {
+    return '<label class="check" style="display:flex;gap:8px;font-weight:600"><input type="checkbox" id="' + p + '-' + id + '"' + (on ? ' checked' : '') + '> ' + titre + '</label>' +
+      '<div class="stack" id="' + p + '-' + id + 'b" style="gap:6px"' + (on ? '' : ' hidden') + '><span class="mut xs">' + aide + '</span><div class="stack" style="gap:6px" data-unite="' + unite + '" id="' + p + '-' + id + 'l">' + l.map(function (x) { return jxLignePalier(p, x, unite); }).join('') + '</div><div><button type="button" class="btn sm line" data-paladd="' + p + '-' + id + 'l">+ Ajouter un palier</button></div></div>';
+  };
+  return '<div class="card stack" style="background:var(--soft);border:0;gap:10px">' +
+    bloc('m1', on1, 'Malus à la victoire de manche', 'Selon le nombre de manches déjà gagnées. Le palier le plus haut atteint s\'applique.', pm, 'manche(s) gagnée(s)') +
+    bloc('m2', on2, 'Malus à la série de victoires', 'Pour le joueur sur le terrain (One Point Slam, roi du terrain) : dès X points gagnés d\'affilée. Il s\'arrête dès qu\'il perd un point.', ps, 'points d\'affilée') + '</div>';
+}
+function jxLireMalus(p) {
+  var lire = function (id) { return all('#' + id + ' .jx-pal').map(function (r) { var i = r.querySelectorAll('input'); return { n: Math.max(1, Math.min(50, parseInt(i[0].value, 10) || 0)), t: i[1].value.trim() }; }).filter(function (x) { return x.n && x.t; }).sort(function (a, b) { return a.n - b.n; }).slice(0, 12); };
+  var pm = lire(p + '-m1l');
+  return { malus_manche_on: $(p + '-m1').checked, paliers_manche: pm, malus: pm.map(function (x) { return x.t; }), malus_serie_on: $(p + '-m2').checked, paliers_serie: lire(p + '-m2l') };
+}
+function jxLierMalus(p) {
+  ['m1', 'm2'].forEach(function (id) { $(p + '-' + id).onchange = function () { $(p + '-' + id + 'b').hidden = !this.checked; }; });
+  var lier = function () { all('[data-palx]').forEach(function (b) { b.onclick = function () { b.parentNode.remove(); }; }); };
+  all('[data-paladd]').forEach(function (b) { b.onclick = function () { var box = $(b.dataset.paladd), der = box.querySelectorAll('.jx-pal'), n = der.length ? (parseInt(der[der.length - 1].querySelector('input').value, 10) || 0) + 1 : 1; box.insertAdjacentHTML('beforeend', jxLignePalier(p, { n: n, t: '' }, box.dataset.unite)); lier(); var l = box.querySelectorAll('.jx-pal'); l[l.length - 1].querySelectorAll('input')[1].focus(); }; });
+  lier();
+}
 function jxFormulaire() {
   var F = window.JEUX.FORMATS;
   panneau('Nouveau jeu', '<div class="stack"><label class="l">Nom<input class="f" id="jn-t" maxlength="80" placeholder="Ex. One Point Slam · apéro de Noël"></label>' +
     '<div class="row2"><label class="l">Date<input class="f" type="date" id="jn-j"></label><label class="l">Nombre de manches<input class="f" type="number" min="1" max="10" id="jn-n" value="3"></label></div>' +
     '<label class="l">Format<select class="f" id="jn-f">' + Object.keys(F).map(function (k) { return '<option value="' + k + '">' + esc(F[k].nom) + '</option>'; }).join('') + '</select></label><p class="mut small" id="jn-d" style="margin:0"></p>' +
     '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="jn-ia" checked> Carte d\'inscription dans l\'appli le jour J à <input class="f" type="time" id="jn-h" value="18:30" style="width:110px;min-height:30px;padding:2px 6px"> (adultes uniquement)</label>' +
-    '<label class="l">Malus après 1 victoire, 2 victoires… (une ligne chacun, vide = pas de malus)<textarea class="f" id="jn-m">Mini raquette\nMini raquette + main faible</textarea></label>' +
+    jxBlocMalus({}, 'jn') +
     '<button class="btn" id="jn-ok">Créer le jeu</button></div>', function () {
-    var d = function () { $('jn-d').textContent = F[$('jn-f').value].desc; }; $('jn-f').onchange = d; d();
+    var d = function () { $('jn-d').textContent = F[$('jn-f').value].desc; }; $('jn-f').onchange = d; d(); jxLierMalus('jn');
     $('jn-ok').onclick = function () {
       var t = $('jn-t').value.trim(); if (!t) { toast('Donne un nom au jeu'); return; }
       var n = Math.max(1, Math.min(10, parseInt($('jn-n').value, 10) || 1)), f = $('jn-f').value, man = [];
       for (var i = 0; i < n; i++) man.push({ fmt: f, lot: '' });
       var jr = $('jn-j').value, ia = $('jn-ia').checked;
       if (ia && !jr) { toast('Indique la date pour que la carte apparaisse dans l\'appli'); return; }
-      q(sb.from('jeux').insert({ titre: t, jour: jr || null, format: f, insc_appli: ia, insc_ouvre_le: ia ? new Date(jr + 'T' + ($('jn-h').value || '18:30')).toISOString() : null, public_cible: 'adultes', manches: man, config: { malus: $('jn-m').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean), terrains: 2, defis: ['Cible', 'Service', 'Précision'] } }).select('id').single())
+      q(sb.from('jeux').insert({ titre: t, jour: jr || null, format: f, insc_appli: ia, insc_ouvre_le: ia ? new Date(jr + 'T' + ($('jn-h').value || '18:30')).toISOString() : null, public_cible: 'adultes', manches: man, config: Object.assign(jxLireMalus('jn'), { terrains: 2, defis: ['Cible', 'Service', 'Précision'] }) }).select('id').single())
         .then(function (r) { fermer(); JX.onglet = 'joueurs'; location.hash = '#/fetes/jeux/' + r.id; }).catch(function () { toast('Création impossible'); });
     };
   });

@@ -116,10 +116,21 @@ function victoiresAvant(manches, k, i) {
   var n = 0; for (var j = 0; j < i; j++) { var e = manches[j] && manches[j].etat; if (e && e.statut === 'finie' && e.gagnant === k) n++; }
   return n;
 }
-function malusDe(manches, malus, k, i) {
-  var v = victoiresAvant(manches, k, i); if (!v || !malus || !malus.length) return '';
-  return malus[Math.min(v, malus.length) - 1] || '';
+// Paliers de malus : [{ n, t }] = à partir de n (manches gagnées ou points d'affilée), malus t. Le palier atteint le plus haut gagne.
+function palier(l, v) {
+  var best = ''; (l || []).slice().sort(function (a, b) { return a.n - b.n; }).forEach(function (x) { if (v >= x.n && x.t) best = x.t; });
+  return best;
 }
-
-G.JEUX = { FORMATS: FORMATS, demarrer: demarrer, point: point, choisir: choisir, tourPret: tourPret, validerTour: validerTour, noter: noter, total: total, classement: classement, terminer: terminer, annuler: annuler, victoiresAvant: victoiresAvant, malusDe: malusDe, melange: melange };
+function paliersManche(cfg) {
+  if (!cfg) return [];
+  if (Array.isArray(cfg)) return cfg.map(function (t, i) { return { n: i + 1, t: t }; });
+  if (cfg.malus_manche_on === false) return [];
+  if (cfg.paliers_manche) return cfg.paliers_manche;
+  return (cfg.malus || []).map(function (t, i) { return { n: i + 1, t: t }; }); // anciens jeux
+}
+// cfg = config du jeu (ou ancienne liste de malus)
+function malusDe(manches, cfg, k, i) { var v = victoiresAvant(manches, k, i); return v ? palier(paliersManche(cfg), v) : ''; }
+// Série : le joueur sur le terrain prend le malus dès qu'il a gagné n points d'affilée dans la manche, il le perd en perdant un point
+function malusSerie(cfg, serie) { return cfg && cfg.malus_serie_on && serie ? palier(cfg.paliers_serie, serie) : ''; }
+G.JEUX = { FORMATS: FORMATS, malusSerie: malusSerie, demarrer: demarrer, point: point, choisir: choisir, tourPret: tourPret, validerTour: validerTour, noter: noter, total: total, classement: classement, terminer: terminer, annuler: annuler, victoiresAvant: victoiresAvant, malusDe: malusDe, melange: melange };
 })(typeof window !== 'undefined' ? window : globalThis);
