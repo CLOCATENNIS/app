@@ -3328,10 +3328,11 @@ function vueFetes(m, arg) {
       var ok = l.filter(function (x) { return !x.annule; }), an = l.filter(function (x) { return x.annule; });
       var m5 = ok.filter(function (x) { return x.groupe === 'moins5'; }).length, p5 = ok.length - m5;
       var mails = ok.filter(function (x) { return x.photos && x.email_photos; }).map(function (x) { return x.email_photos; });
-      C().innerHTML = kpis([[ok.length, 'famille' + (ok.length > 1 ? 's' : '') + ' confirmée' + (ok.length > 1 ? 's' : '')], ['≈ ' + (m5 * 3 + p5 * 6), 'personnes (estimation : 3 par petit groupe, 6 par grand)'], [m5 + ' / ' + p5, 'moins de 5 / 5 et plus'], [ok.filter(function (x) { return x.avec_invites; }).length, 'viennent avec des invités'], [mails.length, 'veulent le lien des photos']]) +
-        '<div class="chips" style="margin-bottom:12px"><button class="btn sm line" id="fp-csv">Exporter la liste</button>' + (mails.length ? '<button class="btn sm line" id="fp-mails">Copier les mails « photos »</button><a class="btn sm ok" href="mailto:?bcc=' + encodeURIComponent(mails.join(',')) + '&subject=' + encodeURIComponent('Les photos de la ' + fete.titre + ' 📸') + '&body=' + encodeURIComponent('Bonjour,\n\nMerci d\'être venus à la ' + fete.titre + ' ! Voici le lien vers les photos :\n\n[colle le lien ici]\n\nVAMOS HR !\nCLOCA Tennis') + '">Envoyer le lien des photos</a>' : '') + '</div>' +
+      var adu = fete.public_cible === 'adultes', inv = ok.filter(function (x) { return x.avec_invites; }).length;
+      C().innerHTML = (adu ? kpis([[ok.length, 'adhérent' + (ok.length > 1 ? 's' : '') + ' confirmé' + (ok.length > 1 ? 's' : '')], [inv, 'vien' + (inv > 1 ? 'nent' : 't') + ' avec quelqu\'un'], ['≈ ' + (ok.length + inv), 'personnes (estimation)']]) + '<div class="chips" style="margin-bottom:12px"><button class="btn sm line" id="fp-csv">Exporter la liste</button>' + (mails.length ? '<button class="btn sm line" id="fp-mails">Copier les mails « photos »</button>' : '') + '</div>' : '') + (adu ? '' : kpis([[ok.length, 'famille' + (ok.length > 1 ? 's' : '') + ' confirmée' + (ok.length > 1 ? 's' : '')], ['≈ ' + (m5 * 3 + p5 * 6), 'personnes (estimation : 3 par petit groupe, 6 par grand)'], [m5 + ' / ' + p5, 'moins de 5 / 5 et plus'], [ok.filter(function (x) { return x.avec_invites; }).length, 'viennent avec des invités'], [mails.length, 'veulent le lien des photos']]) +
+        '<div class="chips" style="margin-bottom:12px"><button class="btn sm line" id="fp-csv">Exporter la liste</button>' + (mails.length ? '<button class="btn sm line" id="fp-mails">Copier les mails « photos »</button><a class="btn sm ok" href="mailto:?bcc=' + encodeURIComponent(mails.join(',')) + '&subject=' + encodeURIComponent('Les photos de la ' + fete.titre + ' 📸') + '&body=' + encodeURIComponent('Bonjour,\n\nMerci d\'être venus à la ' + fete.titre + ' ! Voici le lien vers les photos :\n\n[colle le lien ici]\n\nVAMOS HR !\nCLOCA Tennis') + '">Envoyer le lien des photos</a>' : '') + '</div>') +
         (ok.length ? '<div class="card"><div class="list">' + ok.map(function (x) {
-          return '<div class="it"><div style="min-width:0"><b>' + esc(x.nom) + '</b> <span class="badge ' + (x.groupe === 'plus5' ? 'b-ac' : 'b-ok') + '">' + GRP[x.groupe] + '</span>' + (x.avec_invites ? ' <span class="badge" style="background:var(--soft)">+ invités</span>' : '') +
+          return '<div class="it"><div style="min-width:0"><b>' + esc(x.nom) + '</b>' + (adu ? '' : ' <span class="badge ' + (x.groupe === 'plus5' ? 'b-ac' : 'b-ok') + '">' + GRP[x.groupe] + '</span>') + (x.avec_invites ? ' <span class="badge" style="background:var(--soft)">+ invités</span>' : '') +
             '<div class="mut small">' + [x.contact, x.photos ? '📸 ' + x.email_photos : '', x.user_id ? 'compte appli' : 'sans compte'].filter(Boolean).map(esc).join(' · ') + '</div></div>' +
             '<span class="mut xs" style="white-space:nowrap">' + esc(new Date(x.cree_le).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</span></div>';
         }).join('') + '</div></div>' : '<div class="card empty">Personne n\'a encore confirmé. Partage le lien de la page sur le WhatsApp du club.</div>') +
@@ -3417,18 +3418,18 @@ function vueFetes(m, arg) {
 
   var reglages = function () {
     var f = fete, d = new Date(f.debut), fi = f.fin ? new Date(f.fin) : null;
-    var img = function (u) { return !u ? '' : /^https?:/.test(u) ? u : '../' + u; };
+    var img = function (u) { return !u ? '' : /^https?:/.test(u) ? u : '../' + u; }, adu = f.public_cible === 'adultes';
     C().innerHTML = '<div class="card" style="display:flex;flex-direction:column;gap:12px;max-width:640px">' +
-      '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="fr-ins"' + (f.inscription_ouverte ? ' checked' : '') + '> Les familles peuvent confirmer leur venue</label>' +
-      '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="fr-tom"' + (f.tombola_ouverte ? ' checked' : '') + '> Réservation de tickets de tombola ouverte</label>' +
+      '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="fr-ins"' + (f.inscription_ouverte ? ' checked' : '') + '> ' + (adu ? 'Les adhérents peuvent confirmer leur venue' : 'Les familles peuvent confirmer leur venue') + '</label>' +
+      '<label class="check" style="display:flex;gap:8px"' + (adu ? ' hidden' : '') + '><input type="checkbox" id="fr-tom"' + (f.tombola_ouverte ? ' checked' : '') + '> Réservation de tickets de tombola ouverte</label>' +
       '<label class="check" style="display:flex;gap:8px"><input type="checkbox" id="fr-act"' + (f.actif ? ' checked' : '') + '> Page visible dans l\'appli</label>' +
       '<label class="l">Titre<input class="f" id="fr-titre" value="' + esc(f.titre) + '"></label><label class="l">Phrase d\'accroche<input class="f" id="fr-st" value="' + esc(f.sous_titre || '') + '"></label>' +
       '<div class="row2" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><label class="l">Jour<input class="f" type="date" id="fr-j" value="' + isoJour(d) + '"></label><label class="l">Début<input class="f" type="time" id="fr-hd" value="' + hhmm(d) + '"></label><label class="l">Fin<input class="f" type="time" id="fr-hf" value="' + (fi ? hhmm(fi) : '') + '"></label></div>' +
       '<label class="l">Lieu<input class="f" id="fr-lieu" value="' + esc(f.lieu || '') + '"></label><label class="l">Pour qui (texte affiché)<input class="f" id="fr-pub" value="' + esc(f.public_vise || '') + '"></label>' +
       '<label class="l">Visible dans l\'appli pour<select class="f" id="fr-cib">' + [['jeunes', 'Les familles de l\'école de tennis (jeunes)'], ['adultes', 'Les adultes'], ['tous', 'Tout le club']].map(function (x) { return '<option value="' + x[0] + '"' + ((f.public_cible || 'tous') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><span class="mut" style="font-weight:400">La tombola reste visible par tout le club. Le lien d\'invitation marche pour tout le monde.</span></label>' +
-      '<div class="row2" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><label class="l">Prix du ticket (€)<input class="f" type="number" step="0.5" min="0" id="fr-pt" value="' + f.prix_ticket + '"></label><label class="l">Tickets par carnet<input class="f" type="number" min="1" id="fr-cn" value="' + f.carnet_nb + '"></label><label class="l">Prix du carnet (€)<input class="f" type="number" step="0.5" min="0" id="fr-pc" value="' + f.prix_carnet + '"></label></div>' +
+      '<div class="row2" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"' + (adu ? ' hidden' : '') + '><label class="l">Prix du ticket (€)<input class="f" type="number" step="0.5" min="0" id="fr-pt" value="' + f.prix_ticket + '"></label><label class="l">Tickets par carnet<input class="f" type="number" min="1" id="fr-cn" value="' + f.carnet_nb + '"></label><label class="l">Prix du carnet (€)<input class="f" type="number" step="0.5" min="0" id="fr-pc" value="' + f.prix_carnet + '"></label></div>' +
       '<div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="l">Affiche (en haut de la page)' + (f.affiche_url ? '<img src="' + esc(img(f.affiche_url)) + '" alt="" style="width:110px;border-radius:8px;margin:4px 0">' : '') + '<input type="file" accept="image/*" id="fr-aff"></div>' +
-      '<div class="l">Flyer d\'invitation (partagé aux amis)' + (f.flyer_url ? '<img src="' + esc(img(f.flyer_url)) + '" alt="" style="width:110px;border-radius:8px;margin:4px 0">' : '<span class="mut" style="font-weight:400">Pas encore de flyer : l\'affiche est envoyée à la place.</span>') + '<input type="file" accept="image/*" id="fr-fly"></div></div>' +
+      '<div class="l"' + (adu ? ' hidden' : '') + '>Flyer d\'invitation (partagé aux amis)' + (f.flyer_url ? '<img src="' + esc(img(f.flyer_url)) + '" alt="" style="width:110px;border-radius:8px;margin:4px 0">' : '<span class="mut" style="font-weight:400">Pas encore de flyer : l\'affiche est envoyée à la place.</span>') + '<input type="file" accept="image/*" id="fr-fly"></div></div>' +
       '<button class="btn" id="fr-ok">Enregistrer</button></div>';
     $('fr-ok').onclick = function () {
       var b = this; b.disabled = true;
@@ -3446,6 +3447,7 @@ function vueFetes(m, arg) {
   var charger = function () { C().innerHTML = '<div class="skel"></div>'; ({ presences: presences, tombola: tombola, lots: lots, reglages: reglages })[F.onglet](); };
   q(sb.from('fetes').select('*').order('debut', { ascending: false })).then(function (l) {
     FT = l || [];
+    if (tombo) FT = FT.filter(function (f) { return f.public_cible !== 'adultes'; }); // la tombola n'est que dans les fêtes des familles
     fete = FT.filter(function (f) { return f.edition === F.ed; })[0] || (tombo ? FT[0] : null);
     if (!fete) { C().innerHTML = '<div class="card empty">' + (tombo ? 'Aucune fête avec tombola.' : 'Cette fête est introuvable.') + '</div>'; return; }
     onglets(); charger();
@@ -3468,10 +3470,10 @@ function hubEvenements(m) {
     };
     var h = '';
     FT.forEach(function (f) {
-      var n = P.filter(function (x) { return x.edition === f.edition && !x.annule; }).length, d = new Date(f.debut);
-      h += carte('#/fetes/' + encodeURIComponent(f.edition), '🎄', f.titre + ' ' + d.getFullYear(), esc(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + ' · qui vient, page des familles, flyer', n + ' famille' + (n > 1 ? 's' : '') + ' confirmée' + (n > 1 ? 's' : ''), '#b8862b');
+      var n = P.filter(function (x) { return x.edition === f.edition && !x.annule; }).length, d = new Date(f.debut), adu = f.public_cible === 'adultes';
+      h += carte('#/fetes/' + encodeURIComponent(f.edition), adu ? '🥂' : '🎄', f.titre + ' ' + d.getFullYear(), esc(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + (adu ? ' · qui vient, page des adhérents' : ' · qui vient, page des familles, flyer'), adu ? n + ' adhérent' + (n > 1 ? 's' : '') + ' confirmé' + (n > 1 ? 's' : '') : n + ' famille' + (n > 1 ? 's' : '') + ' confirmée' + (n > 1 ? 's' : ''), adu ? 'var(--navy)' : '#b8862b');
     });
-    if (FT.length) {
+    if (FT.some(function (f) { return f.public_cible !== 'adultes'; })) {
       var payes = T.filter(function (x) { return x.statut === 'paye'; }).reduce(function (s, x) { return s + x.nb; }, 0), res = T.filter(function (x) { return x.statut === 'reserve'; }).length;
       h += carte('#/fetes/tombola', '🎟️', 'Tombola', 'Tickets réservés et payés, vente sur place, lots et tirage', payes + ' ticket' + (payes > 1 ? 's' : '') + ' payé' + (payes > 1 ? 's' : '') + (res ? ' · ' + res + ' réservation' + (res > 1 ? 's' : '') + ' à encaisser' : ''));
     }
@@ -3481,11 +3483,35 @@ function hubEvenements(m) {
     h += carte('#/fetes/jeux', '🎾', 'Jeux et animations', 'One Point Slam, roi du terrain, montante-descendante, défis à points, avec écran du club en direct', 'Tirage au sort, malus, palmarès');
     h += carte('#/fetes/tournoi', '🏆', 'Tournois', 'Tournois et compétitions organisés au club', nb('tournoi'));
     h += carte('#/fetes/autre', '📌', 'Réunions et autres', 'Réunions et tout le reste', E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length ? E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length + ' à venir' : 'Rien de prévu');
+    h += '<button class="card hubc" id="hub-page" style="border-style:dashed;text-align:left;cursor:pointer;font:inherit;color:inherit"><span class="hube">➕</span><div style="min-width:0;flex:1"><b style="font-size:17px">Nouvelle page d\'événement</b><div class="mut small">Une page comme la fête de Noël (apéro des adultes, fête du club…) : qui vient, réglages, affiche.</div></div></button>';
     $('hub').innerHTML = h;
+    $('hub-page').onclick = nouvellePageFete;
+  });
+}
+// Crée une page d'événement (même fonctionnement que la fête de Noël) puis ouvre ses réglages
+function nouvellePageFete() {
+  panneau('Nouvelle page d\'événement', '<div class="stack" style="gap:12px">' +
+    '<label class="l">Titre<input class="f" id="np-t" maxlength="60" placeholder="Ex. Apéro de Noël"></label>' +
+    '<label class="l">Pour qui<select class="f" id="np-c"><option value="adultes">Les adultes</option><option value="jeunes">Les familles de l\'école de tennis (jeunes)</option><option value="tous">Tout le club</option></select></label>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><label class="l">Jour<input class="f" type="date" id="np-j"></label><label class="l">Début<input class="f" type="time" id="np-hd" value="19:00"></label><label class="l">Fin<input class="f" type="time" id="np-hf" value="20:30"></label></div>' +
+    '<label class="l">Lieu<input class="f" id="np-l" placeholder="Ex. Au club"></label>' +
+    '<p class="mut xs" style="margin:0">La page est créée masquée : tu complètes les réglages, puis tu coches « Page visible dans l\'appli ».</p>' +
+    '<button class="btn" id="np-ok">Créer la page</button></div>', function () {
+    $('np-ok').onclick = function () {
+      var t = $('np-t').value.trim(), j = $('np-j').value, b = this;
+      if (!t) return toast('Indique un titre');
+      if (!j) return toast('Indique le jour');
+      var slug = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + j.slice(0, 4);
+      var row = { edition: slug, titre: t, debut: combine(j, $('np-hd').value).toISOString(), fin: $('np-hf').value ? combine(j, $('np-hf').value).toISOString() : null, lieu: $('np-l').value.trim() || null, public_cible: $('np-c').value,
+        actif: false, inscription_ouverte: true, tombola_ouverte: false, prix_ticket: 2, carnet_nb: 5, prix_carnet: 8, tirage_publie: false };
+      b.disabled = true;
+      q(sb.from('fetes').insert(row).select('edition').single()).then(function (r) { fermer(); toast('Page créée : complète ses réglages'); A.feteOnglet = 'reglages'; location.hash = '#/fetes/' + encodeURIComponent(r.edition); })
+        .catch(function (e) { b.disabled = false; toast(/duplicate|unique/i.test(String(e && e.message)) ? 'Une page avec ce titre existe déjà cette année' : 'Création impossible'); });
+    };
   });
 }
 // ---------- Accueil de l'appli des familles : tout se règle ici, sans toucher au code ----------
-var ACC_BLOCS_G = [['presence', 'Présence au club', 'La pastille rouge / orange / vert'], ['rdv', 'Prochain rendez-vous', 'La prochaine séance ou le prochain événement'], ['arena', 'Mon CLOC\'ARENA', 'Classement et prochaine séance, seulement pour les familles dont un joueur est classé'], ['fete', 'Fête à la une', 'La carte Fête de Noël (quand une fête est en ligne)'], ['actu', 'Dernière actu', 'La dernière actu publiée'], ['tiles', 'Raccourcis', 'Les cases Double interne, Inscriptions…'], ['reseaux', 'Réseaux sociaux', 'Publications mises en avant, Instagram, Facebook'], ['partners', 'Partenaires', 'Les liens en bas de page']];
+var ACC_BLOCS_G = [['presence', 'Présence au club', 'La pastille rouge / orange / vert'], ['une', 'Annonces à la une', 'Les cartes que tu crées en haut de cette page (fête, tombola, apéro…)'], ['rdv', 'Prochain rendez-vous', 'La prochaine séance ou le prochain événement'], ['arena', 'Mon CLOC\'ARENA', 'Classement et prochaine séance, seulement pour les familles dont un joueur est classé'], ['fete', 'Fête à la une', 'La carte Fête de Noël (quand une fête est en ligne)'], ['actu', 'Dernière actu', 'La dernière actu publiée'], ['tiles', 'Raccourcis', 'Les cases Double interne, Inscriptions…'], ['reseaux', 'Réseaux sociaux', 'Publications mises en avant, Instagram, Facebook'], ['partners', 'Partenaires', 'Les liens en bas de page']];
 var ACC_TUILES_G = { double: 'Double interne', inscriptions: 'Inscriptions', reserver: 'Réserver un court (Ten\'Up)', cordage: 'Cordage', arena: 'CLOC\'ARENA', agenda: 'Mon agenda', annonces: 'Petites annonces', club: 'Infos du club', fete: 'Fête de Noël', aide: 'Aide' };
 var ACC_ICONES_G = [['pin', 'Repère'], ['trophy', 'Trophée'], ['cal', 'Calendrier'], ['check', 'Coche'], ['racket', 'Raquette'], ['people', 'Personnes'], ['chat', 'Bulle'], ['mail', 'Mail'], ['bell', 'Cloche'], ['club', 'Club'], ['user', 'Personne'], ['tool', 'Outil']];
 var ACC_DEF_G = {
@@ -3494,17 +3520,76 @@ var ACC_DEF_G = {
   tuiles: [{ type: 'double' }, { type: 'inscriptions' }, { type: 'reserver' }, { type: 'cordage' }],
   reseaux: { instagram: 'https://www.instagram.com/cloc.acheres.tennis', facebook: 'https://www.facebook.com/ClocaTennis/' },
   partenaires: [{ nom: 'Ecosport', lien: 'https://ecosport-tennis.fr/' }, { nom: 'Tecnifibre', lien: 'https://www.tecnifibre.com/?country=FR' }],
-  faq: []
+  faq: [],
+  une: []
 };
+// Annonces proposées tant que rien n'est enregistré (les mêmes que dans l'appli des familles)
+function uneDefautG(evts, fetes) {
+  var pa = (fetes || []).filter(function (f) { return f.actif && f.public_cible === 'adultes' && String(f.debut || '').slice(0, 10) === '2026-12-19'; })[0];
+  var ap = (evts || []).filter(function (e) { return e.type === 'animation' && /ap[ée]ro/i.test(e.titre || '') && String(e.debut || '').slice(0, 10) === '2026-12-19'; })[0];
+  return [
+    { id: 'noel-2026-fete', actif: true, titre: 'Fête de Noël du club', quand: 'Samedi 19 décembre · 14h – 16h', texte: 'Pour les enfants de l\'école de tennis et leurs familles : jeux, animation et goûter. Amis et invités bienvenus !', image: 'noel-2026.jpg', lien: '#/fete/noel-2026', lien_txt: 'Je confirme ma venue', couleur: 'ac', public: 'tous', debut: '', fin: '2026-12-19' },
+    { id: 'noel-2026-tombola', actif: true, titre: 'Tombola de Noël', quand: 'Résultats après la fête du 19 décembre', texte: '2 € le ticket, 5 tickets pour 8 €. Ouverte à tout le club : les gagnants sont prévenus dans l\'appli, même s\'ils ne sont pas là au tirage.', image: '', lien: '#/noel/tombola', lien_txt: 'Réserver mes tickets', couleur: 'ok', public: 'tous', debut: '', fin: '2026-12-19' },
+    { id: 'noel-2026-apero', actif: true, titre: 'Apéro de Noël des adultes', quand: 'Samedi 19 décembre · 19h – 20h30', texte: 'Un moment entre adhérents adultes, avec des mini-jeux sur le terrain. Dis-nous si tu viens !', image: '', lien: pa ? '#/fete/' + pa.edition : ap ? '#/evenement/' + ap.id : '#/club/evenements', lien_txt: pa ? 'Je confirme ma venue' : 'Je réponds', couleur: 'navy', public: 'adultes', debut: '', fin: '2026-12-19' }
+  ];
+}
+var UNE_COUL_G = [['ac', 'Terre battue', 'var(--ac)'], ['navy', 'Bleu', 'var(--navy)'], ['ok', 'Vert', 'var(--ok)'], ['sun', 'Doré', '#b8862b']];
+var UNE_PUBLIC_G = [['tous', 'Tout le club'], ['jeunes', 'Familles de l\'école de tennis'], ['adultes', 'Adhérents adultes']];
+function uneStatutG(a) {
+  var auj = new Date(), iso = auj.getFullYear() + '-' + ('0' + (auj.getMonth() + 1)).slice(-2) + '-' + ('0' + auj.getDate()).slice(-2);
+  var jm = function (d) { return d.split('-').reverse().slice(0, 2).join('/'); };
+  if (a.actif === false) return ['Masquée', 'var(--mut)'];
+  if (a.debut && a.debut > iso) return ['Programmée dès le ' + jm(a.debut), 'var(--navy)'];
+  if (a.fin && a.fin < iso) return ['Terminée', 'var(--mut)'];
+  return [a.fin ? 'En ligne jusqu\'au ' + jm(a.fin) : 'En ligne', 'var(--ok)'];
+}
 function vueAccueilApp(m) {
-  m.innerHTML = entete('Accueil de l\'appli', 'Le mot du club, l\'ordre des blocs, les raccourcis, les réseaux, les partenaires et les questions fréquentes de la page Aide. Rien ne change pour les familles tant que tu n\'as pas enregistré.', '<a class="btn sm line" href="../#/accueil">Voir l\'accueil</a>') + '<div id="ac-l"><div class="skel"></div></div>';
-  var E = null;
+  m.innerHTML = entete('Accueil de l\'appli', 'Les annonces à la une, le mot du club, l\'ordre des blocs, les raccourcis, les réseaux, les partenaires et les questions fréquentes de la page Aide. Rien ne change pour les familles tant que tu n\'as pas enregistré.', '<a class="btn sm line" href="../#/accueil">Voir l\'accueil</a>') + '<div id="ac-l"><div class="skel"></div></div>';
+  var E = null, UO = -1, LIENS = { evts: [], fetes: [] };
   var copie = function (o) { return JSON.parse(JSON.stringify(o)); };
   var deplacer = function (l, i, d) { var j = i + d; if (j < 0 || j >= l.length) return; var x = l[i]; l[i] = l[j]; l[j] = x; };
   var fleches = function (cle, i, n) { return '<button class="btn sm ghost" data-up="' + cle + '|' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="Monter">↑</button><button class="btn sm ghost" data-dn="' + cle + '|' + i + '"' + (i === n - 1 ? ' disabled' : '') + ' aria-label="Descendre">↓</button>'; };
+  var imgG = function (u) { return !u ? '' : /^https?:\/\//i.test(u) ? u : '../' + String(u).replace(/^\/?/, ''); };
+  var optionsLien = function () {
+    var o = [['', 'Pas de bouton']];
+    LIENS.fetes.forEach(function (f) { o.push(['#/fete/' + f.edition, 'Page : ' + f.titre + (f.actif ? '' : ' (masquée)')]); });
+    if (LIENS.fetes.some(function (f) { return f.public_cible !== 'adultes'; })) o.push(['#/noel/tombola', 'Tombola de la fête']);
+    LIENS.evts.forEach(function (e) { o.push(['#/evenement/' + e.id, 'Agenda : ' + e.titre + ' (' + new Date(e.debut).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ')']); });
+    o.push(['#/inscriptions', 'Inscriptions'], ['#/club/evenements', 'Événements du club'], ['#/arena', 'CLOC\'ARENA'], ['#/cordage', 'Cordage'], ['#/club/annonces', 'Petites annonces']);
+    return o;
+  };
+  var formUne = function (a, i) {
+    var o = optionsLien(), connu = o.some(function (x) { return x[0] === (a.lien || ''); });
+    return '<div class="stack" style="gap:10px;padding:12px;border:1px solid var(--bd);border-radius:12px;margin-top:4px">' +
+      '<label class="check" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-un="' + i + '|actif"' + (a.actif !== false ? ' checked' : '') + '> Afficher cette annonce</label>' +
+      '<label class="l">Titre<input class="f" data-un="' + i + '|titre" maxlength="70" value="' + esc(a.titre || '') + '" placeholder="Ex. Tombola de Noël"></label>' +
+      '<label class="l">Date et horaire, en une ligne (facultatif)<input class="f" data-un="' + i + '|quand" maxlength="70" value="' + esc(a.quand || '') + '" placeholder="Ex. Samedi 19 décembre · 14h – 16h"></label>' +
+      '<label class="l">Texte<textarea class="f" data-un="' + i + '|texte" rows="3" maxlength="400">' + esc(a.texte || '') + '</textarea></label>' +
+      '<div class="l">Image (facultatif)<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' + (a.image ? '<img src="' + esc(imgG(a.image)) + '" alt="" style="width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:8px">' : '') +
+      '<label class="btn sm line" style="cursor:pointer">' + (a.image ? 'Changer l\'image' : 'Ajouter une image') + '<input type="file" accept="image/*" data-uimg="' + i + '" hidden></label>' + (a.image ? '<button class="btn sm ghost" data-uimgx="' + i + '">Retirer</button>' : '') + '</div></div>' +
+      '<div class="ac-2"><label class="l">Le bouton mène à<select class="f" data-ulien="' + i + '">' + o.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (connu && x[0] === (a.lien || '') ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '<option value="autre"' + (connu ? '' : ' selected') + '>Autre lien…</option></select></label>' +
+      '<label class="l">Texte du bouton<input class="f" data-un="' + i + '|lien_txt" maxlength="30" value="' + esc(a.lien_txt || '') + '" placeholder="En savoir plus"></label></div>' +
+      (connu ? '' : '<label class="l">Lien<input class="f" data-un="' + i + '|lien" value="' + esc(a.lien || '') + '" placeholder="https://… ou #/page"></label>') +
+      '<p class="mut xs" style="margin:0">Si le bouton mène à un événement de l\'agenda qui demande Présent / Absent, les familles concernées répondent directement sur la carte.</p>' +
+      '<div class="ac-2"><label class="l">Pour qui<select class="f" data-un="' + i + '|public">' + UNE_PUBLIC_G.map(function (x) { return '<option value="' + x[0] + '"' + ((a.public || 'tous') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
+      '<div class="l">Couleur<div class="chips">' + UNE_COUL_G.map(function (c) { return '<button class="chip' + ((a.couleur || 'ac') === c[0] ? ' on' : '') + '" data-ucoul="' + i + '|' + c[0] + '"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c[2] + ';margin-right:6px;vertical-align:-1px"></span>' + c[1] + '</button>'; }).join('') + '</div></div></div>' +
+      '<div class="ac-2"><label class="l">À partir du (facultatif)<input class="f" type="date" data-un="' + i + '|debut" value="' + esc(a.debut || '') + '"></label><label class="l">Jusqu\'au, inclus (facultatif)<input class="f" type="date" data-un="' + i + '|fin" value="' + esc(a.fin || '') + '"></label></div>' +
+      '<div class="chips"><button class="btn sm" data-uok="' + i + '">Fermer</button><button class="btn sm line" data-udup="' + i + '">Dupliquer</button><button class="btn sm ko" data-ux="' + i + '">Supprimer</button></div></div>';
+  };
   var dessiner = function () {
     var M = E.mot;
-    var h = '<div class="card stack" style="margin-bottom:14px"><div class="sect" style="margin-top:0">Mot du club</div>' +
+    var h = '<div class="card stack" style="margin-bottom:14px"><div class="sect" style="margin-top:0">Annonces à la une</div>' +
+      '<p class="mut small" style="margin:0">Des cartes en haut de l\'accueil (fête, tombola, apéro, stage…). Chacune s\'affiche seule entre ses dates, et seulement pour le public choisi. Sur téléphone, elles défilent de gauche à droite. N\'oublie pas d\'enregistrer en bas de la page.</p><div class="list">' +
+      (E.une.length ? E.une.map(function (a, i) {
+        var st = uneStatutG(a);
+        return '<div class="it" style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;gap:10px;align-items:center;justify-content:space-between;width:100%">' +
+          '<div style="display:flex;gap:10px;align-items:center;min-width:0">' + (a.image ? '<img src="' + esc(imgG(a.image)) + '" alt="" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex:none">' : '<span style="width:6px;height:36px;border-radius:3px;flex:none;background:' + ((UNE_COUL_G.filter(function (c) { return c[0] === (a.couleur || 'ac'); })[0] || UNE_COUL_G[0])[2]) + '"></span>') +
+          '<span style="min-width:0"><b>' + esc(a.titre || 'Nouvelle annonce') + '</b><span class="xs" style="display:block;color:' + st[1] + ';font-weight:600">' + esc(st[0]) + ' · ' + esc((UNE_PUBLIC_G.filter(function (x) { return x[0] === (a.public || 'tous'); })[0] || UNE_PUBLIC_G[0])[1]) + '</span></span></div>' +
+          '<div class="chips" style="flex:none">' + fleches('une', i, E.une.length) + '<button class="btn sm line" data-ued="' + i + '">' + (UO === i ? 'Fermer' : 'Modifier') + '</button></div></div>' +
+          (UO === i ? formUne(a, i) : '') + '</div>';
+      }).join('') : '<div class="it mut small">Aucune annonce pour l\'instant.</div>') + '</div>' +
+      '<div class="chips"><button class="btn sm line" id="ac-uadd">+ Nouvelle annonce</button></div></div>';
+    h += '<div class="card stack" style="margin-bottom:14px"><div class="sect" style="margin-top:0">Mot du club</div>' +
       '<p class="mut small" style="margin:0">Un bandeau en haut de l\'accueil, pour un message du moment (reprise des cours, fermeture, bonne année…).</p>' +
       '<label class="check" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-mot="actif"' + (M.actif ? ' checked' : '') + '> Afficher le mot du club</label>' +
       '<label class="l">Titre<input class="f" data-mot="titre" maxlength="80" value="' + esc(M.titre) + '" placeholder="Ex. Belle rentrée à tous !"></label>' +
@@ -3534,10 +3619,20 @@ function vueAccueilApp(m) {
     lier();
   };
   var lier = function () {
+    all('[data-ued]').forEach(function (b) { b.onclick = function () { var i = +b.dataset.ued; UO = UO === i ? -1 : i; dessiner(); }; });
+    all('[data-uok]').forEach(function (b) { b.onclick = function () { UO = -1; dessiner(); }; });
+    all('[data-un]').forEach(function (x) { x.oninput = x.onchange = function () { var v = x.dataset.un.split('|'); E.une[+v[0]][v[1]] = x.type === 'checkbox' ? x.checked : x.value; if (x.type === 'checkbox' || x.type === 'date' || x.tagName === 'SELECT') dessiner(); }; });
+    all('[data-ulien]').forEach(function (x) { x.onchange = function () { var a = E.une[+x.dataset.ulien]; a.lien = x.value === 'autre' ? (/^https?:/.test(a.lien || '') ? a.lien : 'https://') : x.value; dessiner(); }; });
+    all('[data-ucoul]').forEach(function (b) { b.onclick = function () { var v = b.dataset.ucoul.split('|'); E.une[+v[0]].couleur = v[1]; dessiner(); }; });
+    all('[data-uimgx]').forEach(function (b) { b.onclick = function () { E.une[+b.dataset.uimgx].image = ''; dessiner(); }; });
+    all('[data-uimg]').forEach(function (x) { x.onchange = function () { var i = +x.dataset.uimg, f = x.files[0]; if (!f) return; toast('Envoi de l\'image…'); envoyerPhoto(f, 'fetes').then(function (u) { E.une[i].image = u; dessiner(); toast('Image ajoutée : pense à enregistrer'); }).catch(function () { toast('Envoi de l\'image impossible'); }); }; });
+    all('[data-udup]').forEach(function (b) { b.onclick = function () { var i = +b.dataset.udup, c = copie(E.une[i]); c.id = 'u' + Date.now(); c.titre = c.titre + ' (copie)'; c.actif = false; E.une.splice(i + 1, 0, c); UO = i + 1; dessiner(); }; });
+    all('[data-ux]').forEach(function (b) { b.onclick = function () { var i = +b.dataset.ux; if (!confirm('Supprimer l\'annonce « ' + (E.une[i].titre || 'sans titre') + ' » ?')) return; E.une.splice(i, 1); UO = -1; dessiner(); }; });
+    $('ac-uadd').onclick = function () { E.une.unshift({ id: 'u' + Date.now(), actif: true, titre: '', quand: '', texte: '', image: '', lien: '', lien_txt: '', couleur: 'ac', public: 'tous', debut: '', fin: '' }); UO = 0; dessiner(); var t = document.querySelector('[data-un="0|titre"]'); if (t) t.focus(); };
     all('[data-mot]').forEach(function (x) { x.oninput = x.onchange = function () { E.mot[x.dataset.mot] = x.type === 'checkbox' ? x.checked : x.value; }; });
     all('[data-coul]').forEach(function (b) { b.onclick = function () { E.mot.couleur = b.dataset.coul; dessiner(); }; });
     all('[data-bloc]').forEach(function (x) { x.onchange = function () { E.blocs[+x.dataset.bloc].on = x.checked; }; });
-    all('[data-up],[data-dn]').forEach(function (b) { b.onclick = function () { var v = (b.dataset.up || b.dataset.dn).split('|'); deplacer(E[v[0]], +v[1], b.dataset.up ? -1 : 1); dessiner(); }; });
+    all('[data-up],[data-dn]').forEach(function (b) { b.onclick = function () { var v = (b.dataset.up || b.dataset.dn).split('|'), d = b.dataset.up ? -1 : 1; deplacer(E[v[0]], +v[1], d); if (v[0] === 'une') UO = -1; dessiner(); }; });
     all('[data-tx]').forEach(function (b) { b.onclick = function () { E.tuiles.splice(+b.dataset.tx, 1); dessiner(); }; });
     all('[data-tl]').forEach(function (x) { x.oninput = x.onchange = function () { var v = x.dataset.tl.split('|'); E.tuiles[+v[0]][v[1]] = x.value; }; });
     $('ac-add').onchange = function () { var k = this.value; if (!k) return; E.tuiles.push(k === 'lien' ? { type: 'lien', titre: '', sous: '', lien: '', icone: 'pin' } : { type: k }); dessiner(); };
@@ -3556,12 +3651,20 @@ function vueAccueilApp(m) {
       v.tuiles = v.tuiles.filter(function (t) { if (t.type !== 'lien') return true; if (!String(t.titre || '').trim() || !String(t.lien || '').trim()) { err = err || 'Un lien personnalisé n\'a pas de titre ou de lien'; } return true; });
       v.partenaires = v.partenaires.filter(function (x) { return String(x.nom || '').trim(); });
       v.faq = v.faq.filter(function (x) { return String(x.q || '').trim(); });
+      v.une.forEach(function (a) { a.titre = String(a.titre || '').trim(); a.texte = String(a.texte || '').trim(); if (!a.titre) err = err || 'Une annonce à la une n\'a pas de titre'; if (a.debut && a.fin && a.fin < a.debut) err = err || 'L\'annonce « ' + a.titre + ' » finit avant de commencer'; if (a.lien === 'https://') a.lien = ''; });
       if (err) return toast(err);
       var b = this; b.disabled = true;
-      q(sb.from('reglages_publics').upsert({ cle: 'accueil', valeur: v, maj_le: new Date().toISOString() })).then(function () { b.disabled = false; toast('Accueil enregistré : visible tout de suite dans l\'appli'); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
+      q(sb.from('reglages_publics').upsert({ cle: 'accueil', valeur: v, maj_le: new Date().toISOString() })).then(function () { b.disabled = false; UO = -1; dessiner(); toast('Accueil enregistré : visible tout de suite dans l\'appli'); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
     };
   };
-  q(sb.from('reglages_publics').select('valeur').eq('cle', 'accueil').maybeSingle()).then(function (r) {
+  Promise.all([
+    q(sb.from('reglages_publics').select('valeur').eq('cle', 'accueil').maybeSingle()),
+    q(sb.from('evenements').select('id, titre, debut, type, statut').gte('debut', new Date().toISOString()).order('debut').limit(60)).catch(function () { return []; }),
+    q(sb.from('fetes').select('edition, titre, actif, public_cible, debut')).catch(function () { return []; })
+  ]).then(function (res) {
+    var r = res[0];
+    LIENS.evts = (res[1] || []).filter(function (e) { return e.statut !== 'annule' && e.type !== 'seance'; });
+    LIENS.fetes = res[2] || [];
     var c = (r && r.valeur) || {}, d = copie(ACC_DEF_G);
     E = {
       mot: Object.assign(d.mot, c.mot || {}),
@@ -3569,9 +3672,10 @@ function vueAccueilApp(m) {
       tuiles: Array.isArray(c.tuiles) ? c.tuiles : d.tuiles,
       reseaux: Object.assign(d.reseaux, c.reseaux || {}),
       partenaires: Array.isArray(c.partenaires) ? c.partenaires : d.partenaires,
-      faq: Array.isArray(c.faq) ? c.faq : d.faq
+      faq: Array.isArray(c.faq) ? c.faq : d.faq,
+      une: Array.isArray(c.une) ? c.une : uneDefautG(res[1] || [], res[2] || [])
     };
-    ACC_BLOCS_G.forEach(function (x) { if (!E.blocs.some(function (b) { return b.k === x[0]; })) E.blocs.push({ k: x[0], on: true }); });
+    ACC_BLOCS_G.forEach(function (x) { if (!E.blocs.some(function (b) { return b.k === x[0]; })) { if (x[0] === 'une') E.blocs.unshift({ k: 'une', on: true }); else E.blocs.push({ k: x[0], on: true }); } });
     dessiner();
   }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les réglages de l\'accueil.</div>'; });
 }

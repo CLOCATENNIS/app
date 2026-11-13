@@ -352,7 +352,7 @@ function nomAffiche() {
 // ---------- Accueil ----------
 
 // ---------- Accueil réglable depuis la gestion (Communication → Accueil de l'appli) ----------
-var ACC_BLOCS = [['presence', 'Présence au club'], ['rdv', 'Prochain rendez-vous'], ['arena', 'Mon CLOC\'ARENA'], ['fete', 'Fête à la une'], ['actu', 'Dernière actu'], ['tiles', 'Raccourcis'], ['reseaux', 'Réseaux sociaux'], ['partners', 'Partenaires']];
+var ACC_BLOCS = [['presence', 'Présence au club'], ['une', 'Annonces à la une'], ['rdv', 'Prochain rendez-vous'], ['arena', 'Mon CLOC\'ARENA'], ['fete', 'Fête à la une'], ['actu', 'Dernière actu'], ['tiles', 'Raccourcis'], ['reseaux', 'Réseaux sociaux'], ['partners', 'Partenaires']];
 var ACC_TUILES = {
   double: ['Double interne', 'trophy', '#/double'], inscriptions: ['Inscriptions', 'check', '#/inscriptions'], reserver: ['Réserver un court', 'cal', ''],
   cordage: ['Cordage', 'racket', '#/cordage'], arena: ['CLOC\'ARENA', 'trophy', '#/arena'], agenda: ['Mon agenda', 'cal', '#/agenda'],
@@ -369,13 +369,14 @@ var ACC_DEF = {
 function accueilCfg() {
   var c = (S.reglages && S.reglages.accueil) || {}, d = ACC_DEF;
   var blocs = Array.isArray(c.blocs) ? c.blocs.filter(function (b) { return b && ACC_BLOCS.some(function (x) { return x[0] === b.k; }); }) : [];
-  ACC_BLOCS.forEach(function (x) { if (!blocs.some(function (b) { return b.k === x[0]; })) blocs.push({ k: x[0], on: true }); }); // un bloc ajouté plus tard apparaît par défaut
+  ACC_BLOCS.forEach(function (x) { if (!blocs.some(function (b) { return b.k === x[0]; })) { if (x[0] === 'une') blocs.unshift({ k: 'une', on: true }); else blocs.push({ k: x[0], on: true }); } }); // un bloc ajouté plus tard apparaît par défaut (les annonces à la une en haut)
   return {
     mot: Object.assign({}, d.mot, c.mot || {}), blocs: blocs,
     tuiles: Array.isArray(c.tuiles) ? c.tuiles.filter(function (t) { return t && (ACC_TUILES[t.type] || (t.type === 'lien' && t.titre && t.lien)); }) : d.tuiles,
     reseaux: Object.assign({}, d.reseaux, c.reseaux || {}),
     partenaires: Array.isArray(c.partenaires) ? c.partenaires.filter(function (x) { return x && x.nom; }) : d.partenaires,
-    faq: Array.isArray(c.faq) ? c.faq.filter(function (x) { return x && x.q; }) : d.faq
+    faq: Array.isArray(c.faq) ? c.faq.filter(function (x) { return x && x.q; }) : d.faq,
+    une: Array.isArray(c.une) ? c.une.filter(function (x) { return x && x.titre; }) : uneParDefaut()
   };
 }
 // Accueil personnalisé : chaque compte choisit ses raccourcis, directement sur l'accueil (crayon ✏️) ou dans Profil → Mon accueil.
@@ -576,6 +577,62 @@ function motDuClub(cfg) {
     (m.titre ? '<b style="font-size:18px;line-height:1.25">' + esc(m.titre) + '</b>' : '') + (m.texte ? '<span class="small" style="white-space:pre-line;line-height:1.5">' + esc(m.texte) + '</span>' : '') +
     (lien ? '<a class="btn" href="' + esc(lien) + '"' + lienExterne(lien) + ' style="align-self:flex-start;margin-top:4px;background:' + (clair ? 'var(--navy)' : '#fff') + ';color:' + (clair ? '#fff' : 'var(--navy)') + '">' + esc(m.lien_txt || 'En savoir plus') + '</a>' : '') + '</section>';
 }
+// ---------- Annonces à la une : des cartes réglées dans la gestion (Accueil de l'appli), sans toucher au code ----------
+// Tant que le club n'a rien enregistré, on propose les annonces de Noël 2026 (elles disparaissent seules après le 19 décembre).
+function uneParDefaut() {
+  var ap = (S.evts || []).filter(function (e) { return e.type === 'animation' && /ap[ée]ro/i.test(e.titre || '') && isoJour(new Date(e.debut)) === '2026-12-19'; })[0];
+  var pa = (S.fetes || []).filter(function (f) { return feteAdultes(f) && isoJour(new Date(f.debut)) === '2026-12-19'; })[0];
+  return [
+    { id: 'noel-2026-fete', actif: true, titre: 'Fête de Noël du club', quand: 'Samedi 19 décembre · 14h – 16h', texte: 'Pour les enfants de l\'école de tennis et leurs familles : jeux, animation et goûter. Amis et invités bienvenus !', image: 'noel-2026.jpg', lien: '#/fete/noel-2026', lien_txt: 'Je confirme ma venue', couleur: 'ac', public: 'tous', debut: '', fin: '2026-12-19' },
+    { id: 'noel-2026-tombola', actif: true, titre: 'Tombola de Noël', quand: 'Résultats après la fête du 19 décembre', texte: '2 € le ticket, 5 tickets pour 8 €. Ouverte à tout le club : les gagnants sont prévenus dans l\'appli, même s\'ils ne sont pas là au tirage.', image: '', lien: '#/noel/tombola', lien_txt: 'Réserver mes tickets', couleur: 'ok', public: 'tous', debut: '', fin: '2026-12-19' },
+    { id: 'noel-2026-apero', actif: true, titre: 'Apéro de Noël des adultes', quand: 'Samedi 19 décembre · 19h – 20h30', texte: 'Un moment entre adhérents adultes, avec des mini-jeux sur le terrain. Dis-nous si tu viens !', image: '', lien: pa ? '#/fete/' + pa.edition : ap ? '#/evenement/' + ap.id : '#/club/evenements', lien_txt: pa ? 'Je confirme ma venue' : 'Je réponds', couleur: 'navy', public: 'adultes', debut: '', fin: '2026-12-19' }
+  ];
+}
+function uneVisibles(cfg) {
+  var auj = isoJour(new Date());
+  return (cfg.une || []).filter(function (a) {
+    if (a.actif === false || !a.titre) return false;
+    if (a.debut && a.debut > auj) return false;
+    if (a.fin && a.fin < auj) return false;
+    return feteConcerne({ public_cible: a.public || 'tous' });
+  });
+}
+// Ce que les annonces couvrent déjà : la carte Fête et la carte « Rendez-vous du club » ne s'affichent pas en double
+function uneCouvre(l) {
+  var c = { fetes: {}, evts: {} };
+  l.forEach(function (a) {
+    var m = String(a.lien || '').match(/^#\/(fete|noel|evenement)(?:\/([^\/?#]+))?/);
+    if (!m) return;
+    if (m[1] === 'evenement' && m[2]) c.evts[decodeURIComponent(m[2])] = 1;
+    else { var f = m[1] === 'noel' ? feteActive() : (S.fetes || []).filter(function (x) { return x.edition === decodeURIComponent(m[2] || ''); })[0]; if (f) c.fetes[f.edition] = 1; }
+  });
+  return c;
+}
+function carteUne(a) {
+  var coul = { ac: 'var(--ac)', navy: 'var(--navy)', ok: 'var(--ok)', sun: '#b8862b' }[a.couleur] || 'var(--ac)';
+  var lien = lienSur(a.lien), bouton = '', extra = '';
+  var mf = String(a.lien || '').match(/^#\/(fete|noel)(?:\/([^\/?#]+))?/), me = String(a.lien || '').match(/^#\/evenement\/([^\/?#]+)/);
+  if (mf && !/tombola/.test(a.lien)) {
+    var f = mf[1] === 'noel' ? feteActive() : (S.fetes || []).filter(function (x) { return x.edition === decodeURIComponent(mf[2] || ''); })[0];
+    if (f && localStorageGet('cloca-fete-ok-' + f.edition)) bouton = '<a class="btn" href="' + esc(lien) + '" style="align-self:flex-start;background:var(--ok)">Ta venue est confirmée ✅</a>';
+  }
+  if (me) {
+    var ev = (S.evts || []).filter(function (x) { return x.id === decodeURIComponent(me[1]); })[0];
+    var qui = ev && peutRepondre(ev) ? eligibles(ev) : [];
+    if (qui.length) extra = '<span class="small">Tu viens ?</span>' + boutonsPart(ev, qui);
+  }
+  if (!bouton && lien && !extra) bouton = '<a class="btn" href="' + esc(lien) + '"' + lienExterne(lien) + ' style="align-self:flex-start;background:' + coul + '">' + esc(a.lien_txt || 'En savoir plus') + '</a>';
+  var img = a.image ? '<a class="une-img" href="' + esc(lien || '#/accueil') + '"' + lienExterne(lien) + '><img src="' + esc(feteImg(a.image)) + '" alt="" loading="lazy"></a>' : '';
+  return '<section class="card une-carte' + (img ? ' avec-img' : '') + '" style="box-shadow:inset 0 5px 0 ' + coul + '">' + img +
+    '<div class="stack" style="gap:6px;min-width:0;flex:1"><b style="font-size:17px;line-height:1.25">' + esc(a.titre) + '</b>' +
+    (a.quand ? '<span class="small" style="color:' + coul + ';font-weight:700">' + esc(a.quand) + '</span>' : '') +
+    (a.texte ? '<span class="mut small" style="white-space:pre-line;line-height:1.5">' + esc(a.texte) + '</span>' : '') +
+    extra + (extra && lien ? '<a class="small" href="' + esc(lien) + '" style="color:' + coul + '">' + esc(a.lien_txt && !/r[ée]ponds/i.test(a.lien_txt) ? a.lien_txt : 'Voir le détail') + ' →</a>' : bouton) + '</div></section>';
+}
+function blocUne(l) {
+  if (!l.length) return '';
+  return '<div class="une' + (l.length > 1 ? ' plusieurs' : '') + '" aria-label="Annonces à la une">' + l.map(carteUne).join('') + '</div>';
+}
 function tuilesAccueil(cfg, dyn) {
   var l = cfg.tuiles; if (!l.length) return '';
   return '<div class="grid2">' + l.map(function (t) {
@@ -593,7 +650,8 @@ function pageAccueil() {
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
     selFamille(true) + '</div></div><main>';
   var tDisc = ''; // les discussions sont dans l'onglet Messages
-  var top = h, P = { presence: '', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', fete: carteFeteAccueil() + carteAnimAccueil(), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
+  var cfg = accueilPerso(accueilCfg()), une = uneVisibles(cfg), couvre = uneCouvre(une);
+  var top = h, P = { presence: '', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', une: blocUne(une), fete: carteFeteAccueil(couvre.fetes) + carteAnimAccueil(couvre.evts), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
   var nl = nonLus();
   if (nl.length) P.msg = '<a class="card stack" href="#/' + (nl.length === 1 ? 'message/' + nl[0].messages.id : 'messages') + '" style="gap:4px;text-decoration:none;color:inherit;border-left:4px solid var(--ac)"><span class="eyebrow">' + (nl.length === 1 ? 'Nouveau message' : nl.length + ' nouveaux messages') + '</span><b>' + esc(nl[0].messages.titre) + '</b><span class="mut small">' + esc(nl[0].messages.expediteur) + (nl[0].pour ? ' · pour ' + esc(nl[0].pour) : '') + '</span></a>';
   if (urgent) P.urgent = '<div class="alert urgent">' + ic('alert', 20, '#fff') + '<div class="stack"><b>' + esc(urgent.titre) + '</b>' + (urgent.texte ? '<span class="small" style="color:#fde3dc">' + esc(urgent.texte) + '</span>' : '') + '</div></div>';
@@ -605,10 +663,9 @@ function pageAccueil() {
   else prochain = (S.evts || []).filter(function (e) { return e.public && new Date(e.fin || e.debut) > now && e.statut !== 'annule'; }).map(function (e) { return { d: new Date(e.debut), f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, gs: evGroupes(e).gs, qui: [], id: e.id }; })[0];
   P.rdv = caseRdv(prochain);
   var rep = prochain && prochain.id ? boutonsPart((S.evts || []).filter(function (x) { return x.id === prochain.id; })[0] || {}, prochain.qui) : '';
-  if (prochain && prochain.id && P.fete.indexOf('#/evenement/' + prochain.id + '"') >= 0) rep = ''; // déjà dans la carte « Rendez-vous du club »
+  if (prochain && prochain.id && (P.fete + P.une).indexOf('#/evenement/' + prochain.id + '"') >= 0) rep = ''; // déjà dans la carte « Rendez-vous du club »
   P.repRdv = rep ? '<section class="card stack" style="gap:6px;padding:12px 14px"><span class="small">Tu viens à <b>' + esc(prochain.titre) + '</b> ?</span>' + rep + '</section>' : '';
 
-  var cfg = accueilPerso(accueilCfg());
   P.arena = carteArenaAccueil();
   P.tiles = zoneRaccourcis(cfg, dynRaccourcis());
   P.mot = motDuClub(cfg);
@@ -634,7 +691,7 @@ function pageAccueil() {
   P.urgent += S.user && S.pers.length ? '<div id="jeux-une"></div>' : '';
   var auto = P.msg + P.disc + P.qst + P.urgent, ordre = cfg.blocs.filter(function (b) { return b.on && b.k !== 'presence' && b.k !== 'rdv' && b.k !== 'partners'; }).map(function (b) { return b.k; });
   if (vueLarge()) {
-    var col1 = ['fete', 'actu'], c1 = P.presence, c2 = '';
+    var col1 = ['une', 'fete', 'actu'], c1 = P.presence, c2 = '';
     ordre.forEach(function (k) { if (col1.indexOf(k) >= 0) c1 += P[k]; else c2 += P[k]; });
     return top + P.mot + '<div class="dk-home">' + (auto ? '<div class="dk-top">' + P.urgent + P.msg + P.disc + P.qst + '</div>' : '') +
       '<div class="dk-col">' + c1 + P.login + P.install + '</div><div class="dk-col">' + c2 + '</div></div>' + P.partners + signature + '</main>';
@@ -3698,7 +3755,8 @@ function remplirBureau() {
 // Visible par tout le monde, avec ou sans compte. Le téléphone garde un « jeton » pour retrouver sa réponse.
 function feteActive() {
   var now = Date.now();
-  return (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut).getTime() > now - 2 * 864e5; })[0] || null;
+  // La fête des familles d'abord (celle de la tombola) ; une page « adultes » (apéro…) passe par les annonces à la une
+  return (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut).getTime() > now - 2 * 864e5; }).sort(function (x, y) { return (feteAdultes(x) ? 1 : 0) - (feteAdultes(y) ? 1 : 0); })[0] || null;
 }
 function feteImg(u) { return !u ? '' : /^https?:\/\//i.test(u) ? u : u.replace(/^\/?/, ''); }
 function feteLien(f) { return location.origin + location.pathname.replace(/[^\/]*$/, '') + '#/fete/' + encodeURIComponent(f.edition); }
@@ -3726,10 +3784,10 @@ function feteConcerne(f) {
   return S.pers.some(function (p) { return c === 'jeunes' ? p.profil === 'jeune' : p.profil !== 'jeune'; });
 }
 // Animations du club dans les 30 jours qui demandent Présent / Absent (ex. Apéro de Noël des adultes) : carte à la une pour les personnes concernées
-function carteAnimAccueil() {
+function carteAnimAccueil(sauf) {
   if (!S.user || !S.pers.length) return '';
   var now = new Date(), lim = new Date(now.getTime() + 30 * 864e5);
-  return (S.evts || []).filter(function (ev) { var d = new Date(ev.debut); return ev.type === 'animation' && d > now && d < lim && peutRepondre(ev) && eligibles(ev).length; }).map(function (ev) {
+  return (S.evts || []).filter(function (ev) { var d = new Date(ev.debut); return ev.type === 'animation' && d > now && d < lim && peutRepondre(ev) && eligibles(ev).length && !(sauf && sauf[ev.id]); }).map(function (ev) {
     var d = new Date(ev.debut), fin = ev.fin ? new Date(ev.fin) : null, qui = eligibles(ev);
     return '<section class="card stack anim-carte" style="gap:8px;border:2px solid var(--ac)"><span class="eyebrow" style="color:var(--ac)">🥂 Rendez-vous du club</span>' +
       '<a href="#/evenement/' + esc(ev.id) + '" style="text-decoration:none;color:inherit"><b style="font-size:18px;line-height:1.2">' + esc(ev.titre) + '</b></a>' +
@@ -3737,13 +3795,13 @@ function carteAnimAccueil() {
       '<span class="small">Tu viens ?</span>' + boutonsPart(ev, qui) + '</section>';
   }).join('');
 }
-function carteFeteAccueil() {
-  var f = feteActive(); if (!f || !feteConcerne(f)) return '';
+function carteFeteAccueil(sauf) {
+  var f = feteActive(); if (!f || !feteConcerne(f) || (sauf && sauf[f.edition])) return '';
   var d = new Date(f.debut), fin = f.fin ? new Date(f.fin) : null;
   var rep = localStorageGet('cloca-fete-ok-' + f.edition);
   return '<a class="card fete-carte" href="#/fete/' + esc(f.edition) + '">' +
     (f.affiche_url ? '<img src="' + esc(feteImg(f.affiche_url)) + '" alt="" loading="lazy">' : '') +
-    '<div class="stack" style="gap:4px;flex:1;min-width:0"><span class="eyebrow" style="color:var(--ac)">🎄 ' + esc(f.titre) + '</span>' +
+    '<div class="stack" style="gap:4px;flex:1;min-width:0"><span class="eyebrow" style="color:var(--ac)">' + (feteAdultes(f) ? '🥂 ' : '🎄 ') + esc(f.titre) + '</span>' +
     '<b style="font-size:17px;line-height:1.2">' + esc(fmtJour(d)) + '</b><span class="mut small">' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + (f.lieu ? ' · ' + esc(f.lieu) : '') + '</span>' +
     '<span class="badge" style="align-self:flex-start;margin-top:4px;background:' + (rep ? 'var(--ok)' : 'var(--ac)') + ';color:#fff">' + (rep ? 'Ta venue est confirmée ✅' : 'Je confirme ma venue') + '</span></div></a>';
 }
@@ -3753,13 +3811,13 @@ function pageFete(ed) {
   if (!f) return '<div class="pagehead">' + backLink('#/accueil', 'Accueil') + '</div><main><section class="card empty">Cette fête n\'est plus en ligne.</section></main>';
   var d = new Date(f.debut), fin = f.fin ? new Date(f.fin) : null, passe = new Date(f.fin || f.debut) < new Date();
   var h = '<div class="darkhead fete-head"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) +
-    '<div class="kicker" style="margin-top:6px">🎄 Pour toute la famille</div><h1>' + esc(f.titre) + '</h1>' + (f.sous_titre ? '<div style="color:#c9d6e2;margin-top:4px">' + esc(f.sous_titre) + '</div>' : '') + '</div></div><main class="wrap">';
+    '<div class="kicker" style="margin-top:6px">' + (feteAdultes(f) ? '🥂 Entre adhérents adultes' : '🎄 Pour toute la famille') + '</div><h1>' + esc(f.titre) + '</h1>' + (f.sous_titre ? '<div style="color:#c9d6e2;margin-top:4px">' + esc(f.sous_titre) + '</div>' : '') + '</div></div><main class="wrap">';
   if (f.affiche_url) h += '<button class="fete-affiche" id="fete-zoom" aria-label="Agrandir l\'affiche"><img src="' + esc(feteImg(f.affiche_url)) + '" alt="Affiche : ' + esc(f.titre) + ', ' + esc(fmtJour(d)) + '"></button>';
   h += '<section class="card stack" style="gap:10px"><div class="rdv"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div>' +
     '<div class="stack"><span class="disp" style="font-size:22px;line-height:1.1">' + esc(fmtJour(d)) + '</span><span class="mut small">' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + '</span>' +
     (f.lieu ? '<span class="mut small">' + ic('pin', 14) + ' ' + esc(f.lieu) + '</span>' : '') + '</div></div>' +
     (f.public_vise ? '<span class="small">' + ic('people', 16) + ' ' + esc(f.public_vise) + '</span>' : '') +
-    '<span class="small">🎁 <b>Gratuit</b> (hors espace goûter)</span><span class="mut small" id="fete-nb"></span></section>' +
+    (feteAdultes(f) ? '' : '<span class="small">🎁 <b>Gratuit</b> (hors espace goûter)</span>') + '<span class="mut small" id="fete-nb"></span></section>' +
     '<div id="fete-main"><section class="card"><div class="skel"></div></section></div></main>';
   setTimeout(function () { chargerFete(f, passe); });
   return h;
@@ -3775,10 +3833,10 @@ function chargerFete(f, passe) {
     var R = r[0] || {}, lots = r[1] || [], P = R.participation, T = R.tickets || [];
     if (P && P.jeton && P.jeton !== jeton) localStorageSet('cloca-fete-' + f.edition, P.jeton); // compte connecté sur un autre appareil
     if (P && !P.annule) localStorageSet('cloca-fete-ok-' + f.edition, '1'); else localStorageSet('cloca-fete-ok-' + f.edition, '');
-    if (R.familles && $('fete-nb')) $('fete-nb').textContent = '🎄 ' + R.familles + ' famille' + (R.familles > 1 ? 's ont déjà confirmé leur venue' : ' a déjà confirmé sa venue');
+    if (R.familles && $('fete-nb')) $('fete-nb').textContent = feteAdultes(f) ? '🥂 ' + R.familles + ' adhérent' + (R.familles > 1 ? 's ont déjà confirmé leur venue' : ' a déjà confirmé sa venue') : '🎄 ' + R.familles + ' famille' + (R.familles > 1 ? 's ont déjà confirmé leur venue' : ' a déjà confirmé sa venue');
     var h = '';
     if (!passe) h += blocPresence(f, P);
-    h += blocInviter(f);
+    if (!feteAdultes(f)) h += blocInviter(f);
     if (f.tombola_ouverte || lots.length || T.length) h += blocTombola(f, lots, T, P, passe);
     $('fete-main').innerHTML = h;
     lierFete(f, P);
@@ -3786,16 +3844,27 @@ function chargerFete(f, passe) {
   if ($('fete-zoom')) $('fete-zoom').onclick = function () { modale('<img src="' + esc(feteImg(f.affiche_url)) + '" alt="Affiche" style="width:100%;border-radius:12px;display:block">'); };
 }
 
+// Une page réglée « Adhérents adultes » (ex. Apéro de Noël) parle aux adultes, pas aux familles
+function feteAdultes(f) { return !!f && f.public_cible === 'adultes'; }
 function blocPresence(f, P) {
+  var adu = feteAdultes(f);
   if (P && !P.annule && !S.feteEdit) {
     return '<section class="card stack fete-ok" style="gap:10px"><b style="font-size:18px">C\'est noté, à bientôt ! 🎉</b>' +
-      '<span class="small"><b>' + esc(P.nom) + '</b> · ' + (P.groupe === 'plus5' ? '5 personnes ou plus' : 'moins de 5 personnes') + (P.avec_invites ? ' · avec des invités' : '') + '</span>' +
+      '<span class="small"><b>' + esc(P.nom) + '</b>' + (adu ? (P.avec_invites ? ' · avec un ou des invités' : '') : ' · ' + (P.groupe === 'plus5' ? '5 personnes ou plus' : 'moins de 5 personnes') + (P.avec_invites ? ' · avec des invités' : '')) + '</span>' +
       (P.photos ? '<span class="small">📸 Le lien des photos sera envoyé à ' + esc(P.email_photos) + '</span>' : '') +
       '<div class="grid2"><button class="btn line" id="fete-modif">Modifier</button><button class="btn line" id="fete-annul">On ne vient plus</button></div></section>';
   }
   if (!f.inscription_ouverte) return '<section class="card empty">Les confirmations sont fermées. Tu peux quand même venir : tout le monde est le bienvenu !</section>';
   var F = S.feteForm = S.feteForm || (P ? { nom: P.nom, contact: P.contact || '', groupe: P.groupe, invites: P.avec_invites, photos: P.photos, email: P.email_photos || '' } :
-    { nom: nomFamilleDefaut(), contact: '', groupe: '', invites: false, photos: false, email: S.user ? S.user.email : '' });
+    { nom: adu ? (S.user && S.pers.length ? nomAffiche() : '') : nomFamilleDefaut(), contact: '', groupe: adu ? 'moins5' : '', invites: false, photos: false, email: S.user ? S.user.email : '' });
+  if (adu) return '<section class="card stack" style="gap:14px" id="fete-form"><div class="stack" style="gap:4px"><b style="font-size:18px">Tu viens ?</b>' +
+    '<span class="mut small">Ça nous aide à prévoir l\'apéro et les jeux.</span></div>' +
+    '<label class="f">Ton nom<input class="f" id="ff-nom" maxlength="80" placeholder="Ex. Julie Martin" value="' + esc(F.nom) + '" autocomplete="name"></label>' +
+    '<label class="check"><input type="checkbox" id="ff-inv"' + (F.invites ? ' checked' : '') + '><span><b>Je viens avec quelqu\'un</b><br><span class="mut">Conjoint, ami… même s\'il n\'est pas au club.</span></span></label>' +
+    (S.user ? '' : '<label class="f">Téléphone ou mail <span class="mut" style="font-weight:400">(facultatif, pour te prévenir en cas de changement)</span><input class="f" id="ff-contact" maxlength="120" value="' + esc(F.contact) + '"></label>') +
+    '<label class="check"><input type="checkbox" id="ff-photos"' + (F.photos ? ' checked' : '') + '><span><b>Je veux recevoir le lien des photos</b><br><span class="mut">Le club t\'envoie le lien de l\'album après la soirée.</span></span></label>' +
+    '<label class="f" id="ff-mail-l"' + (F.photos ? '' : ' hidden') + '>Mail pour les photos<input class="f" id="ff-mail" type="email" maxlength="120" value="' + esc(F.email) + '" autocomplete="email"></label>' +
+    '<button class="btn" id="ff-ok">Oui, je viens ! 🥂</button>' + (P ? '<button class="btn ghost" id="ff-stop">Annuler la modification</button>' : '') + '</section>';
   return '<section class="card stack" style="gap:14px" id="fete-form"><div class="stack" style="gap:4px"><b style="font-size:18px">Tu viens ?</b>' +
     '<span class="mut small">Ça nous aide à prévoir les jeux, l\'animation et le goûter. Pas besoin du nombre exact, une idée suffit.</span></div>' +
     '<label class="f">Nom de la famille<input class="f" id="ff-nom" maxlength="80" placeholder="Ex. Famille Martin" value="' + esc(F.nom) + '" autocomplete="family-name"></label>' +
@@ -3874,6 +3943,7 @@ function lierFete(f, P) {
     F.nom = $('ff-nom').value.trim(); F.invites = $('ff-inv').checked; F.photos = $('ff-photos').checked; F.email = $('ff-mail').value.trim();
     if ($('ff-contact')) F.contact = $('ff-contact').value.trim();
     if (!F.nom) { toast('Indique le nom de la famille'); $('ff-nom').focus(); return; }
+    if (!F.groupe && feteAdultes(f)) F.groupe = 'moins5';
     if (!F.groupe) { toast('Choisis : moins de 5 ou 5 personnes et plus'); return; }
     if (F.photos && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(F.email)) { toast('Indique un mail valide pour les photos'); $('ff-mail').focus(); return; }
     var b = this; b.disabled = true;

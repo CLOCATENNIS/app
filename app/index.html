@@ -277,6 +277,14 @@ nav.tabs .side-brand,nav.tabs .side-foot{display:none}
 /* Fêtes du club (Noël…) */
 .fete-carte{display:flex;gap:12px;align-items:center;text-decoration:none;color:var(--tx);border:2px solid #b8862b;background:linear-gradient(135deg,var(--card),var(--sun))}
 .fete-carte img{width:74px;height:104px;object-fit:cover;border-radius:10px;flex:none;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+/* Annonces à la une (réglées dans la gestion → Accueil de l'appli) */
+.une{display:flex;flex-direction:column;gap:12px}
+.une.plusieurs{flex-direction:row;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none}
+.une.plusieurs::-webkit-scrollbar{display:none}
+.une.plusieurs>.une-carte{flex:0 0 84%;scroll-snap-align:center}
+.une-carte{display:flex;flex-direction:column;gap:10px;padding:14px}
+.une-img{display:block}.une-img img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;display:block}
+@media (min-width:900px){.dk-col .une.plusieurs{flex-direction:column;overflow:visible;margin:0;padding:0}.dk-col .une.plusieurs>.une-carte{flex:none}.une-carte.avec-img{flex-direction:row;align-items:flex-start}.une-carte.avec-img .une-img{flex:0 0 42%}}
 .fete-head{background:linear-gradient(160deg,#0f3b2a,#14523a);border-radius:0 0 24px 24px}
 .fete-affiche{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(15,59,42,.28)}
 .fete-affiche img{display:block;width:100%;height:auto}
@@ -474,6 +482,6 @@ button.javatar{cursor:pointer}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611131545"></script>
+<script src="app.js?v=202611131710"></script>
 </body>
 </html>
