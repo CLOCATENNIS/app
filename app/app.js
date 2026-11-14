@@ -765,9 +765,11 @@ function lierAccueilAide() {
 }
 
 // ---------- Agenda ----------
+// L'agenda ne montre que ce qui reste à venir : pas de retour sur les semaines passées
+function fini(it) { return (it.f || new Date(it.d.getTime() + 3600e3)) <= new Date(); }
 function enteteSemaine(l) {
   return '<div style="display:flex;justify-content:space-between;align-items:center">' +
-    '<button class="back" aria-label="Semaine précédente" id="wk-prev" style="width:44px;justify-content:center">' + ic('back', 20) + '</button>' +
+    '<button class="back" aria-label="Semaine précédente" id="wk-prev" style="width:44px;justify-content:center' + (S.week <= 0 ? ';visibility:hidden' : '') + '">' + ic('back', 20) + '</button>' +
     '<b>' + (S.week === 0 ? 'Cette semaine' : S.week === 1 ? 'Semaine prochaine' : S.week === -1 ? 'Semaine dernière' : 'Semaine du ' + fmtCourt(l)) + '</b>' +
     '<button class="back" aria-label="Semaine suivante" id="wk-next" style="width:44px;justify-content:center">' + ic('next', 20) + '</button></div>';
 }
@@ -803,6 +805,7 @@ function pageAgenda() {
   var tab = S.agTab || (perso ? 'moi' : 'tout');
   if (!perso && tab === 'moi') tab = 'tout';
   var vue = tab === 'moi' ? 'moi' : 'club';
+  if (!(S.week > 0)) S.week = 0;
   var l = lundi(new Date()); l.setDate(l.getDate() + 7 * S.week);
   var f = new Date(l); f.setDate(f.getDate() + 7);
   var h = '<div class="pagehead wrap"><h1>' + (vue === 'club' ? 'Agenda du club' : 'Mon agenda') + '</h1></div><main>';
@@ -819,9 +822,9 @@ function pageAgenda() {
     setTimeout(lierAgenda);
     return h;
   }
-  var items = mesItems(l, f);
+  var items = mesItems(l, f).filter(function (it) { return !fini(it); });
   h += (S.pers.length > 1 ? selFamille() : '') + enteteSemaine(l) + blocPause(AG && AG.pauses, l, f);
-  if (!items.length) h += '<section class="card empty">Rien de prévu cette semaine.</section>';
+  if (!items.length) h += '<section class="card empty">' + (S.week === 0 ? 'Plus rien de prévu cette semaine.' : 'Rien de prévu cette semaine.') + '</section>';
   var jour = '';
   items.forEach(function (it) {
     var jl = fmtJour(it.d);
@@ -837,7 +840,7 @@ function pageAgenda() {
   return h;
 }
 function lierAgenda() {
-  $('wk-prev').onclick = function () { S.week--; render(); };
+  $('wk-prev').onclick = function () { if (S.week > 0) { S.week--; render(); } };
   $('wk-next').onclick = function () { S.week++; render(); };
   Array.prototype.forEach.call(document.querySelectorAll('[data-agf]'), function (b) { b.onclick = function () { S.agTab = b.dataset.agf; render(); }; });
 }
@@ -898,9 +901,10 @@ function agendaClub(l, f, coach) {
       if (coach && !encadrePar(e.encadrant, coach) && !eg.ids.some(function (g) { return S.gere.indexOf(g) >= 0; })) return;
       items.push({ d: d, f: e.fin ? new Date(e.fin) : null, titre: e.titre, lieu: e.lieu, enc: e.encadrant, statut: e.statut, objectif: e.objectif, id: e.id, c: arena ? couleurGroupes(gs) : 'var(--ac)', gs: gs, surInsc: e.inscription_ouverte });
     });
+    items = items.filter(function (it) { return !fini(it); });
     items.sort(function (x, y) { return x.d - y.d; });
     var h = blocPause(C.pauses, l, f);
-    if (!items.length) h += '<section class="card empty">Rien au programme cette semaine.</section>';
+    if (!items.length) h += '<section class="card empty">' + (S.week === 0 ? 'Plus rien au programme cette semaine.' : 'Rien au programme cette semaine.') + '</section>';
     var jour = '';
     items.forEach(function (it) {
       var jl = fmtJour(it.d);
