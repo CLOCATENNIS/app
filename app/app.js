@@ -216,7 +216,7 @@ function etatInsc(ev, qui) {
 function maReponse(ev, p) { var r = ((AG && AG.part) || []).filter(function (x) { return x.evenement_id === ev.id && x.personne_id === p.id; })[0]; return r ? r.reponse : null; }
 function peutRepondre(ev) { return S.user && !ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date() && evGroupes(ev).ids.length; }
 function boutonsPart(ev, qui) {
-  if (!peutRepondre(ev)) return '';
+  if (!peutRepondre(ev) || !qui || !qui.length) return ''; // personne du compte n'est concerné : pas de question sans boutons
   return '<span class="stack" style="gap:6px;margin-top:4px">' + qui.map(function (p) {
     var r = maReponse(ev, p);
     return '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + (qui.length > 1 || S.pers.length > 1 ? '<b class="small" style="min-width:56px;color:' + S.couleur[p.id] + '">' + esc(p.prenom) + '</b>' : '') +
