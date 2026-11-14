@@ -4082,10 +4082,11 @@ function chargerQuestionnaire(id, choix) {
       if (manque) { toast('Réponds à : ' + manque.libelle); var z = document.querySelector('[data-q="' + manque.id + '"]'); if (z) z.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       $('qa-ok').disabled = true;
       q(sb.from('questionnaire_reponses').upsert({ questionnaire_id: id, personne_id: pid, reponses: out }, { onConflict: 'questionnaire_id,personne_id' })).then(function () {
-        toast('Merci, réponse enregistrée');
         (S.qst || []).forEach(function (x) { if (x.questionnaire_id === id && x.personne_id === pid) x.repondu = true; });
         var suivant = miens.filter(function (x) { return x.personne_id !== pid && !x.repondu; })[0];
-        chargerQuestionnaire(id, suivant ? suivant.personne_id : pid);
+        // Un autre membre de la famille doit encore répondre : on enchaîne ; sinon retour à l'accueil
+        if (suivant) { toast('Merci, réponse enregistrée'); chargerQuestionnaire(id, suivant.personne_id); }
+        else { toast('Merci, réponse enregistrée ✓'); location.hash = '#/accueil'; }
       }).catch(function (e) { $('qa-ok').disabled = false; toast(e && /row-level|policy/i.test(e.message || '') ? 'Ce questionnaire est fermé' : 'Envoi impossible pour le moment'); });
     };
   }).catch(function () { $('qa').innerHTML = '<section class="card empty">Impossible de charger le questionnaire.</section>'; });
