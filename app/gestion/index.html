@@ -212,12 +212,21 @@ details.acc .tw{margin:0;border:0;border-radius:0}
 a.chip{text-decoration:none}
 .chip .nb{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:9px;background:var(--ac,#b4532a);color:#fff;font-size:11px;line-height:18px;text-align:center}
 .chip .nb:empty{display:none}
+.as-pts{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.as-pts span{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--soft,#efe9e1);color:var(--mut,#6b7280)}
+.as-pts span.on{background:var(--navy,#102f4a);color:#fff;font-weight:600}
+.as-pts span.fait{background:#e3efe6;color:#1f6f4a}
+.as-types{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.as-type{display:flex;gap:10px;align-items:center;text-align:left;padding:12px;border:1px solid var(--bd,#e5ded4);border-radius:14px;background:var(--card,#fff);font:inherit;color:inherit;cursor:pointer}
+.as-type:hover,.as-type.on{border-color:var(--ac,#b4532a);box-shadow:0 0 0 2px rgba(180,83,42,.15)}
+.as-opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--bd,#e5ded4);border-radius:12px;background:var(--card,#fff);cursor:pointer}
+.as-opt.on{border-color:var(--ac,#b4532a)}
 </style>
 </head>
 <body>
 <div id="root"><div class="login"><div class="skel"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../jeux-moteur.js?v=202611131530"></script>
-<script src="admin.js?v=202611152310"></script>
+<script src="admin.js?v=202611160010"></script>
 </body>
 </html>
