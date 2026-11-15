@@ -364,7 +364,7 @@ function vueEvenements(m, arg, O) {
           '<td><b>' + esc(e.titre) + '</b><div class="mut xs">' + TYPES_EVT[e.type] + (e.lieu ? ' · ' + esc(e.lieu) : '') + (e.encadrant ? ' · ' + esc(e.encadrant) : '') + '</div></td><td class="small">' + (gs || (e.public ? 'Public' : '—')) + '</td>' +
           '<td class="small" style="white-space:nowrap">' + (!e.inscription_ouverte && (e.participations || []).length ? '<span title="Réponses « Je participe »"><b style="color:var(--ok)">✓ ' + e.participations.filter(function (x) { return x.reponse === 'oui'; }).length + '</b> · <span style="color:var(--ko)">✗ ' + e.participations.filter(function (x) { return x.reponse === 'non'; }).length + '</span></span>' : e.inscription_ouverte ? '<a href="#/inscriptions/' + e.id + '">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</a><br><label class="xs mut" style="display:inline-flex;gap:4px;align-items:center">sur <input class="f" type="number" min="1" data-epl="' + e.id + '" value="' + esc(e.places_max) + '" placeholder="∞" title="Nombre de places (vide = illimité)" style="width:64px;min-height:32px;padding:2px 6px"> places</label>' + ((e.evenement_quotas || []).length ? '<div class="xs mut">' + e.evenement_quotas.map(function (x) { return esc(nomGroupe(x.groupe_id).replace("CLOC'ARENA ", '')) + ' ' + x.places; }).join(' · ') + '</div>' : '') : n ? '<a href="#/inscriptions/' + e.id + '">' + n + '</a>' : '—') + '</td>' +
           '<td>' + (e.statut === 'annule' ? '<span class="badge b-ko">Annulé</span>' : e.statut === 'deplace' ? '<span class="badge b-warn">Déplacé</span>' : '<span class="badge b-ok">Prévu</span>') + '</td>' +
-          '<td class="act"><button class="btn sm line" data-edup="' + e.id + '" title="Copier à la même heure la semaine suivante">+ 7 jours</button></td></tr>';
+          '<td class="act"><button class="btn sm line" data-eopt="' + e.id + '" title="Budget, affiche et page, à la une, prévenir">Options</button> <button class="btn sm line" data-edup="' + e.id + '" title="Copier à la même heure la semaine suivante">+ 7 jours</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun événement.</div>';
       all('[data-epl]').forEach(function (inp) {
         inp.onchange = function () {
@@ -375,7 +375,8 @@ function vueEvenements(m, arg, O) {
           }).catch(function () { toast('Enregistrement impossible'); });
         };
       });
-      all('[data-e]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('[data-edup],a,[data-epl],label')) return; formEvt(EV.filter(function (x) { return x.id === tr.dataset.e; })[0]); }; });
+      all('[data-eopt]').forEach(function (b) { b.onclick = function () { optionsEvenement(EV.filter(function (x) { return x.id === b.dataset.eopt; })[0], formEvt); }; });
+      all('[data-e]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('[data-edup],[data-eopt],a,[data-epl],label')) return; formEvt(EV.filter(function (x) { return x.id === tr.dataset.e; })[0]); }; });
       all('[data-edup]').forEach(function (b) { b.onclick = function () { dupliquer(EV.filter(function (x) { return x.id === b.dataset.edup; })[0]); }; });
     }).catch(function () { $('e-l').innerHTML = '<div class="card empty">Impossible de charger les événements.</div>'; });
   };
@@ -3559,6 +3560,75 @@ function hubEvenements(m) {
     $('hub').innerHTML = h;
   });
 }
+// ---------- Options d'un événement (assistant et bouton « Options » de chaque événement) ----------
+function slugPage(titre, jour) { return String(titre).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + String(jour).slice(0, 4); }
+// Page dédiée (affiche, qui vient, lots) : créée masquée, on la complète dans ses réglages
+function creerPageEvt(e, publicCible, lots) {
+  var page = { edition: slugPage(e.titre, e.debut), titre: e.titre, debut: e.debut, fin: e.fin || null, lieu: e.lieu || null, public_cible: publicCible || 'tous',
+    actif: false, inscription_ouverte: true, tombola_ouverte: !!lots, prix_ticket: 2, carnet_nb: 5, prix_carnet: 8, tirage_publie: false };
+  return q(sb.from('fetes').insert(page).select('edition').single());
+}
+// Carte « à la une » sur l'accueil de l'appli, ajoutée en premier ; garde les cartes déjà en place (ou celles proposées par défaut)
+function ajouterUne(e, lien, publicCible) {
+  return Promise.all([
+    q(sb.from('reglages_publics').select('valeur').eq('cle', 'accueil').maybeSingle()),
+    q(sb.from('evenements').select('id, titre, debut, type, statut').gte('debut', new Date().toISOString()).order('debut').limit(60)).catch(function () { return []; }),
+    q(sb.from('fetes').select('edition, titre, actif, public_cible, debut')).catch(function () { return []; })
+  ]).then(function (r) {
+    var v = (r[0] && r[0].valeur) || {};
+    var une = Array.isArray(v.une) ? v.une : uneDefautG(r[1] || [], r[2] || []);
+    var d = new Date(e.debut), fin = e.fin ? new Date(e.fin) : null;
+    var quand = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '');
+    une.unshift({ id: 'u' + Date.now(), actif: true, titre: e.titre, quand: quand.charAt(0).toUpperCase() + quand.slice(1), texte: e.description || '', image: '', lien: lien, lien_txt: 'Voir', couleur: 'ac', public: publicCible || 'tous', debut: '', fin: isoJour(fin || d) });
+    v.une = une;
+    return q(sb.from('reglages_publics').upsert({ cle: 'accueil', valeur: v, maj_le: new Date().toISOString() }));
+  });
+}
+function enregistrerBudget(evtId, lignes) {
+  var L = lignes.filter(function (l) { return String(l.nom || '').trim(); }).map(function (l, i) { return { evenement_id: evtId, nom: String(l.nom).trim(), prix: parseFloat(String(l.prix || 0).replace(',', '.')) || 0, quantite: parseFloat(String(l.qte || l.quantite || 1).replace(',', '.')) || 0, ordre: i }; });
+  return q(sb.from('evenement_budget').delete().eq('evenement_id', evtId)).then(function () { return L.length ? q(sb.from('evenement_budget').insert(L)) : null; });
+}
+function eurosG(n) { return (+n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+// « Options » d'un événement déjà créé : budget du club, page avec affiche, à la une, prévenir les adhérents
+function optionsEvenement(e, apres) {
+  var B = [], page = null;
+  Promise.all([
+    q(sb.from('evenement_budget').select('*').eq('evenement_id', e.id).order('ordre')).catch(function () { return []; }),
+    q(sb.from('fetes').select('edition, titre, debut')).catch(function () { return []; })
+  ]).then(function (r) {
+    B = (r[0] || []).map(function (l) { return { nom: l.nom, prix: String(l.prix).replace('.', ','), qte: String(+l.quantite) }; });
+    if (!B.length) B.push({ nom: '', prix: '', qte: '1' });
+    page = (r[1] || []).filter(function (f) { return f.titre === e.titre && isoJour(new Date(f.debut)) === isoJour(new Date(e.debut)); })[0] || null;
+    panneau('Options · ' + e.titre, '', function () { dessiner(); });
+  });
+  var total = function () { return B.reduce(function (s, l) { return s + (parseFloat(String(l.prix).replace(',', '.')) || 0) * (parseFloat(l.qte) || 0); }, 0); };
+  var lire = function () { all('[data-ob]').forEach(function (i) { var v = i.dataset.ob.split('|'); B[+v[0]][v[1]] = i.value; }); };
+  var dessiner = function () {
+    var h = '<div class="stack">' +
+      '<div class="card stack" style="gap:8px"><b>🧾 Budget du club</b><span class="mut xs">L\'argent à prévoir pour cet événement. Visible seulement par l\'équipe du club.</span>' +
+      '<div class="tw"><table class="t"><thead><tr><th>Nom</th><th style="width:90px">Prix €</th><th style="width:84px">Qté</th><th style="width:90px">Total</th><th></th></tr></thead><tbody>' + B.map(function (l, i) {
+        var t = (parseFloat(String(l.prix).replace(',', '.')) || 0) * (parseFloat(l.qte) || 0);
+        return '<tr><td><input class="f" data-ob="' + i + '|nom" value="' + esc(l.nom) + '" placeholder="Ex. Chocolats"></td><td><input class="f" inputmode="decimal" data-ob="' + i + '|prix" value="' + esc(l.prix) + '"></td><td><input class="f" type="number" min="0" data-ob="' + i + '|qte" value="' + esc(l.qte) + '"></td><td class="small">' + eurosG(t) + '</td><td><button class="btn sm ghost" data-obx="' + i + '" aria-label="Retirer">×</button></td></tr>';
+      }).join('') + '</tbody></table></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="chips"><button class="btn sm line" id="ob-add">+ Ajouter une ligne</button><button class="btn sm line" id="ob-csv">Exporter</button></span><b>Total : ' + eurosG(total()) + '</b></div>' +
+      '<button class="btn sm" id="ob-ok" style="align-self:flex-start">Enregistrer le budget</button></div>' +
+      '<div class="card stack" style="gap:8px"><b>🖼️ Affiche / page dédiée</b>' + (page ? '<span class="mut xs">La page existe : affiche, qui vient, lots et réglages.</span><a class="btn sm line" style="align-self:flex-start" href="#/fetes/' + encodeURIComponent(page.edition) + '">Ouvrir la page</a>' :
+        '<span class="mut xs">Une page comme la fête de Noël, avec l\'affiche en grand. Créée masquée.</span><div class="chips"><select class="f" id="op-pc" style="width:auto">' + UNE_PUBLIC_G.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select><label class="c"><input type="checkbox" id="op-lots"> Avec tombola / lots</label><button class="btn sm" id="op-page">Créer la page</button></div>') + '</div>' +
+      '<div class="card stack" style="gap:8px"><b>⭐ À la une de l\'accueil</b><span class="mut xs">Ajoute une carte en haut de l\'accueil de l\'appli, jusqu\'au jour de l\'événement. Tu la règles ensuite dans Agenda et activités → À la une.</span><div class="chips"><select class="f" id="ou-pc" style="width:auto">' + UNE_PUBLIC_G.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select><button class="btn sm" id="ou-ok">Mettre à la une</button></div></div>' +
+      '<div class="card stack" style="gap:8px"><b>🔔 Prévenir les adhérents concernés</b><span class="mut xs">' + (groupesDe(e).length ? 'Envoyé aux familles des groupes de l\'événement.' : 'Pas de groupe choisi : envoyé à tout le club.') + '</span><textarea class="f" id="on-m" rows="3" placeholder="Message">' + esc(e.titre) + '</textarea><button class="btn sm" id="on-ok" style="align-self:flex-start">Envoyer</button></div>' +
+      '<div class="card stack" style="gap:8px"><b>💶 Prix, inscriptions, Présent / Absent</b><span class="mut xs">Dans la fiche de l\'événement.</span><button class="btn sm line" id="oe-mod" style="align-self:flex-start">Modifier l\'événement</button></div></div>';
+    $('ov-c').innerHTML = h;
+    all('[data-ob]').forEach(function (i) { i.onchange = function () { lire(); dessiner(); }; });
+    all('[data-obx]').forEach(function (b) { b.onclick = function () { lire(); B.splice(+b.dataset.obx, 1); if (!B.length) B.push({ nom: '', prix: '', qte: '1' }); dessiner(); }; });
+    $('ob-add').onclick = function () { lire(); B.push({ nom: '', prix: '', qte: '1' }); dessiner(); };
+    $('ob-csv').onclick = function () { lire(); csv('budget-' + slugPage(e.titre, e.debut) + '.csv', [['Nom', 'Prix', 'Quantité', 'Total']].concat(B.filter(function (l) { return l.nom; }).map(function (l) { var p = parseFloat(String(l.prix).replace(',', '.')) || 0, n = parseFloat(l.qte) || 0; return [l.nom, p, n, p * n]; })).concat([['Total', '', '', total()]])); };
+    $('ob-ok').onclick = function () { lire(); var b = this; b.disabled = true; enregistrerBudget(e.id, B).then(function () { toast('Budget enregistré : ' + eurosG(total())); }).catch(function () { toast('Enregistrement impossible'); }).then(function () { b.disabled = false; }); };
+    if ($('op-page')) $('op-page').onclick = function () { var b = this; b.disabled = true; creerPageEvt(e, $('op-pc').value, $('op-lots').checked).then(function (p) { fermer(); toast('Page créée : ajoute l\'affiche'); A.feteOnglet = 'reglages'; location.hash = '#/fetes/' + encodeURIComponent(p.edition); }).catch(function (x) { b.disabled = false; toast(/duplicate|unique/i.test(String(x && x.message)) ? 'Une page avec ce titre existe déjà cette année' : 'Création impossible'); }); };
+    $('ou-ok').onclick = function () { var b = this; b.disabled = true; ajouterUne(e, page ? '#/fete/' + page.edition : '#/evenement/' + e.id, $('ou-pc').value).then(function () { toast('Ajouté à la une de l\'accueil'); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); }); };
+    $('on-ok').onclick = function () { var t = $('on-m').value.trim(); if (!t) return toast('Écris un message'); var b = this; b.disabled = true; diffuser({ titre: e.titre, texte: t, cible: groupesDe(e).length ? 'evenement' : 'tous', evt: e.id, lien: '#/evenement/' + e.id, source: 'direct' }).then(function () { b.disabled = false; }); };
+    $('oe-mod').onclick = function () { fermer(); if (apres) apres(e); };
+  };
+}
+function groupesDe(e) { var ids = []; if (e.groupe_id) ids.push(e.groupe_id); (e.evenement_groupes || []).forEach(function (g) { if (ids.indexOf(g.groupe_id) < 0) ids.push(g.groupe_id); }); return ids; }
 // ---------- Assistant « Nouvel événement » : 4 étapes (type, infos, fonctions, récapitulatif) ----------
 // Les fonctions cochées décident de ce qui est créé : un événement de l'agenda, et une page avec affiche quand il en faut une.
 var ASS_TYPES = [['animation', '🎉', 'Animation', 'Fête, apéro, jeux, Miss Cup…'], ['stage', '🏕️', 'Stage', 'Stages de vacances, stages adultes'], ['tournoi', '🏆', 'Tournoi', 'Tournois et compétitions au club'], ['reunion', '🗂️', 'Réunion / AG', 'Réunions du bureau, assemblée générale'], ['autre', '📌', 'Autre', 'En cas de besoin']];
@@ -3567,7 +3637,7 @@ var ASS_FONCTIONS = [
   ['payant', '💶', 'Payant', 'Un prix par personne (sinon c\'est gratuit).'],
   ['lots', '🎟️', 'Tombola / lots', 'Tickets, lots et tirage au sort (avec la page dédiée).'],
   ['une', '⭐', 'À la une de l\'accueil', 'Une carte en haut de l\'accueil de l\'appli.'],
-  ['budget', '🧾', 'Budget du club', 'L\'argent à prévoir : nom, prix, quantité et total.'],
+  ['budget', '🧾', 'Budget du club', 'L\'argent à prévoir : nom, prix, quantité et total (visible par l\'équipe du club seulement).'],
   ['prevenir', '🔔', 'Prévenir les adhérents concernés', 'Un message et une notification dès la création.']
 ];
 function assistantEvenement(typeDepart) {
@@ -3608,10 +3678,10 @@ function assistantEvenement(typeDepart) {
           return '<label class="as-opt"><input type="radio" name="as-rep" value="' + x[0] + '"' + (W.reponse === x[0] ? ' checked' : '') + '><span><b>' + x[1] + '</b><span class="mut xs" style="display:block">' + x[2] + '</span></span></label>';
         }).join('') + '</div>' +
         (W.reponse === 'inscription' ? '<label class="l">Nombre de places (vide = illimité)<input class="f" type="number" min="1" id="as-pl" value="' + esc(W.places) + '"></label>' : '') +
-        '<div class="sect">Quelles fonctions ?</div><span class="mut xs">Tu pourras en ajouter plus tard avec « Ajouter des options ».</span><div class="stack" style="gap:6px">' + ASS_FONCTIONS.map(function (x) {
+        '<div class="sect">Quelles fonctions ?</div><span class="mut xs">Tu pourras en ajouter plus tard avec le bouton « Options » de l\'événement.</span><div class="stack" style="gap:6px">' + ASS_FONCTIONS.map(function (x) {
           var sous = '';
           if (x[0] === 'payant' && W.f.payant) sous = '<label class="l" style="margin-top:6px">Prix par personne en €<input class="f" inputmode="decimal" id="as-px" value="' + esc(W.prix) + '" placeholder="Ex. 15"></label>';
-          if (x[0] === 'prevenir' && W.f.prevenir) sous = '<textarea class="f" id="as-msg" rows="3" style="margin-top:6px" placeholder="Message aux adhérents concernés">' + esc(W.message) + '</textarea>';
+          if (x[0] === 'prevenir' && W.f.prevenir) sous = '<textarea class="f" id="as-msg" rows="3" style="margin-top:6px" placeholder="Message aux adhérents concernés">' + esc(W.message) + '</textarea><span class="mut xs">' + (W.qui === 'groupes' ? 'Envoyé aux familles des groupes choisis.' : 'Envoyé à tout le club (les messages ne se trient pas entre adultes et jeunes).') + '</span>';
           if (x[0] === 'budget' && W.f.budget) sous = '<div class="tw" style="margin-top:6px"><table class="t"><thead><tr><th>Nom</th><th style="width:90px">Prix €</th><th style="width:84px">Qté</th><th style="width:90px">Total</th><th></th></tr></thead><tbody>' + W.budget.map(function (l, i) {
             var t = (parseFloat(String(l.prix).replace(',', '.')) || 0) * (parseFloat(l.qte) || 0);
             return '<tr><td><input class="f" data-asb="' + i + '|nom" value="' + esc(l.nom) + '" placeholder="Ex. Chocolats"></td><td><input class="f" inputmode="decimal" data-asb="' + i + '|prix" value="' + esc(l.prix) + '"></td><td><input class="f" type="number" min="0" data-asb="' + i + '|qte" value="' + esc(l.qte) + '"></td><td class="small">' + euros(t) + '</td><td><button class="btn sm ghost" data-asbx="' + i + '" aria-label="Retirer">×</button></td></tr>';
@@ -3652,17 +3722,24 @@ function assistantEvenement(typeDepart) {
     var debut = combine(W.jour, W.hd || '00:00'), fin = W.hf ? combine(W.jourFin || W.jour, W.hf) : null;
     var row = { titre: W.titre, type: W.type, debut: debut.toISOString(), fin: fin ? fin.toISOString() : null, lieu: W.lieu || null, statut: 'prevu', public: W.qui !== 'groupes',
       inscription_ouverte: W.reponse === 'inscription', places_max: W.reponse === 'inscription' && W.places ? +W.places : null, prix_euros: W.f.payant ? parseFloat(String(W.prix).replace(',', '.')) : null };
+    var pc = W.qui === 'adultes' ? 'adultes' : W.qui === 'jeunes' ? 'jeunes' : 'tous', evt = null, page = null, soucis = [];
+    var etape = function (p, quoi) { return p.catch(function () { soucis.push(quoi); }); };
     q(sb.from('evenements').insert(row).select('id').single()).then(function (x) {
-      var suite = [];
-      if (W.qui === 'groupes' && W.groupes.length) suite.push(q(sb.from('evenement_groupes').insert(W.groupes.map(function (g) { return { evenement_id: x.id, groupe_id: g }; }))));
-      return Promise.all(suite).then(function () { return x; });
-    }).then(function (x) {
-      if (!(W.f.affiche || W.f.lots)) { fermer(); toast('Événement créé'); location.hash = '#/fetes/' + (W.type === 'reunion' ? 'autre' : W.type); return; }
-      var slug = W.titre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + W.jour.slice(0, 4);
-      var page = { edition: slug, titre: W.titre, debut: debut.toISOString(), fin: fin ? fin.toISOString() : null, lieu: W.lieu || null, public_cible: W.qui === 'adultes' ? 'adultes' : W.qui === 'jeunes' ? 'jeunes' : 'tous',
-        actif: false, inscription_ouverte: true, tombola_ouverte: !!W.f.lots, prix_ticket: 2, carnet_nb: 5, prix_carnet: 8, tirage_publie: false };
-      return q(sb.from('fetes').insert(page).select('edition').single()).then(function (p) { fermer(); toast('Événement et page créés : ajoute l\'affiche'); A.feteOnglet = 'reglages'; location.hash = '#/fetes/' + encodeURIComponent(p.edition); });
-    }).catch(function () { b.disabled = false; toast('Création impossible'); });
+      evt = Object.assign({ id: x.id, evenement_groupes: W.groupes.map(function (g) { return { groupe_id: g }; }) }, row);
+      return W.qui === 'groupes' && W.groupes.length ? q(sb.from('evenement_groupes').insert(W.groupes.map(function (g) { return { evenement_id: x.id, groupe_id: g }; }))) : null;
+    }).then(function () {
+      return (W.f.affiche || W.f.lots) ? etape(creerPageEvt(evt, pc, W.f.lots).then(function (p) { page = p.edition; }), 'la page') : null;
+    }).then(function () {
+      var P = [];
+      if (W.f.budget) P.push(etape(enregistrerBudget(evt.id, W.budget), 'le budget'));
+      if (W.f.une) P.push(etape(ajouterUne(evt, page ? '#/fete/' + page : '#/evenement/' + evt.id, pc), 'la carte à la une'));
+      if (W.f.prevenir) P.push(diffuser({ titre: W.titre, texte: W.message.trim() || W.titre, cible: W.qui === 'groupes' ? 'evenement' : 'tous', evt: evt.id, lien: '#/evenement/' + evt.id, source: 'direct' }));
+      return Promise.all(P);
+    }).then(function () {
+      fermer();
+      toast(soucis.length ? 'Événement créé, mais ' + soucis.join(', ') + ' n\'a pas pu être enregistré' : page ? 'Événement et page créés : ajoute l\'affiche' : 'Événement créé');
+      if (page) { A.feteOnglet = 'reglages'; location.hash = '#/fetes/' + encodeURIComponent(page); } else location.hash = '#/fetes/' + (W.type === 'reunion' ? 'autre' : W.type);
+    }).catch(function () { b.disabled = false; if (evt) { fermer(); toast('Événement créé, mais la suite a échoué : vérifie ses options'); } else toast('Création impossible'); });
   };
   chargerGroupes().then(function () { panneau('Nouvel événement', '', function () { dessiner(); }); });
 }
