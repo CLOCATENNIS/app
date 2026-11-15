@@ -42,12 +42,12 @@ var MODULES = [
 // Rubriques : le menu principal. Chaque rubrique a sa page d'accueil et ses pages en onglets.
 var RUBRIQUES = [
   ['', ['accueil']],
-  ['Communication', ['messages', 'discussions', 'questionnaires', 'actus', 'accueilapp', 'reseaux', 'annonces'], 'comm', 'megaphone', 'Messages aux familles, discussions de groupe, questionnaires, actus, réseaux sociaux et petites annonces.'],
+  ['Communication', ['messages', 'discussions', 'questionnaires', 'actus', 'accueilapp', 'reseaux'], 'comm', 'megaphone', 'Messages aux familles, discussions de groupe, questionnaires, actus et réseaux sociaux.'],
   ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'CLOC\'ARENA, inscriptions, événements (fête de Noël, tombola, stages…), présence au club.'],
   ['Adhérents', ['adherents', 'niveaux', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, niveaux des joueurs, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
-  ['Services du club', ['cordage', 'boutique'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise.'],
+  ['Services du club', ['cordage', 'boutique', 'annonces'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise, petites annonces.'],
   ['Administration', ['reglages', 'equipe', 'droits', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), rôles et accès, accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
@@ -1835,6 +1835,36 @@ function vueBoutique(m) {
 
 // ---------- Double interne : équipes, poules et reprise des données de l'appli Google ----------
 // Demandes de réservation de terrain envoyées par les joueurs du double
+// Scores envoyés par les joueurs : la direction valide, inverse le vainqueur, refuse ou remet en attente (plus d'onglet Organisateur dans l'appli).
+// La validation déclenche la notification aux joueurs du match (déclencheur notifier_resultat_double).
+function scoresDouble(apres) {
+  var box = $('dbx-s'); if (!box) return;
+  Promise.all([q(sb.from('double_resultats').select('*').order('date', { ascending: false })), q(sb.from('double_equipes').select('id, joueur1, joueur2'))]).then(function (r) {
+    var res = r[0] || [], eqs = r[1] || [];
+    var nomEq = function (id) { var e = eqs.filter(function (x) { return x.id === id; })[0]; return e ? e.joueur1 + (e.joueur2 ? ' / ' + e.joueur2 : '') : '?'; };
+    var att = res.filter(function (x) { return x.statut === 'en attente'; }), val = res.filter(function (x) { return x.statut === 'validé'; });
+    var ligne = function (x, actions) {
+      return '<div class="card stack" style="gap:6px"><span class="xs mut">' + esc(x.categorie + ' · Poule ' + x.poule + ' · ' + fmtJ(new Date(x.date)) + (x.saisi_nom ? ' · envoyé par ' + x.saisi_nom : '')) + '</span>' +
+        '<span><b>' + esc(nomEq(x.gagnant)) + '</b> bat ' + esc(nomEq(x.perdant)) + ' · ' + esc(x.forfait ? 'forfait' : x.score || '') + '</span><span style="display:flex;gap:6px;flex-wrap:wrap">' + actions + '</span></div>';
+    };
+    var plus = val.length > 10;
+    box.innerHTML = '<div class="sect">Scores à valider (' + att.length + ')</div>' + (att.length ? att.map(function (x) {
+      return ligne(x, '<button class="btn sm" data-dsv="' + esc(x.id) + '|validé">Valider</button><button class="btn sm line" data-dsi="' + esc(x.id) + '">Inverser le vainqueur</button><button class="btn sm ko" data-dsv="' + esc(x.id) + '|refusé">Refuser</button>');
+    }).join('') : '<div class="card empty">Aucun score en attente.</div>') +
+      '<details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">Scores validés (' + val.length + ')</summary>' + (val.length ? val.slice(0, 40).map(function (x) {
+        return ligne(x, '<button class="btn sm line" data-dsv="' + esc(x.id) + '|en attente">Remettre en attente</button>');
+      }).join('') + (val.length > 40 ? '<p class="mut xs">Les 40 derniers sont affichés.</p>' : '') : '<div class="card empty">Aucun score validé.</div>') + '</details>';
+    var fini = function (t) { toast(t); scoresDouble(apres); if (apres) apres(); };
+    all('[data-dsv]').forEach(function (b) { b.onclick = function () {
+      var x = b.dataset.dsv.split('|'); b.disabled = true;
+      q(sb.from('double_resultats').update({ statut: x[1], traite_le: new Date().toISOString() }).eq('id', x[0])).then(function () { fini(x[1] === 'validé' ? 'Score validé : les joueurs sont prévenus' : x[1] === 'refusé' ? 'Score refusé' : 'Remis en attente'); }).catch(function () { b.disabled = false; toast('Action impossible'); });
+    }; });
+    all('[data-dsi]').forEach(function (b) { b.onclick = function () {
+      var x = res.filter(function (y) { return y.id === b.dataset.dsi; })[0]; if (!x) return; b.disabled = true;
+      q(sb.from('double_resultats').update({ gagnant: x.perdant, perdant: x.gagnant, score: x.score ? String(x.score).replace(/(\d+)-(\d+)/g, '$2-$1') : x.score }).eq('id', x.id)).then(function () { fini('Vainqueur inversé'); }).catch(function () { b.disabled = false; toast('Action impossible'); });
+    }; });
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les scores.</div>'; });
+}
 function reservationsDouble() {
   var box = $('dbx-r'); if (!box) return;
   Promise.all([
@@ -1884,9 +1914,10 @@ function reservationsDouble() {
   }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les réservations.</div>'; });
 }
 function vueDouble(m) {
-  m.innerHTML = entete('Double interne', 'Les équipes et les poules du tournoi interne. Les joueurs suivent le tournoi dans l\'appli (tuile Double interne de l\'accueil) ; tu valides les scores dans l\'onglet Organisateur de l\'appli.', '<button class="btn line" id="dbx-imp">Reprendre les données de l\'appli Google</button><button class="btn" id="dbx-new">Ajouter une équipe</button>') +
-    '<input type="file" id="dbx-f" accept=".xlsx,.xls" hidden><div id="dbx-r"><div class="skel"></div></div><div id="dbx-l"><div class="skel"></div></div>';
+  m.innerHTML = entete('Double interne', 'Toute la gestion du tournoi interne est ici : scores à valider, réservations, équipes et poules. Les joueurs suivent le tournoi dans l\'appli (tuile Double interne de l\'accueil).', '<button class="btn line" id="dbx-imp">Reprendre les données de l\'appli Google</button><button class="btn" id="dbx-new">Ajouter une équipe</button>') +
+    '<input type="file" id="dbx-f" accept=".xlsx,.xls" hidden><div id="dbx-s"><div class="skel"></div></div><div id="dbx-r"><div class="skel"></div></div><div id="dbx-l"><div class="skel"></div></div>';
   reservationsDouble();
+  scoresDouble(function () { charger(); });
   var EQ = [], RES = [];
   var charger = function () {
     Promise.all([q(sb.from('double_equipes').select('*').order('categorie').order('poule').order('numero')), q(sb.from('double_resultats').select('gagnant, perdant, statut'))]).then(function (r) {

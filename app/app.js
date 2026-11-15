@@ -341,7 +341,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '15/11 espace coach';
+var VERSION_APPLI = '15/11 double gestion';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1905,8 +1905,9 @@ function scoreValide(sets, forfait) {
 }
 function pageDouble() {
   var D = S.dbl = S.dbl || { tab: 'classement', cat: 'Hommes', poule: 1 };
+  if (D.tab === 'orga') D.tab = 'classement';
   var tabs = [['classement', 'Classement', 'trophy'], ['matchs', 'Matchs', 'racket'], ['dispos', 'Mes dispos', 'cal'], ['score', 'Envoyer un score', 'check']];
-  if (S.isDir && !S.apercu) tabs.push(['orga', 'Organisateur', 'tool']);
+  // La gestion du tournoi (scores à valider, équipes, réservations) se fait uniquement dans l'espace gestion → Double interne.
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-dtab]'), function (b) { b.onclick = function () { D.tab = b.dataset.dtab; render(); }; });
     var box = $('dbl-main');
@@ -2023,7 +2024,7 @@ function remplirDouble(box) {
     var ligne = function (r, actions) { return '<section class="card stack" style="gap:6px"><span class="xs mut">' + esc(r.categorie + ' · Poule ' + r.poule + ' · ' + fmtCourt(new Date(r.date)) + (r.saisi_nom ? ' · envoyé par ' + r.saisi_nom : '')) + '</span><span class="small"><b>' + esc(nomEq(eqDe(r.gagnant))) + '</b> bat ' + esc(nomEq(eqDe(r.perdant))) + ' · ' + esc(r.forfait ? 'forfait' : r.score) + '</span><span style="display:flex;gap:6px;flex-wrap:wrap">' + actions + '</span></section>'; };
     h += '<div class="dayhead">À valider (' + att2.length + ')</div>' + (att2.length ? att2.map(function (r) { return ligne(r, '<button class="chip on" data-dv="' + r.id + '|validé">Valider</button><button class="chip" data-dinv="' + r.id + '">Inverser le vainqueur</button><button class="chip" data-dv="' + r.id + '|refusé">Refuser</button>'); }).join('') : '<section class="card empty">Aucun score en attente.</section>') +
       '<div class="dayhead">Validés</div>' + (val.length ? val.slice(0, 30).map(function (r) { return ligne(r, '<button class="chip" data-dv="' + r.id + '|en attente">Remettre en attente</button>'); }).join('') : '<section class="card empty">Aucun score validé.</section>') +
-      '<p class="mut xs" style="text-align:center">Équipes et poules : espace gestion → Double interne.</p>';
+      '';
     apres = function () {
       Array.prototype.forEach.call(box.querySelectorAll('[data-dv]'), function (b) { b.onclick = function () { var x = b.dataset.dv.split('|'); q(sb.from('double_resultats').update({ statut: x[1], traite_le: new Date().toISOString() }).eq('id', x[0])).then(function () { toast(x[1] === 'validé' ? 'Score validé' : x[1] === 'refusé' ? 'Score refusé' : 'Remis en attente'); return chargerDouble(true); }).then(function () { remplirDouble(box); }).catch(function () { toast('Action impossible'); }); }; });
       Array.prototype.forEach.call(box.querySelectorAll('[data-dinv]'), function (b) { b.onclick = function () { var r = DB2.res.filter(function (x) { return x.id === b.dataset.dinv; })[0]; q(sb.from('double_resultats').update({ gagnant: r.perdant, perdant: r.gagnant, score: r.score ? lireSets(r.score).map(function (s) { return s[1] + '-' + s[0]; }).join(' ') : r.score }).eq('id', r.id)).then(function () { toast('Vainqueur inversé'); return chargerDouble(true); }).then(function () { remplirDouble(box); }); }; });
