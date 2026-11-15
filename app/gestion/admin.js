@@ -1437,7 +1437,7 @@ function arPreparation(c, nom) {
     var v = (r && r.valeur) || {}, prep = !v[c] || v[c].preparation !== false;
     if (!$('ar-prep')) return;
     $('ar-prep').innerHTML = '<label class="c" style="font-weight:600"><input type="checkbox" id="ar-prep-c"' + (prep ? ' checked' : '') + '> En préparation pour les adhérents</label><div class="mut xs" style="margin-top:4px">' +
-      (prep ? 'Cochée : dans l\'appli, les adhérents voient la page « en préparation » de ' + nom + '. Tu peux déjà tout préparer ici. Décoche pour ouvrir le circuit à tout le monde.' : 'Décochée : le circuit ' + nom + ' est ouvert à tout le monde dans l\'appli (classement, séances).') + '</div>';
+      (prep ? 'Cochée : dans l\'appli, les adhérents voient la page « en préparation » de ' + nom + '. Tu peux déjà tout préparer ici. Décoche pour ouvrir le circuit à tout le monde.' : 'Décochée : le circuit ' + nom + ' est ouvert à tout le monde dans l\'appli' + (c === 'versus' ? ' (règles, formats et barème ; les défis arriveront avec la V1).' : ' (classement de la saison).')) + '</div>';
     $('ar-prep-c').onchange = function () {
       var c2 = this, ouvrir = !c2.checked;
       if (ouvrir && !confirm('Ouvrir CLOC\'ARENA ' + nom + ' à tout le monde dans l\'appli ?')) { c2.checked = true; return; }
@@ -1446,7 +1446,7 @@ function arPreparation(c, nom) {
     };
   }).catch(function () { if ($('ar-prep')) $('ar-prep').innerHTML = '<span class="mut small">Impossible de lire le réglage « en préparation ».</span>'; });
 }
-var AR_CIRCUITS = [['tweener', 'Tweener', 'Jeunes · balles Galaxie', 'linear-gradient(135deg,#5b3a86,#c62f2f)'], ['masters', 'Masters', 'Adultes', 'linear-gradient(135deg,#102f4a,#2f5b7d)'], ['versus', 'Versus', 'Défis · matchs libres FFT', 'linear-gradient(135deg,#0f3d2e,#2f7a4f)']];
+var AR_CIRCUITS = [['tweener', 'Tweener', 'Jeunes · séances et rassemblements', 'linear-gradient(135deg,#5b3a86,#c62f2f)'], ['masters', 'Masters', 'Adultes et jeunes compétiteurs', 'linear-gradient(135deg,#102f4a,#2f5b7d)'], ['versus', 'Versus', 'Défis · matchs libres FFT', 'linear-gradient(135deg,#0f3d2e,#2f7a4f)']];
 function arInit(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0) + '.'; }
 function arScorePour(score, eq) { if (eq !== 2 || !score) return score || ''; return String(score).split(/\s+/).map(function (s) { var x = s.split('-'); return x.length === 2 ? x[1] + '-' + x[0] : s; }).join(' '); }
 function arLireScore(txt) {
@@ -1457,14 +1457,93 @@ function arLireScore(txt) {
 }
 // CLOC'ARENA : un circuit par case (Tweener, Masters, Versus). Tweener : séances, inscriptions, saisie, historique, niveaux.
 // Adresses : #/arena/<circuit> ou #/arena/<onglet>[/<id>] (onglets du Tweener).
+// ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
+var AR_ONGLETS = {
+  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']],
+  masters: [['classement', 'Classement'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['joueurs', 'Joueurs']],
+  versus: [['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['joueurs', 'Joueurs éligibles'], ['reglages', 'Réglages']]
+};
+var CLASS_ORDRE = ['NC', '40', '30/5', '30/4', '30/3', '30/2', '30/1', '30', '15/5', '15/4', '15/3', '15/2', '15/1', '15', '5/6', '4/6', '3/6', '2/6', '1/6', '0'];
+function estMasters(p) { return /^Adultes/.test(p.niveau_club || '') || p.niveau_club === 'Ados compétition'; }
+// Versus : Orange, Vert, Jaune + Adultes (NC à 30/1). Renvoie [catégorie, raison si pas éligible]
+function categorieVersus(p) {
+  var n = p.niveau_club || '', c = p.classement_fft, rang = CLASS_ORDRE.indexOf(c);
+  if (n === 'Galaxie Orange') return ['Orange', ''];
+  if (n === 'Galaxie Vert') return ['Vert', ''];
+  if (n === 'Ados balle jaune' || n === 'Ados compétition' || /^Adultes/.test(n)) {
+    if (!c) return ['Jaune + Adultes', 'classement à renseigner'];
+    if (rang < 0 || rang > CLASS_ORDRE.indexOf('30/1')) return ['Jaune + Adultes', 'classé ' + c + ' (au-delà de 30/1)'];
+    return ['Jaune + Adultes', ''];
+  }
+  return [null, ''];
+}
+var VS_DEF = { formats: { Orange: ['F5', 'F6'], Vert: ['F5', 'F6', 'F7'], 'Jaune + Adultes': ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7'] }, durees: { F1: '2h', F2: '2h', F3: '1h30', F4: '1h30', F5: '1h', F6: '1h30', F7: '1h30', F9: '' },
+  orange_vert: false, plages: 3, expiration_h: 72, annulation_h: 24, confirmation_h: 72, meme_adversaire_mois: 1, defis_attente: 3, tweener_v: 10, tweener_d: 4, masters_v: '', masters_d: '', saison_debut: '', saison_fin: '' };
+function arMasters(box, tab) {
+  if (tab === 'classement') {
+    q(sb.rpc('arena_classement_circuit', { p_circuit: 'masters' })).then(function (l) {
+      box.innerHTML = (l || []).length ? '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau</th><th>Matchs</th><th>Points</th></tr></thead><tbody>' + l.map(function (x, i) {
+        return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(x.joueur) + '</b></td><td class="small">' + esc(x.niveau || '—') + '</td><td>' + x.matchs + '</td><td><b>' + (+x.points) + '</b></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="card empty">Pas encore de points Masters. Le classement se remplit avec les matchs saisis (onglet « Saisir un match ») et, plus tard, avec les matchs Versus des adultes.</div>';
+    }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement.</div>'; });
+    return;
+  }
+  chargerPers().then(function (l) {
+    var J = l.filter(function (p) { return p.actif && estMasters(p); }).sort(function (a, b) { return String(a.niveau_club).localeCompare(String(b.niveau_club), 'fr', { numeric: true }) || a.prenom.localeCompare(b.prenom, 'fr'); });
+    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Adultes et jeunes compétiteurs (niveau club « Adultes 1 à 10 » ou « Ados compétition »). Le niveau se règle dans <a href="#/niveaux">Adhérents → Niveaux des joueurs</a>.</p>' +
+      '<div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Niveau club</th><th>Classement FFT</th></tr></thead><tbody>' + J.map(function (p) {
+        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b></td><td class="small">' + esc(p.niveau_club) + '</td><td class="small">' + esc(p.classement_fft || '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div><p class="mut xs">' + J.length + ' joueur' + (J.length > 1 ? 's' : '') + '.</p>';
+  });
+}
+function arVersus(box, tab) {
+  var vide = function (titre, texte) { box.innerHTML = '<div class="card stack" style="gap:8px"><b>' + titre + '</b><span class="small mut">' + texte + '</span><span class="badge" style="align-self:flex-start">Arrive avec les défis dans l\'appli (V1)</span></div>'; };
+  if (tab === 'demandes') return vide('Demandes de terrain', 'Quand deux joueurs acceptent un défi avec l\'option « Demander au club », la demande arrive ici (date, heure, fin estimée, format, joueurs) avec « Confirmer » (choix du terrain) ou « Indisponible ». La réservation reste faite à la main dans ADOC.');
+  if (tab === 'matchs') return vide('Matchs', 'Tous les défis par statut (envoyé, accepté, terrain, score à confirmer, validé, litige, forfait, annulé), avec des filtres. Tu pourras tout corriger : score, statut, forfait. Les points vont dans le classement Tweener (jeunes) ou Masters (adultes) du joueur, il n\'y a pas de classement Versus.');
+  if (tab === 'litiges') return vide('Litiges et scores non confirmés', 'Les matchs signalés par un joueur (avec son message) et ceux dont le second joueur n\'a pas confirmé le score après les rappels à 24 h et 48 h. Tu tranches ou tu valides le score déclaré.');
+  if (tab === 'adoc') return vide('À saisir dans ADOC', 'Les matchs validés qui comptent comme match libre FFT, avec une case « Saisi dans ADOC » et la date. Jamais les forfaits. Alerte si un match attend depuis plus de 7 jours.');
+  if (tab === 'joueurs') {
+    chargerPers().then(function (l) {
+      var cats = { Orange: [], Vert: [], 'Jaune + Adultes': [] }, non = [];
+      l.filter(function (p) { return p.actif; }).forEach(function (p) { var c = categorieVersus(p); if (!c[0]) return; if (c[1]) non.push([p, c[1]]); else cats[c[0]].push(p); });
+      box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Calculé avec le niveau club et le classement FFT de chaque joueur. Un jeune de moins de 13 ans de la catégorie Jaune + Adultes ne verra que les jeunes. La licence « compétition » se contrôle au moment de la saisie dans ADOC.</p>' +
+        '<div class="kpis">' + Object.keys(cats).map(function (k) { return '<div class="kpi"><b>' + cats[k].length + '</b><span>' + k + '</span></div>'; }).join('') + '<div class="kpi"><b>' + non.length + '</b><span>à vérifier</span></div></div>' +
+        Object.keys(cats).map(function (k) { return '<div class="sect">' + k + '</div><div class="small">' + (cats[k].map(function (p) { return esc(p.prenom + ' ' + p.nom.charAt(0) + '.') + (p.classement_fft && k === 'Jaune + Adultes' ? ' <span class="mut xs">' + esc(p.classement_fft) + '</span>' : ''); }).join(' · ') || '<span class="mut">Personne</span>') + '</div>'; }).join('') +
+        (non.length ? '<div class="sect">Pas éligibles pour l\'instant</div><div class="small">' + non.map(function (x) { return esc(x[0].prenom + ' ' + x[0].nom.charAt(0) + '.') + ' <span class="mut xs">(' + esc(x[1]) + ')</span>'; }).join(' · ') + '</div>' : '');
+    });
+    return;
+  }
+  // Réglages : enregistrés dans reglages_publics (clé versus_reglages), lus par l'appli
+  q(sb.from('reglages_publics').select('valeur').eq('cle', 'versus_reglages').maybeSingle()).then(function (r) {
+    var V = Object.assign(JSON.parse(JSON.stringify(VS_DEF)), (r && r.valeur) || {}), FMTS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F9'];
+    var num = function (k, lab, suf) { return '<label class="l">' + lab + '<input class="f" type="number" min="0" data-vs="' + k + '" value="' + esc(V[k]) + '"' + (suf ? ' placeholder="' + suf + '"' : '') + '></label>'; };
+    box.innerHTML = '<div class="card stack" style="gap:10px"><div class="sect" style="margin-top:0">Formats autorisés par catégorie</div>' +
+      Object.keys(VS_DEF.formats).map(function (c) { return '<div><b class="small">' + c + '</b><div class="chips" style="margin-top:4px">' + FMTS.map(function (f) { var on = (V.formats[c] || []).indexOf(f) >= 0; return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" data-vf="' + c + '|' + f + '"' + (on ? ' checked' : '') + ' style="display:none">' + f + '</label>'; }).join('') + '</div></div>'; }).join('') +
+      '<div class="sect">Durée indicative de chaque format</div><div class="row3">' + FMTS.map(function (f) { return '<label class="l">' + f + '<input class="f" data-vd="' + f + '" value="' + esc(V.durees[f] || '') + '" placeholder="à fixer"></label>'; }).join('') + '</div>' +
+      '<label class="c"><input type="checkbox" id="vs-ov"' + (V.orange_vert ? ' checked' : '') + '> Autoriser Orange contre Vert (à confirmer avec la ligue)</label>' +
+      '<div class="sect">Défis</div><div class="row3">' + num('plages', 'Plages proposées (3 à 5)') + num('expiration_h', 'Expiration sans réponse (h)') + num('annulation_h', 'Annulation sans pénalité (h)') + num('confirmation_h', 'Confirmation du score (h)') + num('meme_adversaire_mois', 'Matchs par mois contre le même adversaire') + num('defis_attente', 'Défis en attente maximum') + '</div>' +
+      '<div class="sect">Barème (points dans le classement du joueur)</div><div class="row3">' + num('tweener_v', 'Tweener : victoire') + num('tweener_d', 'Tweener : défaite') + num('masters_v', 'Masters : victoire', 'à définir') + num('masters_d', 'Masters : défaite', 'à définir') + '</div>' +
+      '<div class="sect">Saison</div><div class="row3"><label class="l">Début<input class="f" type="date" data-vs="saison_debut" value="' + esc(V.saison_debut) + '"></label><label class="l">Fin<input class="f" type="date" data-vs="saison_fin" value="' + esc(V.saison_fin) + '"></label></div>' +
+      '<button class="btn" id="vs-ok" style="align-self:flex-start">Enregistrer les réglages</button></div>';
+    lierChips(box);
+    $('vs-ok').onclick = function () {
+      var b = this, F = {};
+      all('[data-vf]', box).forEach(function (i) { if (!i.checked) return; var v = i.dataset.vf.split('|'); (F[v[0]] = F[v[0]] || []).push(v[1]); });
+      V.formats = F; all('[data-vd]', box).forEach(function (i) { V.durees[i.dataset.vd] = i.value.trim(); });
+      all('[data-vs]', box).forEach(function (i) { V[i.dataset.vs] = i.type === 'number' ? (i.value === '' ? '' : +i.value) : i.value; });
+      V.orange_vert = $('vs-ov').checked;
+      if (V.plages < 3 || V.plages > 5) return toast('Entre 3 et 5 plages');
+      b.disabled = true;
+      q(sb.from('reglages_publics').upsert({ cle: 'versus_reglages', valeur: V, maj_le: new Date().toISOString() })).then(function () { toast('Réglages Versus enregistrés'); }).catch(function () { toast('Enregistrement impossible'); }).then(function () { b.disabled = false; });
+    };
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les réglages.</div>'; });
+}
 function vueArena(m, arg, suite) {
   if (arg === 'tweener' || arg === 'masters' || arg === 'versus') AR.circuit = arg;
   else if (arg) AR.tab = arg;
-  var dir = aRole('direction'), tabs = [];
-  if (peut('evenements')) tabs.push(['seances', 'Séances']);
-  if (peut('inscriptions')) tabs.push(['inscriptions', 'Inscriptions']);
-  if (dir) tabs.push(['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']);
-  if (arg && arg !== AR.circuit && AR_CIRCUITS.some(function (c) { return c[0] === arg; })) AR.circuit = arg;
+  var dir = aRole('direction');
+  // Tweener : séances et inscriptions (bureau compris). Masters et Versus : direction sportive.
+  var tabs = AR_ONGLETS[AR.circuit].filter(function (t) { return t[0] === 'seances' ? peut('evenements') : t[0] === 'inscriptions' ? peut('inscriptions') : dir; });
   if (!tabs.some(function (t) { return t[0] === AR.tab; })) AR.tab = tabs.length ? tabs[0][0] : '';
   var circ = AR_CIRCUITS.filter(function (c) { return c[0] === AR.circuit; })[0];
   m.innerHTML = entete('CLOC\'ARENA', 'Les trois circuits du club. Les résultats sont saisis uniquement par la direction sportive.') +
@@ -1478,10 +1557,11 @@ function vueArena(m, arg, suite) {
   if (AR.tab === 'seances') return vueEvenements(box, suite, { titre: 'Séances ' + circ[1], sous: 'Dates, groupes, places et inscriptions des séances ' + circ[1] + '. Elles apparaissent dans l\'agenda des adhérents des groupes choisis.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance', circuit: AR.circuit });
   if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], circuit: AR.circuit, titre: 'Inscriptions ' + circ[1], base: '#/arena/inscriptions/' });
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
-  if (AR.tab === 'niveaux' && AR.circuit !== 'tweener') { box.innerHTML = '<div class="card stack" style="gap:8px"><b>Niveaux des adultes</b><span class="small mut">Le circuit ' + circ[1] + ' utilise le niveau club (barème Arena Masters, 1 à 10), fixé dans Adhérents → Niveaux des joueurs.</span><a class="btn sm line" style="align-self:flex-start" href="#/niveaux">Ouvrir les niveaux des joueurs</a></div>'; return; }
+  if (AR.circuit === 'versus') return arVersus(box, AR.tab);
+  if (AR.circuit === 'masters' && (AR.tab === 'classement' || AR.tab === 'joueurs')) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
-      : q(sb.from('personnes').select('id, prenom, nom, niveau_club').eq('actif', true).eq('profil', 'adulte').order('prenom')).then(function (l) { return (l || []).map(function (j) { return { id: j.id, prenom: j.prenom, nom: j.nom, niveau_arena: j.niveau_club }; }); }),
+      : chargerPers().then(function (l) { return l.filter(function (j) { return j.actif && estMasters(j); }).map(function (j) { return { id: j.id, prenom: j.prenom, nom: j.nom, niveau_arena: j.niveau_club }; }); }),
     AR.formats ? AR.formats : q(sb.from('arena_formats').select('*').order('ordre'))
   ]).then(function (r) { AR.joueurs = AR.jc[AR.circuit] = r[0] || []; AR.formats = r[1] || []; if (AR.formC !== AR.circuit) { AR.form = null; AR.formC = AR.circuit; } });
   prep.then(function () {

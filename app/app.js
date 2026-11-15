@@ -1005,7 +1005,7 @@ function circuitEnPrep(c) { var v = S.reglages && S.reglages.arena_circuits; ret
 function circuitVisible(c) { return !circuitEnPrep(c) || (S.user && S.isStaff && !S.apercu); }
 function pageCircuit(c, nom, fond, kicker) {
   var now = new Date();
-  var seances = (S.evts || []).filter(function (e) { return e.type === 'seance' && e.circuit === c && e.statut !== 'annule' && new Date(e.fin || e.debut) > now; }).slice(0, 6);
+  var seances = [];
   setTimeout(function () {
     var box = $('circ-cl'); if (!box) return;
     if (!S.user) { box.innerHTML = '<span class="mut small">Connecte-toi pour voir le classement.</span>'; return; }
@@ -1018,11 +1018,22 @@ function pageCircuit(c, nom, fond, kicker) {
   });
   return '<div class="darkhead" style="background:' + fond + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">' + kicker + '</div><h1>CLOC\'ARENA ' + nom + '</h1></div></div><main>' +
     (circuitEnPrep(c) ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Le circuit est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
-    '<section class="card stack" style="gap:8px"><span class="eyebrow">Prochaines séances</span>' + (seances.length ? seances.map(function (e) { var d = new Date(e.debut); return '<a href="#/evenement/' + esc(e.id) + '" class="small" style="color:inherit;text-decoration:none;padding:6px 0;border-top:1px solid var(--line)"><b>' + esc(fmtJour(d)) + '</b> · ' + fmtH(d) + (e.fin ? ' – ' + fmtH(new Date(e.fin)) : '') + ' · ' + esc(e.titre) + (e.inscription_ouverte ? ' · <span style="color:var(--ac)">inscription</span>' : '') + '</a>'; }).join('') : '<span class="mut small">Aucune séance prévue pour le moment.</span>') + '</section>' +
+    '<section class="card stack" style="gap:6px"><span class="eyebrow">Le circuit</span><span class="small">Pour les adultes et les jeunes compétiteurs du club. Chaque match saisi par la direction sportive rapporte des points ; les matchs CLOC\'ARENA Versus des adultes compteront aussi ici.</span></section>' +
     '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement de la saison</span><div id="circ-cl"><div class="skel"></div></div></section></main>';
 }
+function pageVersusOuvert() {
+  var V = (S.reglages && S.reglages.versus_reglages) || {}, F = V.formats || { Orange: ['F5', 'F6'], Vert: ['F5', 'F6', 'F7'], 'Jaune + Adultes': ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7'] }, D = V.durees || { F1: '2h', F2: '2h', F3: '1h30', F4: '1h30', F5: '1h', F6: '1h30', F7: '1h30' };
+  var tv = V.tweener_v || 10, td = V.tweener_d || 4;
+  return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
+    (circuitEnPrep('versus') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Versus est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
+    '<section class="card stack" style="gap:8px"><b>Le principe</b><span class="small">Tu défies un joueur de ta catégorie, vous choisissez ensemble le créneau et le format, et vous jouez un vrai match libre FFT au club. Le club le saisit dans ADOC : il compte pour ton palmarès FFT.</span>' +
+    '<span class="small">Pas de classement Versus : chaque match validé rapporte des points dans ton classement CLOC\'ARENA. Tweener : <b>' + tv + ' pts</b> la victoire, <b>' + td + ' pts</b> la défaite' + (V.masters_v ? ' · Masters : <b>' + V.masters_v + ' pts</b> la victoire, <b>' + (V.masters_d || 0) + ' pts</b> la défaite' : '') + '.</span></section>' +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Catégories et formats</span>' + Object.keys(F).map(function (c) { return '<div class="small"><b>' + esc(c) + '</b> · ' + (F[c] || []).map(function (f) { return esc(f) + (D[f] ? ' (' + esc(D[f]) + ')' : ''); }).join(', ') + '</div>'; }).join('') +
+    '<span class="mut xs">Galaxie Orange, Galaxie Vert, balle jaune et adultes de NC à 30/1. Un jeune de moins de 13 ans ne joue que contre des jeunes.</span></section>' +
+    '<section class="card stack" style="gap:6px"><span class="eyebrow">Bientôt dans l\'appli</span><span class="small">Lancer un défi, choisir le créneau et le terrain, déclarer et confirmer le score.</span></section></main>';
+}
 function pageVersus() {
-  if (circuitVisible('versus')) return pageCircuit('versus', 'Versus', VERSUS_FOND, 'DÉFIS · MATCHS LIBRES FFT');
+  if (circuitVisible('versus')) return pageVersusOuvert();
   return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
     '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des défis arrive bientôt</b>' +
     '<span class="mut small">Tu défies un joueur de ta catégorie, vous choisissez ensemble le créneau et le format, et vous jouez votre match au club. Chaque match compte pour le classement Versus de la saison et, selon les conditions, comme match libre pour ton classement FFT.</span></section>' +
