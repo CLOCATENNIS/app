@@ -26,7 +26,7 @@ var MODULES = [
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['boutique', 'Boutique et ardoise', ['direction', 'bureau', 'accueil']],
-  ['arena', 'CLOC\'ARENA', ['direction']],
+  ['arena', 'CLOC\'ARENA', ['direction', 'bureau']],
   ['nextgen', 'Next Gen', ['direction']],
   ['missions', 'Missions coachs', ['direction']],
   ['double', 'Double interne', ['direction']],
@@ -43,11 +43,11 @@ var MODULES = [
 var RUBRIQUES = [
   ['', ['accueil']],
   ['Communication', ['messages', 'discussions', 'questionnaires', 'actus', 'accueilapp', 'reseaux'], 'comm', 'megaphone', 'Messages aux familles, discussions de groupe, questionnaires, actus et réseaux sociaux.'],
-  ['Agenda et activités', ['evenements', 'inscriptions', 'fetes', 'presence'], 'agenda', 'cal', 'CLOC\'ARENA, inscriptions, événements (fête de Noël, tombola, stages…), présence au club.'],
+  ['Agenda et activités', ['fetes', 'inscriptions'], 'agenda', 'cal', 'Événements (fête de Noël, tombola, stages, animations…) et inscriptions à tout ce qui arrive.'],
   ['Adhérents', ['adherents', 'niveaux', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, niveaux des joueurs, groupes et cours, mise à jour depuis ADOC.'],
-  ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA et tournoi interne de double.'],
+  ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA (Tweener, Masters, Versus : séances, inscriptions, résultats) et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
-  ['Services du club', ['cordage', 'boutique', 'annonces'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise, petites annonces.'],
+  ['Services du club', ['cordage', 'boutique', 'annonces', 'presence'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise, petites annonces, présence au club.'],
   ['Administration', ['reglages', 'equipe', 'droits', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), rôles et accès, accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
@@ -188,7 +188,8 @@ function compteurs() {
   if (peut('annonces')) p.push(nb(sb.from('annonces').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.annonces = n; }).catch(function () { }));
   if (peut('cordage')) p.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.cordage = n; }).catch(function () { }));
   if (peut('adherents')) p.push(q(sb.rpc('comptes_a_rattacher')).then(function (l) { c.adherents = (l || []).length; }).catch(function () { }));
-  if (peut('niveaux')) p.push(nb(sb.from('niveau_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.niveaux = n; }).catch(function () { }));
+  if (peut('niveaux')) p.push(nb(sb.from('niveau_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { c.niveaux = (c.niveaux || 0) + n; }).catch(function () { }));
+  if (peut('niveaux')) p.push(nb(sb.from('personnes').select('id', { count: 'exact', head: true }).eq('actif', true).is('niveau_club', null)).then(function (n) { c.niveaux = (c.niveaux || 0) + n; }).catch(function () { })); // joueurs dont le niveau n'est pas défini
   if (peut('retours')) p.push(nb(sb.from('retours').select('id', { count: 'exact', head: true }).eq('statut', 'nouveau')).then(function (n) { c.retours = n; }).catch(function () { }));
   if (peut('double')) p.push(nb(sb.from('double_reservations').select('id', { count: 'exact', head: true }).eq('statut', 'demande')).then(function (n) { c.double = n; }).catch(function () { }));
   return Promise.all(p).then(function () { return c; });
@@ -246,6 +247,7 @@ function vueAccueil(m) {
     P.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'attente')).then(function (n) { k.push([n, 'raquette' + (n > 1 ? 's' : '') + ' à corder', '#/cordage', false]); }));
     P.push(nb(sb.from('cordage_demandes').select('id', { count: 'exact', head: true }).eq('statut', 'fini')).then(function (n) { k.push([n, 'raquette' + (n > 1 ? 's' : '') + ' à récupérer', '#/cordage', false]); }));
   }
+  if (peut('niveaux')) P.push(nb(sb.from('personnes').select('id', { count: 'exact', head: true }).eq('actif', true).is('niveau_club', null)).then(function (n) { k.push([n, 'joueur' + (n > 1 ? 's' : '') + ' sans niveau', '#/niveaux/adefinir', n > 0]); }));
   if (peut('arena')) P.push(nb(sb.from('arena_matchs').select('id', { count: 'exact', head: true }).eq('statut', 'propose')).then(function (n) { k.push([n, 'score' + (n > 1 ? 's' : '') + ' CLOC\'ARENA à valider', '#/arena', n > 0]); }));
   if (peut('adherents')) {
     P.push(nb(sb.from('personnes').select('id', { count: 'exact', head: true }).not('adoc_id', 'is', null).eq('actif', true)).then(function (n) { k.push([n, 'adhérents', '#/adherents', false]); }));
@@ -466,13 +468,14 @@ function vueEvenements(m, arg, O) {
 }
 
 // ---------- Inscriptions ----------
-function vueInscriptions(m, arg) {
-  m.innerHTML = entete('Inscriptions', 'Qui est inscrit, qui a payé.') + '<div class="toolbar"><select class="f grow" id="i-ev"><option value="">Chargement…</option></select></div><div id="i-l"></div>';
-  Promise.all([q(sb.from('evenements').select('id, titre, debut, places_max, prix_euros, inscription_ouverte, groupe_id, evenement_groupes(groupe_id), evenement_quotas(groupe_id, places), inscriptions(count)').gte('debut', new Date(Date.now() - 60 * 864e5).toISOString()).order('debut')), chargerPers()]).then(function (r) {
-    var l = r[0].filter(function (e) { return e.inscription_ouverte || (e.inscriptions[0] && e.inscriptions[0].count); });
+function vueInscriptions(m, arg, F) {
+  F = F || { titre: 'Inscriptions', base: '#/inscriptions/' };
+  m.innerHTML = entete(F.titre, F.types ? 'Qui est inscrit, qui a payé, séance par séance.' : 'Qui est inscrit, qui a payé : stages, fête de Noël, animations, séances…') + '<div class="toolbar"><select class="f grow" id="i-ev"><option value="">Chargement…</option></select></div><div id="i-l"></div>';
+  Promise.all([q(sb.from('evenements').select('id, titre, type, debut, places_max, prix_euros, inscription_ouverte, groupe_id, evenement_groupes(groupe_id), evenement_quotas(groupe_id, places), inscriptions(count)').gte('debut', new Date(Date.now() - 60 * 864e5).toISOString()).order('debut')), chargerPers()]).then(function (r) {
+    var l = r[0].filter(function (e) { return (e.inscription_ouverte || (e.inscriptions[0] && e.inscriptions[0].count)) && (!F.types || F.types.indexOf(e.type) >= 0); });
     var sel = arg || (l.filter(function (e) { return new Date(e.debut) > new Date(); })[0] || l[l.length - 1] || {}).id;
     $('i-ev').innerHTML = l.length ? l.map(function (e) { var n = e.inscriptions[0] ? e.inscriptions[0].count : 0; return '<option value="' + e.id + '"' + (e.id === sel ? ' selected' : '') + '>' + esc(fmtJ(new Date(e.debut)) + ' · ' + e.titre + ' (' + n + (e.places_max ? '/' + e.places_max : '') + ')') + '</option>'; }).join('') : '<option value="">Aucun événement avec inscriptions</option>';
-    $('i-ev').onchange = function () { location.hash = '#/inscriptions/' + this.value; };
+    $('i-ev').onchange = function () { location.hash = F.base + this.value; };
     if (sel) liste(l.filter(function (e) { return e.id === sel; })[0] || r[0].filter(function (e) { return e.id === sel; })[0]);
   }).catch(function () { $('i-l').innerHTML = '<div class="card empty">Impossible de charger les inscriptions.</div>'; });
   var liste = function (ev) {
@@ -1422,7 +1425,8 @@ function cordTarifs(box) {
 
 // ---------- CLOC'ARENA (saisie réservée à la direction sportive) ----------
 var AR_NIVEAUX = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
-var AR = { tab: 'saisir', joueurs: null, formats: null, form: null, ouverts: {} };
+var AR = { tab: '', circuit: 'tweener', joueurs: null, formats: null, form: null, ouverts: {} };
+var AR_CIRCUITS = [['tweener', 'Tweener', 'Jeunes · balles Galaxie', 'linear-gradient(135deg,#5b3a86,#c62f2f)'], ['masters', 'Masters', 'Adultes', 'linear-gradient(135deg,#102f4a,#2f5b7d)'], ['versus', 'Versus', 'Défis · matchs libres FFT', 'linear-gradient(135deg,#0f3d2e,#2f7a4f)']];
 function arInit(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0) + '.'; }
 function arScorePour(score, eq) { if (eq !== 2 || !score) return score || ''; return String(score).split(/\s+/).map(function (s) { var x = s.split('-'); return x.length === 2 ? x[1] + '-' + x[0] : s; }).join(' '); }
 function arLireScore(txt) {
@@ -1431,13 +1435,30 @@ function arLireScore(txt) {
   if (!ok || a === b) return null;
   return { score: sets.join(' '), vainqueur: a > b ? 1 : 2 };
 }
-function vueArena(m) {
-  m.innerHTML = entete('CLOC\'ARENA', 'Saisie des résultats par la direction sportive, historique des matchs et niveaux des joueurs.') +
-    '<div class="chips" style="margin-bottom:14px">' + [['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']].map(function (t) { return '<button class="chip' + (AR.tab === t[0] ? ' on' : '') + '" data-artab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+// CLOC'ARENA : un circuit par case (Tweener, Masters, Versus). Tweener : séances, inscriptions, saisie, historique, niveaux.
+// Adresses : #/arena/<circuit> ou #/arena/<onglet>[/<id>] (onglets du Tweener).
+function vueArena(m, arg, suite) {
+  if (arg === 'tweener' || arg === 'masters' || arg === 'versus') AR.circuit = arg;
+  else if (arg) { AR.circuit = 'tweener'; AR.tab = arg; }
+  var dir = aRole('direction'), tabs = [];
+  if (peut('evenements')) tabs.push(['seances', 'Séances']);
+  if (peut('inscriptions')) tabs.push(['inscriptions', 'Inscriptions']);
+  if (dir) tabs.push(['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']);
+  if (!tabs.some(function (t) { return t[0] === AR.tab; })) AR.tab = tabs.length ? tabs[0][0] : '';
+  var circ = AR_CIRCUITS.filter(function (c) { return c[0] === AR.circuit; })[0];
+  m.innerHTML = entete('CLOC\'ARENA', 'Les trois circuits du club. Les résultats sont saisis uniquement par la direction sportive.') +
+    '<div class="ar-circ">' + AR_CIRCUITS.map(function (c) { return '<a href="#/arena/' + c[0] + '" class="' + (c[0] === AR.circuit ? 'on' : '') + '" style="background:' + c[3] + '"><b>' + c[1] + '</b><span>' + c[2] + '</span></a>'; }).join('') + '</div>' +
+    (AR.circuit === 'tweener' && tabs.length ? '<div class="chips" style="margin-bottom:14px">' + tabs.map(function (t) { return '<a class="chip' + (AR.tab === t[0] ? ' on' : '') + '" href="#/arena/' + t[0] + '">' + t[1] + '</a>'; }).join('') + '</div>' : '') +
     '<div id="ar-l"><div class="skel"></div></div>';
-  all('[data-artab]').forEach(function (b) { b.onclick = function () { AR.tab = b.dataset.artab; vueArena(m); }; });
   var box = $('ar-l');
-  if (!aRole('direction')) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
+  if (AR.circuit !== 'tweener') {
+    box.innerHTML = '<div class="card stack" style="gap:8px"><b>CLOC\'ARENA ' + circ[1] + ' · en préparation</b><span class="small mut">' + (AR.circuit === 'masters' ? 'Le circuit des adultes n\'est pas encore lancé.' : 'Le circuit des défis (matchs libres FFT) n\'est pas encore lancé.') +
+      ' Ses séances, inscriptions et résultats seront gérés ici quand il démarrera. Côté appli, les familles voient pour l\'instant la page d\'info du circuit.</span></div>';
+    return;
+  }
+  if (AR.tab === 'seances') return vueEvenements(box, suite, { titre: 'Séances Tweener', sous: 'Dates, groupes, places et inscriptions des séances. Elles apparaissent dans l\'agenda des familles.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance' });
+  if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], titre: 'Inscriptions Tweener', base: '#/arena/inscriptions/' });
+  if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
   var prep = Promise.all([
     AR.joueurs ? AR.joueurs : q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom')),
     AR.formats ? AR.formats : q(sb.from('arena_formats').select('*').order('ordre'))
@@ -2819,10 +2840,12 @@ function selectBareme(id, val, off) {
   }).join('') + '</select>';
 }
 var NVF = { tab: 'demandes', txt: '', niv: '' };
-function vueNiveaux(m) {
+function vueNiveaux(m, arg) {
+  if (arg === 'adefinir') { NVF.tab = 'joueurs'; NVF.niv = '-'; }
   m.innerHTML = entete('Niveaux des joueurs', 'Le niveau club est fixé par la direction sportive selon le barème ; les familles peuvent demander un changement depuis la fiche joueur de l\'appli (accepté ou refusé par la direction sportive). Le classement FFT est affiché à titre d\'info.') +
-    '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs'], ['fft', 'Import classements FFT (ADOC)']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
-  all('[data-nvt]').forEach(function (b) { b.onclick = function () { NVF.tab = b.dataset.nvt; vueNiveaux(m); }; });
+    '<div class="chips" style="margin-bottom:14px">' + [['demandes', 'Demandes des familles'], ['joueurs', 'Tous les joueurs'], ['adefinir', 'Niveau à définir<span class="nb" id="nv-nb"></span>'], ['fft', 'Import classements FFT (ADOC)']].map(function (t) { return '<button class="chip' + (NVF.tab === t[0] && !(t[0] === 'joueurs' && NVF.niv === '-') || (t[0] === 'adefinir' && NVF.tab === 'joueurs' && NVF.niv === '-') ? ' on' : '') + '" data-nvt="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><div id="nv-l"><div class="skel"></div></div>';
+  all('[data-nvt]').forEach(function (b) { b.onclick = function () { var t = b.dataset.nvt; if (t === 'adefinir') { NVF.tab = 'joueurs'; NVF.niv = '-'; } else { NVF.tab = t; if (t === 'joueurs') NVF.niv = ''; } vueNiveaux(m); }; });
+  nb(sb.from('personnes').select('id', { count: 'exact', head: true }).eq('actif', true).is('niveau_club', null)).then(function (n) { if ($('nv-nb') && n) $('nv-nb').textContent = n; }).catch(function () { });
   if (NVF.tab === 'joueurs') return nvJoueurs();
   if (NVF.tab === 'fft') return nvImportFft();
   q(sb.from('niveau_demandes').select('id, personne_id, niveau_actuel, niveau_demande, message, statut, reponse, created_at, traite_le, personnes(prenom, nom, date_naissance, classement_fft)').order('created_at', { ascending: false }).limit(200)).then(function (l) {
@@ -3487,7 +3510,7 @@ function vueFetes(m, arg) {
 
 // Page d'accueil des événements : une carte par catégorie, cliquable
 function hubEvenements(m) {
-  m.innerHTML = entete('Événements', 'Clique sur une catégorie pour la gérer. Les séances CLOC\'ARENA sont dans « CLOC\'ARENA organisation ».') + '<div id="hub" class="hub"><div class="skel"></div></div>';
+  m.innerHTML = entete('Événements', 'Clique sur une catégorie pour la gérer. Les séances CLOC\'ARENA sont dans Compétitions → CLOC\'ARENA → Tweener.') + '<div id="hub" class="hub"><div class="skel"></div></div>';
   var depuis = new Date(Date.now() - 864e5).toISOString();
   Promise.all([
     q(sb.from('fetes').select('*').order('debut', { ascending: false })).catch(function () { return []; }),
@@ -3722,10 +3745,11 @@ function router() {
     if (rr) { A.rub = rr[2]; A.view = 'r'; cadre('<div class="skel"></div>'); vueRubrique($('main'), rr[2]); window.scrollTo(0, 0); return; }
     v = 'accueil';
   }
+  if (v === 'evenements') { location.replace('#/arena/seances' + (parts[1] ? '/' + parts[1] : '')); return; } // séances CLOC'ARENA : Compétitions → CLOC'ARENA → Tweener
   if (!peut(v)) v = A.mods[0];
   A.view = v;
   cadre('<div class="skel"></div>');
-  if (v === 'fetes' && parts[1] === 'jeux') vueJeux($('main'), parts[2]); else VUES[v]($('main'), parts[1]);
+  if (v === 'fetes' && parts[1] === 'jeux') vueJeux($('main'), parts[2]); else if (v === 'arena') vueArena($('main'), parts[1], parts[2]); else VUES[v]($('main'), parts[1]);
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', router);
