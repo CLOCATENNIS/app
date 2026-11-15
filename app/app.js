@@ -341,7 +341,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '15/11 double gestion';
+var VERSION_APPLI = '16/11 circuits';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -992,15 +992,37 @@ function pageArenaAccueil() {
     '<a href="#/arena/masters" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#102f4a,#2f5b7d);border:0;padding:22px">' +
       '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">ADULTES</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Masters</span>' +
       '<span class="small" style="opacity:.9">Le circuit des adultes du club : matchs, défis et classement.</span>' +
-      '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span><span class="small" style="font-weight:700">Découvrir →</span></a>' +
+      (circuitEnPrep('masters') ? '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>' : '<span><span class="badge" style="background:#e9a37f;color:#12304a">En cours</span></span>') + '<span class="small" style="font-weight:700">Découvrir →</span></a>' +
     '<a href="#/arena/versus" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:' + VERSUS_FOND + ';border:0;padding:22px">' +
       '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">DÉFIS · MATCHS LIBRES FFT</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Versus</span>' +
       '<span class="small" style="opacity:.9">Défie un joueur de ta catégorie et grimpe au classement de la saison.</span>' +
-      '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span><span class="small" style="font-weight:700">Découvrir →</span></a></main>';
+      (circuitEnPrep('versus') ? '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>' : '<span><span class="badge" style="background:#e9a37f;color:#12304a">En cours</span></span>') + '<span class="small" style="font-weight:700">Découvrir →</span></a></main>';
 }
 // CLOC'ARENA Versus : circuit des défis (matchs libres FFT). En préparation : page d'info seulement, aucun défi possible.
 var VERSUS_FOND = 'linear-gradient(135deg,#0f3d2e,#2f7a4f)';
+// Masters et Versus : « en préparation » tant que la case est cochée dans la gestion (l'équipe du club voit déjà la vraie page pour tester)
+function circuitEnPrep(c) { var v = S.reglages && S.reglages.arena_circuits; return !v || !v[c] || v[c].preparation !== false; }
+function circuitVisible(c) { return !circuitEnPrep(c) || (S.user && S.isStaff && !S.apercu); }
+function pageCircuit(c, nom, fond, kicker) {
+  var now = new Date();
+  var seances = (S.evts || []).filter(function (e) { return e.type === 'seance' && e.circuit === c && e.statut !== 'annule' && new Date(e.fin || e.debut) > now; }).slice(0, 6);
+  setTimeout(function () {
+    var box = $('circ-cl'); if (!box) return;
+    if (!S.user) { box.innerHTML = '<span class="mut small">Connecte-toi pour voir le classement.</span>'; return; }
+    q(sb.rpc('arena_classement_circuit', { p_circuit: c })).then(function (l) {
+      if (!$('circ-cl')) return;
+      $('circ-cl').innerHTML = (l || []).length ? '<div class="stack" style="gap:0">' + l.slice(0, 50).map(function (x, i) {
+        return '<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:' + (i ? '1px solid var(--line)' : '0') + '"><b style="width:28px;text-align:right">' + (i + 1) + '</b><span style="flex:1">' + esc(x.joueur) + (x.niveau ? ' <span class="mut xs">· ' + esc(x.niveau) + '</span>' : '') + '</span><span class="mut xs">' + x.matchs + ' match' + (x.matchs > 1 ? 's' : '') + '</span><b>' + (+x.points) + ' pts</b></div>';
+      }).join('') + '</div>' : '<span class="mut small">Le classement apparaîtra après les premiers matchs.</span>';
+    }).catch(function () { if ($('circ-cl')) $('circ-cl').innerHTML = '<span class="mut small">Classement indisponible pour le moment.</span>'; });
+  });
+  return '<div class="darkhead" style="background:' + fond + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">' + kicker + '</div><h1>CLOC\'ARENA ' + nom + '</h1></div></div><main>' +
+    (circuitEnPrep(c) ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Le circuit est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Prochaines séances</span>' + (seances.length ? seances.map(function (e) { var d = new Date(e.debut); return '<a href="#/evenement/' + esc(e.id) + '" class="small" style="color:inherit;text-decoration:none;padding:6px 0;border-top:1px solid var(--line)"><b>' + esc(fmtJour(d)) + '</b> · ' + fmtH(d) + (e.fin ? ' – ' + fmtH(new Date(e.fin)) : '') + ' · ' + esc(e.titre) + (e.inscription_ouverte ? ' · <span style="color:var(--ac)">inscription</span>' : '') + '</a>'; }).join('') : '<span class="mut small">Aucune séance prévue pour le moment.</span>') + '</section>' +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement de la saison</span><div id="circ-cl"><div class="skel"></div></div></section></main>';
+}
 function pageVersus() {
+  if (circuitVisible('versus')) return pageCircuit('versus', 'Versus', VERSUS_FOND, 'DÉFIS · MATCHS LIBRES FFT');
   return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
     '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des défis arrive bientôt</b>' +
     '<span class="mut small">Tu défies un joueur de ta catégorie, vous choisissez ensemble le créneau et le format, et vous jouez votre match au club. Chaque match compte pour le classement Versus de la saison et, selon les conditions, comme match libre pour ton classement FFT.</span></section>' +
@@ -1009,6 +1031,7 @@ function pageVersus() {
     '<span class="mut small">Les infos seront publiées ici et dans les actus du club.</span></section></main>';
 }
 function pageMasters() {
+  if (circuitVisible('masters')) return pageCircuit('masters', 'Masters', 'linear-gradient(135deg,#102f4a,#2f5b7d)', 'ADULTES');
   return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
     '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des adultes arrive bientôt</b>' +
     '<span class="mut small">Matchs entre adhérents adultes, défis et classement de la saison, sur le même principe que CLOC\'ARENA Tweener pour les jeunes. Les infos seront publiées ici et dans les actus du club.</span></section></main>';
@@ -1288,12 +1311,12 @@ function blocCompetitions() {
     var ids = S.classement.map(function (c) { return c.personne_id; });
     rangs = S.pers.filter(function (p) { return p.niveau_arena; }).map(function (p) { var i = ids.indexOf(p.id); return i >= 0 ? esc(p.prenom) + ' <b>' + (i + 1) + (i ? 'e' : 'er') + '</b>' : null; }).filter(Boolean).join(' · ');
   }
-  var circuit = function (lien, nom, fond, bientot) { return '<a class="cmp-c" href="' + lien + '" style="background:' + fond + '"><b>' + nom + '</b>' + (bientot ? '<span>Bientôt</span>' : '<span>En cours</span>') + '</a>'; };
+  var circuit = function (lien, nom, fond, bientot) { if (typeof bientot === 'string') bientot = circuitEnPrep(bientot); return '<a class="cmp-c" href="' + lien + '" style="background:' + fond + '"><b>' + nom + '</b>' + (bientot ? '<span>Bientôt</span>' : '<span>En cours</span>') + '</a>'; };
   return '<section class="cmp">' +
     '<div class="cmp-arena"><span class="cmp-lignes" aria-hidden="true"></span>' +
       '<a class="cmp-main" href="#/arena"><span class="cmp-k">LE CIRCUIT PHARE DU CLUB</span><span class="cmp-t">CLOC\'ARENA</span>' +
       '<span class="cmp-x">' + (rangs ? 'Au classement : ' + rangs : 'Classements, défis et résultats') + '</span><span class="cmp-go">Entrer dans l\'arène →</span></a>' +
-      '<div class="cmp-cs">' + circuit('#/arena/tweener', 'Tweener', 'linear-gradient(135deg,#5b3a86,#c62f2f)', false) + circuit('#/arena/masters', 'Masters', 'linear-gradient(135deg,#1d4a6e,#3b6f96)', true) + circuit('#/arena/versus', 'Versus', VERSUS_FOND, true) + '</div></div>' +
+      '<div class="cmp-cs">' + circuit('#/arena/tweener', 'Tweener', 'linear-gradient(135deg,#5b3a86,#c62f2f)', false) + circuit('#/arena/masters', 'Masters', 'linear-gradient(135deg,#1d4a6e,#3b6f96)', 'masters') + circuit('#/arena/versus', 'Versus', VERSUS_FOND, 'versus') + '</div></div>' +
     '<a class="cmp-double" href="#/double"><span class="cmp-di">' + ic('trophy', 24, '#fff') + '</span><span class="stack" style="gap:2px;flex:1;min-width:0"><b>Tournoi interne de double</b><span class="small" style="opacity:.9">Poules, dispos, réservations et scores</span></span><span aria-hidden="true" style="font-size:20px">→</span></a>' +
     '</section>';
 }

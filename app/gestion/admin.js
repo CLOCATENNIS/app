@@ -354,6 +354,7 @@ function vueEvenements(m, arg, O) {
     var minuit = new Date(); minuit.setHours(0, 0, 0, 0);
     r = EVF.quand === 'avenir' ? r.gte('debut', minuit.toISOString()).order('debut') : r.lt('debut', minuit.toISOString()).order('debut', { ascending: false }).limit(100);
     r = r.in('type', O.types);
+    if (O.circuit) r = r.eq('circuit', O.circuit);
     if (EVF.type && O.types.indexOf(EVF.type) >= 0 && O.types.length > 1) r = r.eq('type', EVF.type);
     q(r).then(function (l) {
       EV = l;
@@ -381,7 +382,7 @@ function vueEvenements(m, arg, O) {
     }).catch(function () { $('e-l').innerHTML = '<div class="card empty">Impossible de charger les événements.</div>'; });
   };
   var groupesEvt = function (e) { var ids = []; if (e.groupe_id) ids.push(e.groupe_id); (e.evenement_groupes || []).forEach(function (g) { if (ids.indexOf(g.groupe_id) < 0) ids.push(g.groupe_id); }); return ids; };
-  var champsEvt = ['titre', 'type', 'debut', 'fin', 'lieu', 'encadrant', 'description', 'objectif', 'public', 'statut', 'inscription_ouverte', 'places_max', 'prix_euros', 'format'];
+  var champsEvt = ['titre', 'type', 'debut', 'fin', 'lieu', 'encadrant', 'description', 'objectif', 'public', 'statut', 'inscription_ouverte', 'places_max', 'prix_euros', 'format', 'circuit'];
   var dupliquer = function (e) {
     var row = {}; champsEvt.forEach(function (k) { row[k] = e[k]; });
     row.debut = new Date(new Date(e.debut).getTime() + 7 * 864e5).toISOString(); if (e.fin) row.fin = new Date(new Date(e.fin).getTime() + 7 * 864e5).toISOString();
@@ -448,6 +449,7 @@ function vueEvenements(m, arg, O) {
         var row = { titre: titre, type: $('v-ty').value, statut: $('v-st').value, debut: deb.toISOString(), fin: fin ? fin.toISOString() : null, lieu: $('v-l').value.trim() || null,
           encadrant: $('v-en').value.trim() || null, objectif: $('v-o').value.trim() || null, description: $('v-x').value.trim() || null, public: $('v-p').checked,
           inscription_ouverte: $('v-io').checked, places_max: pl, prix_euros: pr, groupe_id: null };
+        if (nouveau && O.circuit) row.circuit = O.circuit;
         if (nouveau) row.created_by = A.user.id;
         $('v-ok').disabled = true;
         var id;
@@ -474,8 +476,8 @@ function vueEvenements(m, arg, O) {
 function vueInscriptions(m, arg, F) {
   F = F || { titre: 'Inscriptions', base: '#/inscriptions/' };
   m.innerHTML = entete(F.titre, F.types ? 'Qui est inscrit, qui a payé, séance par séance.' : 'Qui est inscrit, qui a payé : stages, fête de Noël, animations, séances…') + '<div class="toolbar"><select class="f grow" id="i-ev"><option value="">Chargement…</option></select></div><div id="i-l"></div>';
-  Promise.all([q(sb.from('evenements').select('id, titre, type, debut, places_max, prix_euros, inscription_ouverte, groupe_id, evenement_groupes(groupe_id), evenement_quotas(groupe_id, places), inscriptions(count)').gte('debut', new Date(Date.now() - 60 * 864e5).toISOString()).order('debut')), chargerPers()]).then(function (r) {
-    var l = r[0].filter(function (e) { return (e.inscription_ouverte || (e.inscriptions[0] && e.inscriptions[0].count)) && (!F.types || F.types.indexOf(e.type) >= 0); });
+  Promise.all([q(sb.from('evenements').select('id, titre, type, circuit, debut, places_max, prix_euros, inscription_ouverte, groupe_id, evenement_groupes(groupe_id), evenement_quotas(groupe_id, places), inscriptions(count)').gte('debut', new Date(Date.now() - 60 * 864e5).toISOString()).order('debut')), chargerPers()]).then(function (r) {
+    var l = r[0].filter(function (e) { return (e.inscription_ouverte || (e.inscriptions[0] && e.inscriptions[0].count)) && (!F.types || F.types.indexOf(e.type) >= 0) && (!F.circuit || (e.circuit || 'tweener') === F.circuit); });
     var sel = arg || (l.filter(function (e) { return new Date(e.debut) > new Date(); })[0] || l[l.length - 1] || {}).id;
     $('i-ev').innerHTML = l.length ? l.map(function (e) { var n = e.inscriptions[0] ? e.inscriptions[0].count : 0; return '<option value="' + e.id + '"' + (e.id === sel ? ' selected' : '') + '>' + esc(fmtJ(new Date(e.debut)) + ' · ' + e.titre + ' (' + n + (e.places_max ? '/' + e.places_max : '') + ')') + '</option>'; }).join('') : '<option value="">Aucun événement avec inscriptions</option>';
     $('i-ev').onchange = function () { location.hash = F.base + this.value; };
@@ -1428,7 +1430,22 @@ function cordTarifs(box) {
 
 // ---------- CLOC'ARENA (saisie réservée à la direction sportive) ----------
 var AR_NIVEAUX = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
-var AR = { tab: '', circuit: 'tweener', joueurs: null, formats: null, form: null, ouverts: {} };
+var AR = { tab: '', circuit: 'tweener', joueurs: null, jc: {}, formats: null, form: null, formC: 'tweener', ouverts: {} };
+// Case « En préparation » de Masters et Versus : cochée, les adhérents voient la page d'info ; décochée, tout le monde a accès au circuit
+function arPreparation(c, nom) {
+  q(sb.from('reglages_publics').select('valeur').eq('cle', 'arena_circuits').maybeSingle()).then(function (r) {
+    var v = (r && r.valeur) || {}, prep = !v[c] || v[c].preparation !== false;
+    if (!$('ar-prep')) return;
+    $('ar-prep').innerHTML = '<label class="c" style="font-weight:600"><input type="checkbox" id="ar-prep-c"' + (prep ? ' checked' : '') + '> En préparation pour les adhérents</label><div class="mut xs" style="margin-top:4px">' +
+      (prep ? 'Cochée : dans l\'appli, les adhérents voient la page « en préparation » de ' + nom + '. Tu peux déjà tout préparer ici. Décoche pour ouvrir le circuit à tout le monde.' : 'Décochée : le circuit ' + nom + ' est ouvert à tout le monde dans l\'appli (classement, séances).') + '</div>';
+    $('ar-prep-c').onchange = function () {
+      var c2 = this, ouvrir = !c2.checked;
+      if (ouvrir && !confirm('Ouvrir CLOC\'ARENA ' + nom + ' à tout le monde dans l\'appli ?')) { c2.checked = true; return; }
+      v[c] = Object.assign({}, v[c] || {}, { preparation: !ouvrir }); c2.disabled = true;
+      q(sb.from('reglages_publics').upsert({ cle: 'arena_circuits', valeur: v, maj_le: new Date().toISOString() })).then(function () { toast(ouvrir ? nom + ' est ouvert à tout le monde' : nom + ' repasse en préparation'); arPreparation(c, nom); }).catch(function () { c2.disabled = false; c2.checked = !ouvrir; toast('Enregistrement impossible'); });
+    };
+  }).catch(function () { if ($('ar-prep')) $('ar-prep').innerHTML = '<span class="mut small">Impossible de lire le réglage « en préparation ».</span>'; });
+}
 var AR_CIRCUITS = [['tweener', 'Tweener', 'Jeunes · balles Galaxie', 'linear-gradient(135deg,#5b3a86,#c62f2f)'], ['masters', 'Masters', 'Adultes', 'linear-gradient(135deg,#102f4a,#2f5b7d)'], ['versus', 'Versus', 'Défis · matchs libres FFT', 'linear-gradient(135deg,#0f3d2e,#2f7a4f)']];
 function arInit(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0) + '.'; }
 function arScorePour(score, eq) { if (eq !== 2 || !score) return score || ''; return String(score).split(/\s+/).map(function (s) { var x = s.split('-'); return x.length === 2 ? x[1] + '-' + x[0] : s; }).join(' '); }
@@ -1442,30 +1459,31 @@ function arLireScore(txt) {
 // Adresses : #/arena/<circuit> ou #/arena/<onglet>[/<id>] (onglets du Tweener).
 function vueArena(m, arg, suite) {
   if (arg === 'tweener' || arg === 'masters' || arg === 'versus') AR.circuit = arg;
-  else if (arg) { AR.circuit = 'tweener'; AR.tab = arg; }
+  else if (arg) AR.tab = arg;
   var dir = aRole('direction'), tabs = [];
   if (peut('evenements')) tabs.push(['seances', 'Séances']);
   if (peut('inscriptions')) tabs.push(['inscriptions', 'Inscriptions']);
   if (dir) tabs.push(['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']);
+  if (arg && arg !== AR.circuit && AR_CIRCUITS.some(function (c) { return c[0] === arg; })) AR.circuit = arg;
   if (!tabs.some(function (t) { return t[0] === AR.tab; })) AR.tab = tabs.length ? tabs[0][0] : '';
   var circ = AR_CIRCUITS.filter(function (c) { return c[0] === AR.circuit; })[0];
   m.innerHTML = entete('CLOC\'ARENA', 'Les trois circuits du club. Les résultats sont saisis uniquement par la direction sportive.') +
     '<div class="ar-circ">' + AR_CIRCUITS.map(function (c) { return '<a href="#/arena/' + c[0] + '" class="' + (c[0] === AR.circuit ? 'on' : '') + '" style="background:' + c[3] + '"><b>' + c[1] + '</b><span>' + c[2] + '</span></a>'; }).join('') + '</div>' +
-    (AR.circuit === 'tweener' && tabs.length ? '<div class="chips" style="margin-bottom:14px">' + tabs.map(function (t) { return '<a class="chip' + (AR.tab === t[0] ? ' on' : '') + '" href="#/arena/' + t[0] + '">' + t[1] + '</a>'; }).join('') + '</div>' : '') +
+    (AR.circuit !== 'tweener' ? '<div class="card" id="ar-prep" style="margin-bottom:12px;padding:12px 14px"><div class="skel" style="height:22px"></div></div>' : '') +
+    (tabs.length ? '<div class="chips" style="margin-bottom:14px">' + tabs.map(function (t) { return '<button class="chip' + (AR.tab === t[0] ? ' on' : '') + '" data-artab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' : '') +
     '<div id="ar-l"><div class="skel"></div></div>';
+  all('[data-artab]').forEach(function (b) { b.onclick = function () { AR.tab = b.dataset.artab; vueArena(m, null, null); }; });
   var box = $('ar-l');
-  if (AR.circuit !== 'tweener') {
-    box.innerHTML = '<div class="card stack" style="gap:8px"><b>CLOC\'ARENA ' + circ[1] + ' · en préparation</b><span class="small mut">' + (AR.circuit === 'masters' ? 'Le circuit des adultes n\'est pas encore lancé.' : 'Le circuit des défis (matchs libres FFT) n\'est pas encore lancé.') +
-      ' Ses séances, inscriptions et résultats seront gérés ici quand il démarrera. Côté appli, les familles voient pour l\'instant la page d\'info du circuit.</span></div>';
-    return;
-  }
-  if (AR.tab === 'seances') return vueEvenements(box, suite, { titre: 'Séances Tweener', sous: 'Dates, groupes, places et inscriptions des séances. Elles apparaissent dans l\'agenda des familles.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance' });
-  if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], titre: 'Inscriptions Tweener', base: '#/arena/inscriptions/' });
+  if (AR.circuit !== 'tweener') arPreparation(AR.circuit, circ[1]);
+  if (AR.tab === 'seances') return vueEvenements(box, suite, { titre: 'Séances ' + circ[1], sous: 'Dates, groupes, places et inscriptions des séances ' + circ[1] + '. Elles apparaissent dans l\'agenda des adhérents des groupes choisis.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance', circuit: AR.circuit });
+  if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], circuit: AR.circuit, titre: 'Inscriptions ' + circ[1], base: '#/arena/inscriptions/' });
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
+  if (AR.tab === 'niveaux' && AR.circuit !== 'tweener') { box.innerHTML = '<div class="card stack" style="gap:8px"><b>Niveaux des adultes</b><span class="small mut">Le circuit ' + circ[1] + ' utilise le niveau club (barème Arena Masters, 1 à 10), fixé dans Adhérents → Niveaux des joueurs.</span><a class="btn sm line" style="align-self:flex-start" href="#/niveaux">Ouvrir les niveaux des joueurs</a></div>'; return; }
   var prep = Promise.all([
-    AR.joueurs ? AR.joueurs : q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom')),
+    AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
+      : q(sb.from('personnes').select('id, prenom, nom, niveau_club').eq('actif', true).eq('profil', 'adulte').order('prenom')).then(function (l) { return (l || []).map(function (j) { return { id: j.id, prenom: j.prenom, nom: j.nom, niveau_arena: j.niveau_club }; }); }),
     AR.formats ? AR.formats : q(sb.from('arena_formats').select('*').order('ordre'))
-  ]).then(function (r) { AR.joueurs = r[0] || []; AR.formats = r[1] || []; });
+  ]).then(function (r) { AR.joueurs = AR.jc[AR.circuit] = r[0] || []; AR.formats = r[1] || []; if (AR.formC !== AR.circuit) { AR.form = null; AR.formC = AR.circuit; } });
   prep.then(function () {
     if (AR.tab === 'historique') arHistorique(box); else if (AR.tab === 'niveaux') arNiveaux(box); else arSaisir(box);
   }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger CLOC\'ARENA.</div>'; });
@@ -1482,7 +1500,7 @@ function arSaisir(box) {
   box.innerHTML = '<div class="two" style="align-items:start"><div class="card stack">' +
     '<label class="l">Date du match<input class="f" type="date" id="ar-date" value="' + esc(F.date) + '"></label>' +
     '<div class="sect" style="margin:0">Format</div><div class="chips">' + AR.formats.map(function (x) { return '<button class="chip' + (x.code === F.format ? ' on' : '') + '" data-arfmt="' + esc(x.code) + '">' + esc(x.libelle) + ' · ' + (+x.points_victoire) + '/' + (+x.points_defaite) + '</button>'; }).join('') + '</div>' +
-    '<div class="sect" style="margin:0">Filtrer les joueurs par niveau</div><div class="chips"><button class="chip' + (!F.niv.length ? ' on' : '') + '" data-arniv="">Tous</button>' + AR_NIVEAUX.map(function (n) { return '<button class="chip' + (F.niv.indexOf(n) >= 0 ? ' on' : '') + '" data-arniv="' + n + '">' + n + '</button>'; }).join('') + '</div>' +
+    '<div class="sect" style="margin:0">Filtrer les joueurs par niveau</div><div class="chips"><button class="chip' + (!F.niv.length ? ' on' : '') + '" data-arniv="">Tous</button>' + (AR.circuit === 'tweener' ? AR_NIVEAUX : AR.joueurs.map(function (j) { return j.niveau_arena; }).filter(function (n, i, l) { return n && l.indexOf(n) === i; }).sort(function (a, b) { return String(a).localeCompare(String(b), 'fr', { numeric: true }); })).map(function (n) { return '<button class="chip' + (F.niv.indexOf(n) >= 0 ? ' on' : '') + '" data-arniv="' + n + '">' + n + '</button>'; }).join('') + '</div>' +
     '<span class="mut xs">Plusieurs niveaux possibles pour un regroupement (ex. Violet + Rouge).</span></div>' +
     '<div class="card stack"><b class="small">' + (dbl ? 'Équipe 1' : 'Joueur 1') + '</b>' + ligne(1, 0) + (dbl ? ligne(1, 1) : '') +
     '<b class="small">' + (dbl ? 'Équipe 2' : 'Joueur 2') + '</b>' + ligne(2, 0) + (dbl ? ligne(2, 1) : '') +
@@ -1504,7 +1522,7 @@ function arSaisir(box) {
     if (tous.filter(function (x, i) { return tous.indexOf(x) !== i; }).length) return toast('Un joueur apparaît deux fois');
     var lu = arLireScore(score()); if (!lu) return toast('Score invalide');
     var b = this; b.disabled = true; var match;
-    q(sb.from('arena_matchs').insert({ date_match: F.date, format: F.format, score: lu.score, vainqueur: lu.vainqueur, statut: 'propose', propose_par: A.user.id }).select().single()).then(function (mm) {
+    q(sb.from('arena_matchs').insert({ date_match: F.date, format: F.format, score: lu.score, vainqueur: lu.vainqueur, statut: 'propose', propose_par: A.user.id, circuit: AR.circuit }).select().single()).then(function (mm) {
       match = mm; var rows = [];
       ks.forEach(function (k) { rows.push({ match_id: mm.id, personne_id: F.e1[k], equipe: 1, invite: !!F.inv['1-' + k] }); rows.push({ match_id: mm.id, personne_id: F.e2[k], equipe: 2, invite: !!F.inv['2-' + k] }); });
       return q(sb.from('arena_match_joueurs').insert(rows));
@@ -1514,7 +1532,7 @@ function arSaisir(box) {
   };
 }
 function arHistorique(box) {
-  q(sb.from('arena_matchs').select('id, date_match, format, score, vainqueur, statut, legacy_id, created_at, arena_match_joueurs(equipe, invite, personnes(prenom, nom, niveau_arena))').in('statut', ['valide', 'refuse']).order('date_match', { ascending: false }).order('created_at', { ascending: false }).limit(1000)).then(function (l) {
+  q(sb.from('arena_matchs').select('id, date_match, format, score, vainqueur, statut, legacy_id, created_at, arena_match_joueurs(equipe, invite, personnes(prenom, nom, niveau_arena))').eq('circuit', AR.circuit).in('statut', ['valide', 'refuse']).order('date_match', { ascending: false }).order('created_at', { ascending: false }).limit(1000)).then(function (l) {
     if (!l.length) { box.innerHTML = '<div class="card empty">Aucun match enregistré.</div>'; return; }
     var jours = {}, ordre = [];
     l.forEach(function (mm) { if (!jours[mm.date_match]) { jours[mm.date_match] = []; ordre.push(mm.date_match); } jours[mm.date_match].push(mm); });
@@ -3951,7 +3969,7 @@ function router() {
     if (rr) { A.rub = rr[2]; A.view = 'r'; cadre('<div class="skel"></div>'); vueRubrique($('main'), rr[2]); window.scrollTo(0, 0); return; }
     v = 'accueil';
   }
-  if (v === 'evenements') { location.replace('#/arena/seances' + (parts[1] ? '/' + parts[1] : '')); return; } // séances CLOC'ARENA : Compétitions → CLOC'ARENA → Tweener
+  if (v === 'evenements') { AR.circuit = 'tweener'; location.replace('#/arena/seances' + (parts[1] ? '/' + parts[1] : '')); return; } // séances CLOC'ARENA : Compétitions → CLOC'ARENA → Tweener
   if (!peut(v)) v = A.mods[0];
   A.view = v;
   cadre('<div class="skel"></div>');
