@@ -19,6 +19,7 @@ var MODULES = [
   ['evenements', 'CLOC\'ARENA organisation', ['direction', 'bureau']],
   ['inscriptions', 'Inscriptions', ['direction', 'bureau', 'accueil']],
   ['fetes', 'Événements', ['direction', 'bureau', 'accueil']],
+  ['alaune', 'À la une', ['direction', 'bureau', 'accueil']],
   ['adherents', 'Adhérents', ['direction', 'bureau', 'accueil']],
   ['adoc', 'Mise à jour ADOC', ['direction', 'bureau']],
   ['groupes', 'Groupes', ['direction', 'bureau']],
@@ -43,7 +44,7 @@ var MODULES = [
 var RUBRIQUES = [
   ['', ['accueil']],
   ['Communication', ['messages', 'discussions', 'questionnaires', 'actus', 'accueilapp', 'reseaux'], 'comm', 'megaphone', 'Messages aux familles, discussions de groupe, questionnaires, actus et réseaux sociaux.'],
-  ['Agenda et activités', ['fetes', 'inscriptions'], 'agenda', 'cal', 'Événements (fête de Noël, tombola, stages, animations…) et inscriptions à tout ce qui arrive.'],
+  ['Agenda et activités', ['fetes', 'alaune', 'inscriptions'], 'agenda', 'cal', 'Événements (fête de Noël, tombola, stages, animations…), cartes à la une de l\'accueil et inscriptions à tout ce qui arrive.'],
   ['Adhérents', ['adherents', 'niveaux', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, niveaux des joueurs, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA (Tweener, Masters, Versus : séances, inscriptions, résultats) et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
@@ -52,7 +53,7 @@ var RUBRIQUES = [
 ];
 var DESC_MOD = {
   niveaux: 'Niveau club et classement FFT de chaque joueur, demandes de changement de niveau envoyées par les familles.',
-  accueil: 'Ce qui demande ton attention aujourd\'hui.', discussions: 'Les fils de groupe de l\'appli (annonces, CLOC\'ARENA, poules, équipes…) qui remplacent les groupes WhatsApp.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
+  accueil: 'Ce qui demande ton attention aujourd\'hui.', alaune: 'Les cartes mises en avant sur l\'accueil de l\'appli : ordre, visibles ou non, pour qui, dates.', discussions: 'Les fils de groupe de l\'appli (annonces, CLOC\'ARENA, poules, équipes…) qui remplacent les groupes WhatsApp.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
   reseaux: 'Mettre en avant des publications Instagram et Facebook.', accueilapp: 'Mot du club, ordre des blocs, raccourcis, partenaires et questions fréquentes de l\'appli.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Organiser les séances CLOC\'ARENA : dates, groupes, places.',
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël, tombola, stages, animations et tournois : chaque catégorie a sa page.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Saisie des résultats, historique des matchs par jour et niveaux des joueurs.',
@@ -339,7 +340,7 @@ var EVF = { quand: 'avenir', type: '' };
 function vueEvenements(m, arg, O) {
   O = O || { titre: 'CLOC\'ARENA organisation', sous: 'Les séances CLOC\'ARENA : dates, groupes, places et inscriptions. Elles apparaissent dans l\'agenda des familles.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance' };
   var avant = O.retour ? '<a class="fil" href="' + O.retour + '">← Événements</a>' : '';
-  m.innerHTML = avant + entete(O.titre, O.sous, '<button class="btn" id="e-new">' + esc(O.btn || 'Nouvel événement') + '</button>') +
+  m.innerHTML = avant + entete(O.titre, O.sous, '<button class="btn" id="e-new">' + esc(O.btn || 'Nouvel événement') + '</button>') + (O.haut || '') +
     '<div class="toolbar"><div class="chips">' + [['avenir', 'À venir'], ['passes', 'Passés']].map(function (x) { return '<button class="chip' + (EVF.quand === x[0] ? ' on' : '') + '" data-eq="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
     (O.types.length < 2 ? '</div><div id="e-l"><div class="skel"></div></div>' : '<select class="f" id="e-ty" style="width:auto"><option value="">Tous les types</option>' + O.types.map(function (k) { return '<option value="' + k + '"' + (EVF.type === k ? ' selected' : '') + '>' + TYPES_EVT[k] + '</option>'; }).join('') + '</select></div><div id="e-l"><div class="skel"></div></div>');
   all('[data-eq]').forEach(function (b) { b.onclick = function () { EVF.quand = b.dataset.eq; vueEvenements(m, arg, O); }; });
@@ -465,6 +466,7 @@ function vueEvenements(m, arg, O) {
     });
   };
   chargerGroupes().then(function () { charger(); if (arg === 'nouveau') formEvt(null); });
+  if (O.apres) O.apres();
 }
 
 // ---------- Inscriptions ----------
@@ -3032,7 +3034,7 @@ function vueJeux(m, id) {
   var J = window.JEUX, F = J ? J.FORMATS : {};
   if (!J) { m.innerHTML = '<div class="card empty">Le module des jeux n\'a pas pu se charger. Recharge la page.</div>'; return; }
   if (!id) {
-    m.innerHTML = '<a class="fil" href="#/fetes">← Événements</a>' + entete('Jeux et animations', 'One Point Slam, roi du terrain, montante-descendante, défis à points. Tu pilotes depuis ton téléphone, l\'écran du club affiche en direct.', '<button class="btn" id="jx-new">Nouveau jeu</button>') + '<div id="jx-l"><div class="skel"></div></div>';
+    m.innerHTML = '<a class="fil" href="#/fetes/animation">← Animations</a>' + entete('Jeux', 'One Point Slam, roi du terrain, montante-descendante, défis à points. Tu pilotes depuis ton téléphone, l\'écran du club affiche en direct.', '<button class="btn" id="jx-new">Nouveau jeu</button>') + '<div id="jx-l"><div class="skel"></div></div>';
     q(sb.from('jeux').select('id, titre, jour, format, joueurs, manches, archive').order('cree_le', { ascending: false })).then(function (l) {
       var actifs = l.filter(function (x) { return !x.archive; }), arch = l.filter(function (x) { return x.archive; });
       var carte = function (x) {
@@ -3046,7 +3048,7 @@ function vueJeux(m, id) {
     return;
   }
   var JE = null, timer = null;
-  m.innerHTML = '<a class="fil" href="#/fetes/jeux">← Jeux et animations</a><div id="jx-h"></div><div class="chips" id="jx-tabs" style="margin-bottom:14px"></div><div id="jx-c"><div class="skel"></div></div>';
+  m.innerHTML = '<a class="fil" href="#/fetes/jeux">← Jeux</a><div id="jx-h"></div><div class="chips" id="jx-tabs" style="margin-bottom:14px"></div><div id="jx-c"><div class="skel"></div></div>';
   var nom = function (k) { var p = JE.joueurs.filter(function (x) { return x.k === k; })[0]; return p ? p.nom : '?'; };
   var gNom = function (ee) { return (ee.gagnants || [ee.gagnant]).map(function (k) { return nom(k); }).join(' & '); };
   var malus = function (k, i) { var t = J.malusDe(JE.manches, JE.config, k, i), ac = J.accDe(JE.manches[i] && JE.manches[i].etat, k); return (t ? ' <span class="badge b-warn">' + esc(t) + '</span>' : '') + (ac.length ? ' <span class="badge jx-acc" title="Accessoires à porter">🎭 ' + ac.map(esc).join(' + ') + '</span>' : ''); };
@@ -3355,15 +3357,20 @@ function vueFetes(m, arg) {
   if (arg === 'jeux') return vueJeux(m);
   // Catégories d'événements tirées de l'agenda (stages, tournois…) : leur propre page
   if (arg && TYPES_EVT[arg] && arg !== 'seance') {
-    var NOMS = { stage: ['Stages', 'Stages de vacances et stages adultes : dates, groupes, places et inscriptions.', 'Nouveau stage'], tournoi: ['Tournois', 'Tournois et compétitions du club.', 'Nouveau tournoi'], animation: ['Animations', 'Animations ponctuelles du club.', 'Nouvelle animation'], reunion: ['Réunions', 'Réunions du club.', 'Nouvelle réunion'], autre: ['Réunions et autres', 'Réunions et tout ce qui ne rentre pas ailleurs.', 'Nouvel événement'] }[arg];
-    return vueEvenements(m, null, { titre: NOMS[0], sous: NOMS[1], btn: NOMS[2], types: arg === 'autre' ? ['reunion', 'autre'] : [arg], def: arg === 'autre' ? 'reunion' : arg, retour: '#/fetes' });
+    var NOMS = { stage: ['Stages', 'Stages de vacances et stages adultes : dates, groupes, places et inscriptions.', 'Nouveau stage'], tournoi: ['Tournois', 'Tournois et compétitions du club.', 'Nouveau tournoi'], animation: ['Animations', 'Fête de Noël, tombola, apéro, jeux et animations ponctuelles du club : tout ce qui est animation est ici.', 'Nouvelle animation dans l\'agenda'], reunion: ['Réunions', 'Réunions du club.', 'Nouvelle réunion'], autre: ['Réunions et autres', 'Réunions et tout ce qui ne rentre pas ailleurs.', 'Nouvel événement'] }[arg];
+    var OE = { titre: NOMS[0], sous: NOMS[1], btn: NOMS[2], types: arg === 'autre' ? ['reunion', 'autre'] : [arg], def: arg === 'autre' ? 'reunion' : arg, retour: '#/fetes' };
+    if (arg === 'animation') {
+      OE.haut = '<div class="sect" style="margin-top:0">Animations avec page, tombola et jeux</div><div id="anim-hub" class="hub" style="margin-bottom:18px"><div class="skel"></div></div><div class="sect">Animations de l\'agenda (Présent / Absent ou inscription)</div>';
+      OE.apres = function () { chargerAnimationsHub().then(function (x) { if (!$('anim-hub')) return; $('anim-hub').innerHTML = x.html; if ($('hub-page')) $('hub-page').onclick = nouvellePageFete; }); };
+    }
+    return vueEvenements(m, null, OE);
   }
   if (!arg) return hubEvenements(m);
   var tombo = arg === 'tombola';
   var F = { onglet: tombo ? (A.tomboOnglet || 'tombola') : (A.feteOnglet || 'presences'), ed: tombo ? A.feteEd : arg };
   var FT = [], fete = null;
   var GRP = { moins5: 'Moins de 5', plus5: '5 et plus' }, MODES_T = { especes: 'Espèces', cb: 'Carte', cheque: 'Chèque', virement: 'Virement' };
-  m.innerHTML = '<a class="fil" href="#/fetes">← Événements</a>' + entete(tombo ? 'Tombola' : 'Fête', tombo ? 'Tickets réservés et payés, lots et tirage au sort.' : 'Qui vient et réglages de la page vue par les familles (avec ou sans compte).', '<a class="btn sm line" id="ft-voir">Voir la page des familles</a>') +
+  m.innerHTML = '<a class="fil" href="#/fetes/animation">← Animations</a>' + entete(tombo ? 'Tombola' : 'Animation', tombo ? 'Tickets réservés et payés, lots et tirage au sort.' : 'Qui vient et réglages de la page vue par les familles (avec ou sans compte).', '<a class="btn sm line" id="ft-voir">Voir la page des familles</a>') +
     '<div class="chips" id="ft-ed" style="margin-bottom:8px"></div><div class="chips" id="ft-tabs" style="margin-bottom:14px"></div><div id="ft-c"><div class="skel"></div></div>';
   var onglets = function () {
     if (!tombo) { var h1 = m.querySelector('.head h1'); if (h1) h1.textContent = fete.titre + ' ' + new Date(fete.debut).getFullYear(); }
@@ -3509,37 +3516,46 @@ function vueFetes(m, arg) {
 }
 
 // Page d'accueil des événements : une carte par catégorie, cliquable
+// Carte du hub Événements (et du haut de la page Animations)
+function carteHub(href, emoji, titre, desc, info, accent) {
+  return '<a class="card hubc" href="' + href + '"' + (accent ? ' style="border-color:' + accent + '"' : '') + '><span class="hube">' + emoji + '</span><div style="min-width:0;flex:1"><b style="font-size:17px">' + esc(titre) + '</b><div class="mut small">' + desc + '</div>' + (info ? '<div class="small" style="margin-top:6px;font-weight:600;color:var(--ac)">' + info + '</div>' : '') + '</div><span class="mut" style="font-size:22px">›</span></a>';
+}
+// Tout ce qui est « animation » au même endroit : animations avec page (fête de Noël, apéro…), tombola, jeux, puis les animations de l'agenda.
+function chargerAnimationsHub() {
+  return Promise.all([
+    q(sb.from('fetes').select('*').order('debut', { ascending: false })).catch(function () { return []; }),
+    q(sb.from('fete_participations').select('edition, annule')).catch(function () { return []; }),
+    q(sb.from('tombola_commandes').select('edition, nb, statut')).catch(function () { return []; })
+  ]).then(function (r) {
+    var FT = r[0] || [], P = r[1] || [], T = r[2] || [], h = '';
+    FT.forEach(function (f) {
+      var n = P.filter(function (x) { return x.edition === f.edition && !x.annule; }).length, d = new Date(f.debut), adu = f.public_cible === 'adultes';
+      h += carteHub('#/fetes/' + encodeURIComponent(f.edition), adu ? '🥂' : '🎄', f.titre + ' ' + d.getFullYear(), esc(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + (adu ? ' · qui vient, page des adhérents, affiche' : ' · qui vient, page des familles, affiche'), adu ? n + ' adhérent' + (n > 1 ? 's' : '') + ' confirmé' + (n > 1 ? 's' : '') : n + ' famille' + (n > 1 ? 's' : '') + ' confirmée' + (n > 1 ? 's' : ''), adu ? 'var(--navy)' : '#b8862b');
+    });
+    if (FT.some(function (f) { return f.public_cible !== 'adultes'; })) {
+      var payes = T.filter(function (x) { return x.statut === 'paye'; }).reduce(function (s, x) { return s + x.nb; }, 0), res = T.filter(function (x) { return x.statut === 'reserve'; }).length;
+      h += carteHub('#/fetes/tombola', '🎟️', 'Tombola', 'Tickets réservés et payés, vente sur place, lots et tirage', payes + ' ticket' + (payes > 1 ? 's' : '') + ' payé' + (payes > 1 ? 's' : '') + (res ? ' · ' + res + ' réservation' + (res > 1 ? 's' : '') + ' à encaisser' : ''));
+    }
+    h += carteHub('#/fetes/jeux', '🎾', 'Jeux', 'One Point Slam, roi du terrain, montante-descendante, défis à points, avec écran du club en direct', 'Tirage au sort, malus, palmarès');
+    h += '<button class="card hubc" id="hub-page" style="border-style:dashed;text-align:left;cursor:pointer;font:inherit;color:inherit"><span class="hube">➕</span><div style="min-width:0;flex:1"><b style="font-size:17px">Nouvelle animation avec page</b><div class="mut small">Comme la fête de Noël (apéro des adultes, fête du club…) : qui vient, réglages, affiche.</div></div></button>';
+    return { html: h, nb: FT.length };
+  });
+}
 function hubEvenements(m) {
   m.innerHTML = entete('Événements', 'Clique sur une catégorie pour la gérer. Les séances CLOC\'ARENA sont dans Compétitions → CLOC\'ARENA → Tweener.') + '<div id="hub" class="hub"><div class="skel"></div></div>';
   var depuis = new Date(Date.now() - 864e5).toISOString();
   Promise.all([
-    q(sb.from('fetes').select('*').order('debut', { ascending: false })).catch(function () { return []; }),
-    q(sb.from('fete_participations').select('edition, annule')).catch(function () { return []; }),
-    q(sb.from('tombola_commandes').select('edition, nb, statut')).catch(function () { return []; }),
+    q(sb.from('fetes').select('edition, debut, fin').order('debut', { ascending: false })).catch(function () { return []; }),
     q(sb.from('evenements').select('type').neq('type', 'seance').gte('debut', depuis)).catch(function () { return []; })
   ]).then(function (r) {
-    var FT = r[0], P = r[1], T = r[2], E = r[3];
-    var carte = function (href, emoji, titre, desc, info, accent) {
-      return '<a class="card hubc" href="' + href + '"' + (accent ? ' style="border-color:' + accent + '"' : '') + '><span class="hube">' + emoji + '</span><div style="min-width:0;flex:1"><b style="font-size:17px">' + esc(titre) + '</b><div class="mut small">' + desc + '</div>' + (info ? '<div class="small" style="margin-top:6px;font-weight:600;color:var(--ac)">' + info + '</div>' : '') + '</div><span class="mut" style="font-size:22px">›</span></a>';
-    };
-    var h = '';
-    FT.forEach(function (f) {
-      var n = P.filter(function (x) { return x.edition === f.edition && !x.annule; }).length, d = new Date(f.debut), adu = f.public_cible === 'adultes';
-      h += carte('#/fetes/' + encodeURIComponent(f.edition), adu ? '🥂' : '🎄', f.titre + ' ' + d.getFullYear(), esc(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + (adu ? ' · qui vient, page des adhérents' : ' · qui vient, page des familles, flyer'), adu ? n + ' adhérent' + (n > 1 ? 's' : '') + ' confirmé' + (n > 1 ? 's' : '') : n + ' famille' + (n > 1 ? 's' : '') + ' confirmée' + (n > 1 ? 's' : ''), adu ? 'var(--navy)' : '#b8862b');
-    });
-    if (FT.some(function (f) { return f.public_cible !== 'adultes'; })) {
-      var payes = T.filter(function (x) { return x.statut === 'paye'; }).reduce(function (s, x) { return s + x.nb; }, 0), res = T.filter(function (x) { return x.statut === 'reserve'; }).length;
-      h += carte('#/fetes/tombola', '🎟️', 'Tombola', 'Tickets réservés et payés, vente sur place, lots et tirage', payes + ' ticket' + (payes > 1 ? 's' : '') + ' payé' + (payes > 1 ? 's' : '') + (res ? ' · ' + res + ' réservation' + (res > 1 ? 's' : '') + ' à encaisser' : ''));
-    }
+    var FT = r[0] || [], E = r[1] || [], h = '';
     var nb = function (t) { var n = E.filter(function (x) { return x.type === t; }).length; return n ? n + ' à venir' : 'Rien de prévu'; };
-    h += carte('#/fetes/stage', '🏕️', 'Stages', 'Stages de vacances (dont stage d\'hiver multisport) et stages adultes', nb('stage'));
-    h += carte('#/fetes/animation', '🎉', 'Animations', 'Miss Cup, fête du club, animations ponctuelles', nb('animation'));
-    h += carte('#/fetes/jeux', '🎾', 'Jeux et animations', 'One Point Slam, roi du terrain, montante-descendante, défis à points, avec écran du club en direct', 'Tirage au sort, malus, palmarès');
-    h += carte('#/fetes/tournoi', '🏆', 'Tournois', 'Tournois et compétitions organisés au club', nb('tournoi'));
-    h += carte('#/fetes/autre', '📌', 'Réunions et autres', 'Réunions et tout le reste', E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length ? E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length + ' à venir' : 'Rien de prévu');
-    h += '<button class="card hubc" id="hub-page" style="border-style:dashed;text-align:left;cursor:pointer;font:inherit;color:inherit"><span class="hube">➕</span><div style="min-width:0;flex:1"><b style="font-size:17px">Nouvelle page d\'événement</b><div class="mut small">Une page comme la fête de Noël (apéro des adultes, fête du club…) : qui vient, réglages, affiche.</div></div></button>';
+    var fetesAVenir = FT.filter(function (f) { return new Date(f.fin || f.debut) > new Date(Date.now() - 864e5); }).length, nAnim = E.filter(function (x) { return x.type === 'animation'; }).length + fetesAVenir;
+    h += carteHub('#/fetes/animation', '🎉', 'Animations', 'Fête de Noël, tombola, apéro, jeux (One Point Slam…), Miss Cup, animations ponctuelles', nAnim ? nAnim + ' à venir' : 'Rien de prévu', '#b8862b');
+    h += carteHub('#/fetes/stage', '🏕️', 'Stages', 'Stages de vacances (dont stage d\'hiver multisport) et stages adultes', nb('stage'));
+    h += carteHub('#/fetes/tournoi', '🏆', 'Tournois', 'Tournois et compétitions organisés au club', nb('tournoi'));
+    h += carteHub('#/fetes/autre', '📌', 'Réunions et autres', 'Réunions et tout le reste', E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length ? E.filter(function (x) { return x.type === 'reunion' || x.type === 'autre'; }).length + ' à venir' : 'Rien de prévu');
     $('hub').innerHTML = h;
-    $('hub-page').onclick = nouvellePageFete;
   });
 }
 // Crée une page d'événement (même fonctionnement que la fête de Noël) puis ouvre ses réglages
@@ -3597,8 +3613,12 @@ function uneStatutG(a) {
   if (a.fin && a.fin < iso) return ['Terminée', 'var(--mut)'];
   return [a.fin ? 'En ligne jusqu\'au ' + jm(a.fin) : 'En ligne', 'var(--ok)'];
 }
-function vueAccueilApp(m) {
-  m.innerHTML = entete('Accueil de l\'appli', 'Les annonces à la une, le mot du club, l\'ordre des blocs, les raccourcis, les réseaux, les partenaires et les questions fréquentes de la page Aide. Rien ne change pour les familles tant que tu n\'as pas enregistré.', '<a class="btn sm line" href="../#/accueil">Voir l\'accueil</a>') + '<div id="ac-l"><div class="skel"></div></div>';
+// Deux pages pour le même réglage : « À la une » (Agenda et activités) montre seulement les cartes mises en avant ;
+// « Accueil de l'appli » (Communication) garde le reste. Chacune enregistre toute la configuration de l'accueil.
+function vueALaUne(m) { vueAccueilApp(m, null, { seul: 'une' }); }
+function vueAccueilApp(m, arg, O) {
+  O = O || {};
+  m.innerHTML = O.seul === 'une' ? entete('À la une', 'Les cartes mises en avant sur l\'accueil de l\'appli (fête de Noël, tombola, apéro…) : l\'ordre avec les flèches, visible ou non, pour qui, les dates, l\'image et le bouton. Rien ne change pour les adhérents tant que tu n\'as pas enregistré.') + '<div id="ac-l"><div class="skel"></div></div>' : entete('Accueil de l\'appli', 'Le mot du club, l\'ordre des blocs, les raccourcis, les réseaux, les partenaires et les questions fréquentes de la page Aide. Rien ne change pour les familles tant que tu n\'as pas enregistré.', '<a class="btn sm line" href="../#/accueil">Voir l\'accueil</a>') + '<div id="ac-l"><div class="skel"></div></div>';
   var E = null, UO = -1, LIENS = { evts: [], fetes: [] };
   var copie = function (o) { return JSON.parse(JSON.stringify(o)); };
   var deplacer = function (l, i, d) { var j = i + d; if (j < 0 || j >= l.length) return; var x = l[i]; l[i] = l[j]; l[j] = x; };
@@ -3643,6 +3663,7 @@ function vueAccueilApp(m) {
           (UO === i ? formUne(a, i) : '') + '</div>';
       }).join('') : '<div class="it mut small">Aucune annonce pour l\'instant.</div>') + '</div>' +
       '<div class="chips"><button class="btn sm line" id="ac-uadd">+ Nouvelle annonce</button></div></div>';
+    var hUne = h; h = '';
     h += '<div class="card stack" style="margin-bottom:14px"><div class="sect" style="margin-top:0">Mot du club</div>' +
       '<p class="mut small" style="margin:0">Un bandeau en haut de l\'accueil, pour un message du moment (reprise des cours, fermeture, bonne année…).</p>' +
       '<label class="check" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-mot="actif"' + (M.actif ? ' checked' : '') + '> Afficher le mot du club</label>' +
@@ -3668,8 +3689,8 @@ function vueAccueilApp(m) {
     h += '<div class="card stack" style="margin-bottom:14px"><div class="sect" style="margin-top:0">Questions fréquentes (page Aide)</div><p class="mut small" style="margin:0">Elles s\'ajoutent sous le guide d\'installation et de connexion.</p><div class="list">' + (E.faq.length ? E.faq.map(function (x, i) {
       return '<div class="it" style="flex-direction:column;align-items:stretch;gap:8px"><div style="display:flex;gap:8px;align-items:center"><input class="f" data-fq="' + i + '|q" value="' + esc(x.q) + '" placeholder="Question" style="flex:1;min-width:0"><div class="chips" style="flex:none">' + fleches('faq', i, E.faq.length) + '<button class="btn sm ko" data-fx="' + i + '" aria-label="Retirer">×</button></div></div><textarea class="f" data-fq="' + i + '|r" rows="2" placeholder="Réponse">' + esc(x.r || '') + '</textarea></div>';
     }).join('') : '<div class="it mut small">Aucune question pour l\'instant.</div>') + '</div><div class="chips"><button class="btn sm line" id="ac-fadd">+ Ajouter une question</button></div></div>';
-    h += '<div class="ac-save"><button class="btn sm ghost" id="ac-def">Revenir aux réglages d\'origine</button><button class="btn" id="ac-ok">Enregistrer</button></div>';
-    $('ac-l').innerHTML = h;
+    var hSave = '<div class="ac-save"><button class="btn sm ghost" id="ac-def"' + (O.seul === 'une' ? ' hidden' : '') + '>Revenir aux réglages d\'origine</button><button class="btn" id="ac-ok">Enregistrer</button></div>';
+    $('ac-l').innerHTML = O.seul === 'une' ? hUne + '<div hidden>' + h + '</div>' + hSave : '<div hidden>' + hUne + '</div><p class="mut small" style="margin:0 0 14px">Les cartes mises en avant (fête de Noël, tombola, apéro…) se règlent dans <a href="#/alaune">Agenda et activités → À la une</a>.</p>' + h + hSave;
     lier();
   };
   var lier = function () {
@@ -3734,7 +3755,7 @@ function vueAccueilApp(m) {
   }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les réglages de l\'accueil.</div>'; });
 }
 
-var VUES = { droits: vueDroits, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
+var VUES = { droits: vueDroits, alaune: vueALaUne, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
   fermer();
