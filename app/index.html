@@ -476,12 +476,20 @@ button.javatar{cursor:pointer}
 .acc-ajout .chip svg{color:var(--ac)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}}
 :root[data-theme="dark"] .fete-carte{background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--clay) 22%,var(--card)))}
+/* Bascule Adhérent / Espace coach sous « Bonjour Prénom » */
+.mode-sw{display:flex;gap:4px;margin-top:14px;padding:4px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);width:calc(74% - 34px);max-width:420px}
+.mode-sw button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;padding:0 6px;border:0;border-radius:10px;background:transparent;color:#dbe4ec;font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer}
+@media (max-width:479px){.mode-sw svg{display:none}}
+.mode-sw button.on{background:#fff;color:var(--navy)}
+.hero.coach-mode .mode-sw button.on{background:var(--balle);color:var(--navy)}
+.hero.coach-mode .hello{color:var(--balle);font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-size:12px}
+.co-titre{font-family:var(--disp);font-size:26px;margin:0 0 2px}
 </style>
 </head>
 <body>
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611140720"></script>
+<script src="app.js?v=202611151100"></script>
 </body>
 </html>

@@ -130,6 +130,7 @@ function cordageOuvert() { return !S.reglages || S.reglages.cordage_ouvert !== f
 
 function chargerUtilisateur() {
   S.compte = null; S.pers = []; S.roles = []; S.groupesDe = {}; S.couleur = {}; S.isDir = false; S.isStaff = false; S.gere = [];
+  S.mode = S.user && localStorageGet('cloca-mode') === S.user.id ? 'coach' : ''; // l'appli rouvre là où le coach l'a laissée
   if (!S.user) return Promise.resolve();
   return Promise.all([
     q(sb.from('comptes').select('*').eq('user_id', S.user.id).maybeSingle()),
@@ -324,6 +325,7 @@ function tabs(actif) {
   var t = [['accueil', 'home', 'Accueil'], ['agenda', 'cal', 'Agenda'], ['messages', 'chat', 'Messages'], ['club', 'club', 'Club']];
   var nm = totalNonLus();
   t.push(aDesEspaces() ? ['gestion', 'tool', 'Gestion'] : ['profil', 'user', 'Profil']);
+  if (enModeCoach()) t = [['coach', 'cal', 'Mes cours'], ['coach/evts', 'trophy', 'Séances'], ['coach/groupes', 'people', 'Groupes'], ['coach/missions', 'check', 'Missions'], ['messages', 'chat', 'Messages']];
   $('tabs-in').style.setProperty('--n', t.length);
   $('tabs-in').innerHTML = t.map(function (x) {
     return '<a href="#/' + x[0] + '" class="' + (actif === x[0] ? 'on' : '') + '"' + (actif === x[0] ? ' aria-current="page"' : '') + ' style="position:relative">' + ic(x[1], 24) + x[2] + (x[0] === 'messages' && nm ? '<span class="bulle-tab" aria-label="' + nm + ' non lu' + (nm > 1 ? 's' : '') + '">' + (nm > 99 ? '99+' : nm) + '</span>' : '') + '</a>';
@@ -339,7 +341,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '11/11 droits';
+var VERSION_APPLI = '15/11 espace coach';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -648,7 +650,7 @@ function pageAccueil() {
   var urgent = (S.pubs || []).filter(function (p) { return p.urgent; })[0];
   var h = '<div class="hero"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
     '<div style="flex:1"><div class="hello">' + (S.user ? 'Bonjour' : 'Bienvenue au club') + '</div><div class="hello-name">' + esc(S.user ? nomAffiche() : 'CLOCA Tennis') + '</div></div>' + cloche() + '</div>' +
-    selFamille(true) + '</div></div><main>';
+    selMode() + selFamille(true) + '</div></div><main>';
   var tDisc = ''; // les discussions sont dans l'onglet Messages
   var cfg = accueilPerso(accueilCfg()), une = uneVisibles(cfg), couvre = uneCouvre(une);
   var top = h, P = { presence: '', msg: '', disc: '', qst: carteQuestionnairesAccueil(), urgent: '', une: blocUne(une), fete: carteFeteAccueil(couvre.fetes) + carteAnimAccueil(couvre.evts), rdv: '', tiles: '', login: '', install: '', actu: '', reseaux: '<div id="reseaux"></div>', partners: '', mot: '' };
@@ -2036,7 +2038,7 @@ function pageGroupe(gid) {
   var cr = ((AG && AG.creneaux) || []).filter(function (c) { return c.groupe_id === gid; })[0];
   var nom = cr && cr.groupes ? cr.groupes.nom : 'Groupe';
   setTimeout(function () { remplirGroupe(gid); });
-  return '<div class="pagehead wrap">' + backLink('#/agenda', 'Agenda') + '<h1 style="font-size:26px">' + esc(String(nom).replace(/^.*?·\s*/, '')) + '</h1>' +
+  return '<div class="pagehead wrap">' + (enModeCoach() ? backLink('#/coach', 'Mes cours') : backLink('#/agenda', 'Agenda')) + '<h1 style="font-size:26px">' + esc(String(nom).replace(/^.*?·\s*/, '')) + '</h1>' +
     (cr ? '<p class="mut small" style="margin:4px 0 0">' + esc(JOURS[cr.jour_semaine].charAt(0).toUpperCase() + JOURS[cr.jour_semaine].slice(1)) + ' ' + cr.heure_debut.slice(0, 5).replace(':', 'h') + ' – ' + cr.heure_fin.slice(0, 5).replace(':', 'h') + (cr.lieu ? ' · ' + esc(cr.lieu) : '') + (cr.encadrant ? ' · ' + esc(cr.encadrant) : '') + '</p>' : '') + '</div>' +
     '<main id="grp-main"><div class="skel"></div></main>';
 }
@@ -3583,7 +3585,25 @@ function aRole(r) { return S.roles.some(function (x) { return x.role === r && !x
 function estCoach() { return !!nomCoachCompte() || S.gere.length > 0 || S.isDir; }
 function estCordeurSeul() { return aRole('cordeur') || S.isDir; }
 function estBureau() { return aRole('bureau') || S.isDir; }
-function aDesEspaces() { return !S.apercu && (S.isStaff || estCoach() || estCordeurSeul() || estBureau()); }
+function aDesEspaces() { return !S.apercu && (S.isStaff || (estCoach() && !peutModeCoach()) || estCordeurSeul() || estBureau()); }
+// Bascule Adhérent / Espace coach (sous « Bonjour Prénom ») : chaque coach est aussi adhérent, on sépare les deux.
+// Pas pour la direction : son compte et l'espace coach sont différents.
+function peutModeCoach() { return !!S.user && !S.apercu && !S.isDir && (!!nomCoachCompte() || S.gere.length > 0); }
+function enModeCoach() { return S.mode === 'coach' && peutModeCoach(); }
+function changerMode(m) {
+  S.mode = m === 'coach' ? 'coach' : ''; localStorageSet('cloca-mode', S.mode && S.user ? S.user.id : '');
+  if (S.mode) CO.jour = 0;
+  go(S.mode ? '#/coach' : '#/accueil');
+}
+function selMode() {
+  if (!peutModeCoach()) return '';
+  var c = enModeCoach();
+  return '<div class="mode-sw" role="group" aria-label="Choisir mon espace"><button data-mode="" class="' + (c ? '' : 'on') + '"' + (c ? '' : ' aria-pressed="true"') + '>' + ic('user', 18) + 'Adhérent</button>' +
+    '<button data-mode="coach" class="' + (c ? 'on' : '') + '"' + (c ? ' aria-pressed="true"' : '') + '>' + ic('cal', 18) + 'Espace coach</button></div>';
+}
+function lierMode() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function (b) { b.onclick = function () { if (b.classList.contains('on')) return; changerMode(b.dataset.mode); }; });
+}
 function pageEspaces() {
   if (!S.user || !aDesEspaces()) return '<div class="pagehead wrap"><h1>Gestion</h1></div><main><section class="card empty">Espace réservé à l\'équipe du club.</section></main>';
   var carte = function (href, icone, titre, texte, id, ext) {
@@ -3620,7 +3640,12 @@ var CO = { jour: 0, tab: 'jour' };
 function pageCoach() {
   var nc = nomCoachCompte();
   var tabs = [['jour', 'Mes cours', 'cal'], ['evts', 'Séances et événements', 'trophy']].concat([['missions', 'Missions', 'check'], ['groupes', 'Mes groupes', 'user']]);
-  var h = '<div class="darkhead"><div class="wrap">' + backLink('#/gestion', 'Mes espaces', true) + '<div class="kicker" style="margin-top:8px">ESPACE COACH' + (nc ? ' · ' + esc(nc.toUpperCase()) : '') + '</div><h1>Mon espace coach</h1>' +
+  var titres = { jour: 'Mes cours', evts: 'Séances et événements', missions: 'Missions', groupes: 'Mes groupes' };
+  var h = enModeCoach()
+    ? '<div class="hero coach-mode"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
+      '<div style="flex:1"><div class="hello">Espace coach</div><div class="hello-name">' + esc(nomAffiche() || nc) + '</div></div>' + cloche() + '</div>' +
+      selMode() + '</div></div><main id="co-main">' + (CO.tab === 'jour' ? '' : '<h2 class="co-titre">' + titres[CO.tab] + '</h2>')
+    : '<div class="darkhead"><div class="wrap">' + backLink('#/gestion', 'Mes espaces', true) + '<div class="kicker" style="margin-top:8px">ESPACE COACH' + (nc ? ' · ' + esc(nc.toUpperCase()) : '') + '</div><h1>Mon espace coach</h1>' +
     '<div class="cases">' + tabs.map(function (t) { return '<button data-cot="' + t[0] + '" class="' + (CO.tab === t[0] ? 'on' : '') + '">' + ic(t[2], 20) + '<span>' + t[1] + '</span></button>'; }).join('') + '</div></div></div><main id="co-main">';
   if (CO.tab === 'jour') {
     var j = new Date(); j.setHours(12, 0, 0, 0); j.setDate(j.getDate() + CO.jour);
@@ -4424,8 +4449,12 @@ function render() {
   else if (p === 'saisie' || p === 'cordeur' || p === 'bureau') { location.replace('gestion/#/' + ({ saisie: 'arena', cordeur: 'cordage', bureau: 'accueil' })[p]); return; }
   else if (p === 'cordage') { html = arg === 'guide' ? pageGuideCordage() : pageCordage(arg); actif = 'accueil'; }
   else if (p === 'double') { html = pageDouble(); actif = 'accueil'; }
-  else if (p === 'groupe') { html = pageGroupe(arg); actif = aDesEspaces() ? 'gestion' : 'agenda'; }
-  else if (p === 'coach') { html = pageCoach(); actif = 'gestion'; }
+  else if (p === 'groupe') { html = pageGroupe(arg); actif = enModeCoach() ? 'coach' : aDesEspaces() ? 'gestion' : 'agenda'; }
+  else if (p === 'coach') {
+    if (peutModeCoach() && !enModeCoach()) { S.mode = 'coach'; localStorageSet('cloca-mode', S.user.id); } // entrer dans l'espace coach = passer en mode coach
+    if (enModeCoach()) CO.tab = { evts: 1, groupes: 1, missions: 1 }[arg] ? arg : 'jour';
+    html = pageCoach(); actif = enModeCoach() ? 'coach' + (CO.tab === 'jour' ? '' : '/' + CO.tab) : 'gestion';
+  }
   else if (p === 'messages') { html = pageMessages(); actif = 'messages'; }
   else if (p === 'contacter') { html = pageContacter(arg, parts[2]); actif = 'messages'; }
   else if (p === 'discussions') { MSGF = 'club'; html = pageMessages(); actif = 'messages'; }
@@ -4434,11 +4463,14 @@ function render() {
   else if (p === 'message') { html = pageMessage(arg); actif = 'messages'; }
   else if (p === 'questionnaire') { html = pageQuestionnaire(arg); actif = 'accueil'; }
   else if (p === 'notifs') { html = pageNotifs(); actif = 'accueil'; setTimeout(lierNotifs); }
+  else if (enModeCoach()) { location.replace('#/coach'); return; } // en mode coach, l'accueil est l'espace coach
   else { p = 'accueil'; html = pageAccueil(); actif = 'accueil'; setTimeout(function () { lierSel(); remplirPresence(); lierPart(); lierRaccourcis(); remplirReseaux(); resumeCoach(); lierAccueilAide(); setTimeout(guidesAuto, 400); }); }
   if (S.apercu) html = '<div style="position:sticky;top:0;z-index:30;background:#7b4fa0;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small"><b>Aperçu : ' + esc(S.apercu.nom) + '</b><br>Tu vois l\'appli comme cette famille. Rien n\'est enregistré.</span><button class="chip" id="apercu-x" style="background:#fff;color:#12304a;flex:none">Quitter</button></div>' + html;
   document.body.setAttribute('data-page', p);
   document.body.setAttribute('data-sub', arg || '');
   $('app').innerHTML = html;
+  document.body.classList.toggle('mode-coach', enModeCoach());
+  lierMode();
   poserCloche();
   notifsLuesPage();
   if ($('apercu-x')) $('apercu-x').onclick = function () { apercu(null); };
