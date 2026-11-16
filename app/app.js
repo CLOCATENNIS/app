@@ -341,7 +341,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '16/11 masters versus';
+var VERSION_APPLI = '16/11 balles classement';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1151,15 +1151,21 @@ function arenaClassement() {
     var p = l.slice(0, 3), ordre = [1, 0, 2], hauteurs = [96, 70, 54], fonds = ['var(--ac)', '#dfe6ec', '#ede3d2'], txt = ['#fff', '#102f4a', '#102f4a'];
     h += '<section class="card podium">' + ordre.map(function (i) {
       var c = p[i]; if (!c) return '<div></div>';
-      return '<div class="p">' + lien(c, '<b>' + esc(c.joueur) + '</b>') + '<span class="mut small">' + (+c.points) + ' pts</span><div class="blk" style="height:' + hauteurs[i] + 'px;background:' + fonds[i] + ';color:' + txt[i] + '">' + (i + 1) + '</div></div>';
+      return '<div class="p">' + balleArena(c.niveau, 34) + lien(c, '<b>' + esc(c.joueur) + '</b>') + '<span class="mut small">' + (+c.points) + ' pts</span><div class="blk" style="height:' + hauteurs[i] + 'px;background:' + fonds[i] + ';color:' + txt[i] + '">' + (i + 1) + '</div></div>';
     }).join('') + '</section>';
     h += '<section class="card tight"><div class="rk h"><span>#</span><span>Joueur</span><span class="n">Part.</span><span class="n">Points</span></div>' +
       l.slice(3).map(function (c, i) {
         var me = mes.indexOf(c.personne_id) >= 0;
-        return '<div class="rk' + (me ? ' me' : '') + '"><span>' + (i + 4) + '</span><span>' + lien(c, esc(c.joueur) + (me ? ' <span class="xs" style="color:#6f43a0">· ' + (S.compte && S.compte.personne_id === c.personne_id ? 'toi' : 'ta famille') + '</span>' : '')) + '</span><span class="n mut">' + c.participations + '</span><span class="n"><b>' + (+c.points) + '</b></span></div>';
+        return '<div class="rk' + (me ? ' me' : '') + '"><span>' + (i + 4) + '</span><span>' + lien(c, balleArena(c.niveau) + esc(c.joueur) + (me ? ' <span class="xs" style="color:#6f43a0">· ' + (S.compte && S.compte.personne_id === c.personne_id ? 'toi' : 'ta famille') + '</span>' : '')) + '</span><span class="n mut">' + c.participations + '</span><span class="n"><b>' + (+c.points) + '</b></span></div>';
       }).join('') + '</section><p class="mut xs" style="text-align:center;margin:0 0 6px">Classement par points, puis nombre de participations.</p>';
     box.innerHTML = h; lierFiltres();
   }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger le classement pour le moment.</section>'; });
+}
+// Petite balle de la couleur du niveau CLOC'ARENA devant chaque joueur du classement Tweener (pastille de couleur si pas d'image)
+function balleArena(n, t) {
+  t = t || 22; var f = { Blanc: 'blanc', Violet: 'violet', Rouge: 'rouge', Orange: 'orange', Vert: 'vert', Jaune: 'jaune' }[n || ''];
+  if (f) return '<img src="balles/' + f + '.webp" alt="' + esc(n) + '" title="' + esc(n) + '" width="' + t + '" height="' + t + '" loading="lazy" style="width:' + t + 'px;height:' + t + 'px;object-fit:contain;vertical-align:middle;margin-right:6px;flex:none">';
+  var c = NIV[n]; return c ? '<span title="' + esc(n) + '" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c.bg + ';vertical-align:middle;margin-right:6px"></span>' : '';
 }
 function lierFiltres() { Array.prototype.forEach.call(document.querySelectorAll('[data-filtre]'), function (b) { b.onclick = function () { S.arenaFiltre = b.dataset.filtre; arenaClassement(); }; }); }
 
