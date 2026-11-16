@@ -341,7 +341,7 @@ function selFamille(onHero) {
 function lierSel() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-sel]'), function (b) { b.onclick = function () { S.sel = b.dataset.sel; render(); }; });
 }
-var VERSION_APPLI = '16/11 circuits';
+var VERSION_APPLI = '16/11 masters versus';
 function nomAffiche() {
   if (!S.user) return '';
   var moi = S.pers.filter(function (p) { return S.compte && p.id === S.compte.personne_id; })[0];
@@ -1021,7 +1021,76 @@ function pageCircuit(c, nom, fond, kicker) {
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Le circuit</span><span class="small">Pour les adultes et les jeunes compétiteurs du club. Chaque match saisi par la direction sportive rapporte des points ; les matchs CLOC\'ARENA Versus des adultes compteront aussi ici.</span></section>' +
     '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement de la saison</span><div id="circ-cl"><div class="skel"></div></div></section></main>';
 }
+// Icône « Défier » : deux raquettes croisées avec un petit VS
+function icDefi(t) { t = t || 30; return '<svg width="' + t + '" height="' + t + '" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="10" cy="10" rx="5.5" ry="6.5" transform="rotate(-45 10 10)"/><path d="M14 14l9 9"/><ellipse cx="22" cy="10" rx="5.5" ry="6.5" transform="rotate(45 22 10)"/><path d="M18 14l-9 9"/></g><rect x="10" y="18.5" width="12" height="8" rx="3" fill="var(--ac)"/><text x="16" y="24.6" text-anchor="middle" font-size="6.5" font-weight="800" fill="#fff" font-family="Arial,sans-serif">VS</text></svg>'; }
+// Mes choix CLOC'ARENA (participer, prêt à jouer) pour chaque profil du compte
+function choixArena(pid, champs, apres) {
+  if (S.apercu) return toast('Aperçu : rien n\'est enregistré');
+  q(sb.from('arena_choix').upsert(Object.assign({ personne_id: pid, maj_le: new Date().toISOString() }, champs))).then(function () { toast('C\'est noté'); if (apres) apres(); }).catch(function () { toast('Enregistrement impossible'); });
+}
+function pageMastersOuvert() {
+  setTimeout(function () {
+    var box = $('ms-cl'); if (!box) return;
+    if (!S.user) { box.innerHTML = '<span class="mut small">Connecte-toi pour voir le classement.</span>'; return; }
+    var mesIds = (S.pers || []).map(function (p) { return p.id; });
+    Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters').in('personne_id', mesIds.length ? mesIds : ['00000000-0000-0000-0000-000000000000'])).catch(function () { return []; })]).then(function (r) {
+      if (!$('ms-cl')) return;
+      var L = r[0] || [], C = r[1] || [];
+      var moi = L.filter(function (x) { return mesIds.indexOf(x.personne_id) >= 0; });
+      var portee = {}; moi.forEach(function (x) { portee[x.personne_id] = [Math.max(1, x.rang - (x.bonus ? 8 : 5)), x.rang - 1]; });
+      var peutDefier = function (x) { return moi.some(function (m) { var p = portee[m.personne_id]; return x.rang >= p[0] && x.rang <= p[1]; }); };
+      $('ms-cl').innerHTML = (moi.length ? moi.map(function (m) { return '<div class="small" style="margin-bottom:8px">' + esc(m.joueur) + ' : <b>' + m.rang + (m.rang === 1 ? 'er' : 'e') + '</b>' + (m.rang > 1 ? ' · tu peux défier du n°' + portee[m.personne_id][0] + ' au n°' + (m.rang - 1) + (m.bonus ? ' ✨ bonus' : '') : '') + '</div>'; }).join('') : '') +
+        '<div class="stack" style="gap:0">' + L.map(function (x) {
+          var mine = mesIds.indexOf(x.personne_id) >= 0, ok = !mine && peutDefier(x);
+          return '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)' + (mine ? ';background:rgba(223,245,0,.18)' : '') + '"><b style="width:30px;text-align:right">' + x.rang + '</b><span style="flex:1;min-width:0">' + esc(x.joueur) + (x.bonus ? ' ✨' : '') + ' <span class="mut xs">' + esc(x.classement_fft || '') + '</span></span>' +
+            (ok ? '<button class="btn sm line" data-defi="' + esc(x.personne_id) + '" data-nom="' + esc(x.joueur) + '" aria-label="Défier ' + esc(x.joueur) + '" style="padding:2px 8px;color:var(--navy)">' + icDefi(28) + '</button>' : '') + '</div>';
+        }).join('') + '</div>';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-defi]'), function (b) { b.onclick = function () { modale('<div class="stack" style="gap:10px"><div style="display:flex;gap:10px;align-items:center;color:var(--navy)">' + icDefi(40) + '<b style="font-size:18px">Défier ' + esc(b.dataset.nom) + '</b></div><p class="small" style="margin:0">Les défis se lanceront directement dans l\'appli très bientôt (créneaux, terrain, score).</p><p class="small" style="margin:0">En attendant : mettez-vous d\'accord, jouez le match au club, puis donnez le score à la direction sportive. Si tu gagnes, tu prends sa place.</p><button class="btn" id="df-ok">J\'ai compris</button></div>', function () { $('df-ok').onclick = fermerModale; }, true); }; });
+      // Participation : un bouton par profil du compte concerné par Masters
+      var dedans = moi.map(function (m) { return m.personne_id; }), dehors = C.filter(function (c) { return c.masters === false; }).map(function (c) { return c.personne_id; });
+      var lignes = (S.pers || []).filter(function (p) { return dedans.indexOf(p.id) >= 0 || dehors.indexOf(p.id) >= 0; }).map(function (p) {
+        var out = dehors.indexOf(p.id) >= 0;
+        return '<label class="c" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-msopt="' + esc(p.id) + '"' + (out ? ' checked' : '') + '> ' + esc(p.prenom) + ' : je ne souhaite pas participer à CLOC\'ARENA Masters</label>';
+      }).join('');
+      if ($('ms-part')) { $('ms-part').innerHTML = lignes ? '<span class="eyebrow">Ma participation</span>' + lignes + '<span class="mut xs">Tu peux revenir quand tu veux : ta place est gardée.</span>' : ''; $('ms-part').hidden = !lignes; }
+      Array.prototype.forEach.call(document.querySelectorAll('[data-msopt]'), function (i) { i.onchange = function () { choixArena(i.dataset.msopt, { masters: !i.checked }, function () { render(); }); }; });
+    }).catch(function () { if ($('ms-cl')) $('ms-cl').innerHTML = '<span class="mut small">Classement indisponible pour le moment.</span>'; });
+  });
+  return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES ET JEUNES COMPÉTITEURS</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
+    (circuitEnPrep('masters') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Masters est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
+    '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">Un classement général. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi lancé par un joueur moins bien classé, tu gagnes un <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
+    '<section class="card stack" style="gap:8px" id="ms-part" hidden></section>' +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement général</span><div id="ms-cl"><div class="skel"></div></div></section></main>';
+}
 function pageVersusOuvert() {
+  setTimeout(function () {
+    if (!$('vs-l')) return;
+    if (!S.user) { $('vs-l').innerHTML = '<span class="mut small">Connecte-toi pour voir les joueurs.</span>'; return; }
+    q(sb.rpc('versus_joueurs')).then(function (L) {
+      if (!$('vs-l')) return; L = L || [];
+      var mesIds = (S.pers || []).map(function (p) { return p.id; }), moi = L.filter(function (x) { return mesIds.indexOf(x.personne_id) >= 0; });
+      var adulte = function (x) { return /^Adultes/.test(x.niveau || ''); };
+      var visibles = !moi.length ? L.filter(function (x) { return x.participe; }) : L.filter(function (x) {
+        return x.participe && mesIds.indexOf(x.personne_id) < 0 && moi.some(function (m) { return m.categorie === x.categorie && !(m.moins13 && adulte(x)) && !(x.moins13 && adulte(m)); });
+      });
+      var cats = ['Orange', 'Vert', 'Jaune + Adultes'].filter(function (c) { return visibles.some(function (x) { return x.categorie === c; }); });
+      $('vs-l').innerHTML = cats.length ? cats.map(function (c) {
+        return '<div class="small" style="font-weight:700;margin-top:6px">' + c + '</div>' + visibles.filter(function (x) { return x.categorie === c; }).sort(function (a, b) { return (b.pret ? 1 : 0) - (a.pret ? 1 : 0); }).map(function (x) {
+          return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)"><span style="width:12px;color:#1f9d55">' + (x.pret ? '●' : '') + '</span><span style="flex:1">' + esc(x.joueur) + '</span><span class="mut xs">' + esc(x.classement_fft || '') + '</span></div>';
+        }).join('');
+      }).join('') : '<span class="mut small">Personne pour l\'instant.</span>';
+      if ($('vs-moi')) {
+        $('vs-moi').hidden = !moi.length;
+        $('vs-moi').innerHTML = '<span class="eyebrow">Mes choix</span>' + moi.map(function (m) {
+          return '<div class="stack" style="gap:6px;padding:6px 0;border-top:1px solid var(--line)"><b class="small">' + esc(m.joueur) + ' · ' + esc(m.categorie) + '</b>' +
+            '<label class="c"><input type="checkbox" data-vspret="' + esc(m.personne_id) + '"' + (m.pret ? ' checked' : '') + (m.participe ? '' : ' disabled') + '> <span style="color:#1f9d55">●</span> Prêt à jouer : je cherche un match</label>' +
+            '<label class="c"><input type="checkbox" data-vsout="' + esc(m.personne_id) + '"' + (m.participe ? '' : ' checked') + '> Je ne souhaite pas participer à Versus (je ne reçois pas de défi)</label></div>';
+        }).join('');
+        Array.prototype.forEach.call(document.querySelectorAll('[data-vspret]'), function (i) { i.onchange = function () { choixArena(i.dataset.vspret, { versus_pret: i.checked }, function () { render(); }); }; });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-vsout]'), function (i) { i.onchange = function () { choixArena(i.dataset.vsout, i.checked ? { versus: false, versus_pret: false } : { versus: true }, function () { render(); }); }; });
+      }
+    }).catch(function () { if ($('vs-l')) $('vs-l').innerHTML = '<span class="mut small">Liste indisponible pour le moment.</span>'; });
+  });
   var V = (S.reglages && S.reglages.versus_reglages) || {}, F = V.formats || { Orange: ['F5', 'F6'], Vert: ['F5', 'F6', 'F7'], 'Jaune + Adultes': ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7'] }, D = V.durees || { F1: '2h', F2: '2h', F3: '1h30', F4: '1h30', F5: '1h', F6: '1h30', F7: '1h30' };
   var tv = V.tweener_v || 10, td = V.tweener_d || 4;
   return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
@@ -1030,7 +1099,8 @@ function pageVersusOuvert() {
     '<span class="small">Pas de classement Versus : chaque match validé rapporte des points dans ton classement CLOC\'ARENA. Tweener : <b>' + tv + ' pts</b> la victoire, <b>' + td + ' pts</b> la défaite' + (V.masters_v ? ' · Masters : <b>' + V.masters_v + ' pts</b> la victoire, <b>' + (V.masters_d || 0) + ' pts</b> la défaite' : '') + '.</span></section>' +
     '<section class="card stack" style="gap:8px"><span class="eyebrow">Catégories et formats</span>' + Object.keys(F).map(function (c) { return '<div class="small"><b>' + esc(c) + '</b> · ' + (F[c] || []).map(function (f) { return esc(f) + (D[f] ? ' (' + esc(D[f]) + ')' : ''); }).join(', ') + '</div>'; }).join('') +
     '<span class="mut xs">Galaxie Orange, Galaxie Vert, balle jaune et adultes de NC à 30/1. Un jeune de moins de 13 ans ne joue que contre des jeunes.</span></section>' +
-    '<section class="card stack" style="gap:6px"><span class="eyebrow">Bientôt dans l\'appli</span><span class="small">Lancer un défi, choisir le créneau et le terrain, déclarer et confirmer le score.</span></section></main>';
+    '<section class="card stack" style="gap:8px" id="vs-moi" hidden></section>' +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Les joueurs de ta catégorie</span><div id="vs-l"><div class="skel"></div></div><span class="mut xs"><span style="color:#1f9d55">●</span> prêt à jouer · Lancer un défi, choisir le créneau et le terrain, déclarer le score : bientôt dans l\'appli.</span></section></main>';
 }
 function pageVersus() {
   if (circuitVisible('versus')) return pageVersusOuvert();
@@ -1042,7 +1112,7 @@ function pageVersus() {
     '<span class="mut small">Les infos seront publiées ici et dans les actus du club.</span></section></main>';
 }
 function pageMasters() {
-  if (circuitVisible('masters')) return pageCircuit('masters', 'Masters', 'linear-gradient(135deg,#102f4a,#2f5b7d)', 'ADULTES');
+  if (circuitVisible('masters')) return pageMastersOuvert();
   return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
     '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des adultes arrive bientôt</b>' +
     '<span class="mut small">Matchs entre adhérents adultes, défis et classement de la saison, sur le même principe que CLOC\'ARENA Tweener pour les jeunes. Les infos seront publiées ici et dans les actus du club.</span></section></main>';

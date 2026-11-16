@@ -1460,8 +1460,8 @@ function arLireScore(txt) {
 // ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
 var AR_ONGLETS = {
   tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']],
-  masters: [['classement', 'Classement'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['joueurs', 'Joueurs']],
-  versus: [['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['joueurs', 'Joueurs éligibles'], ['reglages', 'Réglages']]
+  masters: [['classement', 'Classement général'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants']],
+  versus: [['joueurs', 'Joueurs par catégorie'], ['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['reglages', 'Réglages']]
 };
 var CLASS_ORDRE = ['NC', '40', '30/5', '30/4', '30/3', '30/2', '30/1', '30', '15/5', '15/4', '15/3', '15/2', '15/1', '15', '5/6', '4/6', '3/6', '2/6', '1/6', '0'];
 function estMasters(p) { return /^Adultes/.test(p.niveau_club || '') || p.niveau_club === 'Ados compétition'; }
@@ -1479,22 +1479,31 @@ function categorieVersus(p) {
 }
 var VS_DEF = { formats: { Orange: ['F5', 'F6'], Vert: ['F5', 'F6', 'F7'], 'Jaune + Adultes': ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7'] }, durees: { F1: '2h', F2: '2h', F3: '1h30', F4: '1h30', F5: '1h', F6: '1h30', F7: '1h30', F9: '' },
   orange_vert: false, plages: 3, expiration_h: 72, annulation_h: 24, confirmation_h: 72, meme_adversaire_mois: 1, defis_attente: 3, tweener_v: 10, tweener_d: 4, masters_v: '', masters_d: '', saison_debut: '', saison_fin: '' };
+// Participation Masters / Versus : tout le monde est inclus sauf ceux qui ne veulent pas ; la direction peut retirer ou remettre un joueur
+function majChoix(pid, champs) { return q(sb.from('arena_choix').upsert(Object.assign({ personne_id: pid, maj_le: new Date().toISOString() }, champs))); }
 function arMasters(box, tab) {
-  if (tab === 'classement') {
-    q(sb.rpc('arena_classement_circuit', { p_circuit: 'masters' })).then(function (l) {
-      box.innerHTML = (l || []).length ? '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau</th><th>Matchs</th><th>Points</th></tr></thead><tbody>' + l.map(function (x, i) {
-        return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(x.joueur) + '</b></td><td class="small">' + esc(x.niveau || '—') + '</td><td>' + x.matchs + '</td><td><b>' + (+x.points) + '</b></td></tr>';
-      }).join('') + '</tbody></table></div>' : '<div class="card empty">Pas encore de points Masters. Le classement se remplit avec les matchs saisis (onglet « Saisir un match ») et, plus tard, avec les matchs Versus des adultes.</div>';
-    }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement.</div>'; });
+  if (tab === 'classement' || tab === 'joueurs') {
+    Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters').eq('masters', false)).catch(function () { return []; }), chargerPers()]).then(function (r) {
+      var L = r[0] || [], sortis = (r[1] || []).map(function (x) { return x.personne_id; }), P = r[2] || [];
+      var nomP = function (id) { var p = P.filter(function (x) { return x.id === id; })[0]; return p ? p.prenom + ' ' + p.nom : '?'; };
+      if (tab === 'classement') {
+        box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Classement général par places. Un joueur peut défier jusqu\'à <b>5 places au-dessus</b> de lui (<b>8</b> avec un bonus ✨). S\'il gagne contre un mieux classé, il prend sa place et les joueurs entre les deux reculent d\'une place. Le mieux classé qui gagne un défi lancé par un moins bien classé gagne le bonus ; l\'utiliser le consomme. Classement de départ : ton fichier « Arena Masters classement pondéré ».</p>' +
+          '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau club</th><th>FFT</th><th>Matchs</th><th>Peut défier</th></tr></thead><tbody>' + L.map(function (x) {
+            var haut = Math.max(1, x.rang - (x.bonus ? 8 : 5));
+            return '<tr><td><b>' + x.rang + '</b></td><td><b>' + esc(x.joueur) + '</b>' + (x.bonus ? ' <span title="Bonus : 8 places">✨</span>' : '') + (x.place == null ? ' <span class="badge">nouveau</span>' : '') + '</td><td class="small">' + esc(x.niveau || '—') + '</td><td class="small">' + esc(x.classement_fft || '—') + '</td><td>' + x.matchs + '</td><td class="small">' + (x.rang > 1 ? 'n°' + haut + ' à ' + (x.rang - 1) : '—') + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        return;
+      }
+      box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Tout le monde est dans Masters, sauf ceux qui ont coché « Je ne souhaite pas participer » dans l\'appli (ils peuvent revenir eux-mêmes). Tu peux aussi retirer ou remettre un joueur ici : sa place est gardée.</p>' +
+        '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau club</th><th>Participe</th></tr></thead><tbody>' + L.map(function (x) {
+          return '<tr><td>' + x.rang + '</td><td><b>' + esc(x.joueur) + '</b></td><td class="small">' + esc(x.niveau || '—') + '</td><td><button class="btn sm line" data-msx="' + x.personne_id + '|0">Retirer</button></td></tr>';
+        }).join('') + sortis.map(function (id) {
+          return '<tr style="opacity:.6"><td>—</td><td><b>' + esc(nomP(id)) + '</b> <span class="badge b-warn">ne participe pas</span></td><td></td><td><button class="btn sm" data-msx="' + id + '|1">Remettre</button></td></tr>';
+        }).join('') + '</tbody></table></div>';
+      all('[data-msx]', box).forEach(function (b) { b.onclick = function () { var v = b.dataset.msx.split('|'); b.disabled = true; majChoix(v[0], { masters: v[1] === '1' }).then(function () { toast(v[1] === '1' ? 'Remis dans Masters' : 'Retiré de Masters'); arMasters(box, tab); }).catch(function () { b.disabled = false; toast('Action impossible'); }); }; });
+    }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement Masters.</div>'; });
     return;
   }
-  chargerPers().then(function (l) {
-    var J = l.filter(function (p) { return p.actif && estMasters(p); }).sort(function (a, b) { return String(a.niveau_club).localeCompare(String(b.niveau_club), 'fr', { numeric: true }) || a.prenom.localeCompare(b.prenom, 'fr'); });
-    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Adultes et jeunes compétiteurs (niveau club « Adultes 1 à 10 » ou « Ados compétition »). Le niveau se règle dans <a href="#/niveaux">Adhérents → Niveaux des joueurs</a>.</p>' +
-      '<div class="tw"><table class="t"><thead><tr><th>Joueur</th><th>Niveau club</th><th>Classement FFT</th></tr></thead><tbody>' + J.map(function (p) {
-        return '<tr><td><b>' + esc(p.prenom + ' ' + p.nom) + '</b></td><td class="small">' + esc(p.niveau_club) + '</td><td class="small">' + esc(p.classement_fft || '—') + '</td></tr>';
-      }).join('') + '</tbody></table></div><p class="mut xs">' + J.length + ' joueur' + (J.length > 1 ? 's' : '') + '.</p>';
-  });
 }
 function arVersus(box, tab) {
   var vide = function (titre, texte) { box.innerHTML = '<div class="card stack" style="gap:8px"><b>' + titre + '</b><span class="small mut">' + texte + '</span><span class="badge" style="align-self:flex-start">Arrive avec les défis dans l\'appli (V1)</span></div>'; };
@@ -1503,14 +1512,19 @@ function arVersus(box, tab) {
   if (tab === 'litiges') return vide('Litiges et scores non confirmés', 'Les matchs signalés par un joueur (avec son message) et ceux dont le second joueur n\'a pas confirmé le score après les rappels à 24 h et 48 h. Tu tranches ou tu valides le score déclaré.');
   if (tab === 'adoc') return vide('À saisir dans ADOC', 'Les matchs validés qui comptent comme match libre FFT, avec une case « Saisi dans ADOC » et la date. Jamais les forfaits. Alerte si un match attend depuis plus de 7 jours.');
   if (tab === 'joueurs') {
-    chargerPers().then(function (l) {
-      var cats = { Orange: [], Vert: [], 'Jaune + Adultes': [] }, non = [];
-      l.filter(function (p) { return p.actif; }).forEach(function (p) { var c = categorieVersus(p); if (!c[0]) return; if (c[1]) non.push([p, c[1]]); else cats[c[0]].push(p); });
-      box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Calculé avec le niveau club et le classement FFT de chaque joueur. Un jeune de moins de 13 ans de la catégorie Jaune + Adultes ne verra que les jeunes. La licence « compétition » se contrôle au moment de la saisie dans ADOC.</p>' +
-        '<div class="kpis">' + Object.keys(cats).map(function (k) { return '<div class="kpi"><b>' + cats[k].length + '</b><span>' + k + '</span></div>'; }).join('') + '<div class="kpi"><b>' + non.length + '</b><span>à vérifier</span></div></div>' +
-        Object.keys(cats).map(function (k) { return '<div class="sect">' + k + '</div><div class="small">' + (cats[k].map(function (p) { return esc(p.prenom + ' ' + p.nom.charAt(0) + '.') + (p.classement_fft && k === 'Jaune + Adultes' ? ' <span class="mut xs">' + esc(p.classement_fft) + '</span>' : ''); }).join(' · ') || '<span class="mut">Personne</span>') + '</div>'; }).join('') +
-        (non.length ? '<div class="sect">Pas éligibles pour l\'instant</div><div class="small">' + non.map(function (x) { return esc(x[0].prenom + ' ' + x[0].nom.charAt(0) + '.') + ' <span class="mut xs">(' + esc(x[1]) + ')</span>'; }).join(' · ') + '</div>' : '');
-    });
+    q(sb.rpc('versus_joueurs')).then(function (L) {
+      L = L || []; var cats = ['Orange', 'Vert', 'Jaune + Adultes'];
+      box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Tous les joueurs qui peuvent jouer en Versus, par catégorie (niveau club et classement FFT). Les adultes de NC à 30/1 sont tous ensemble dans Jaune + Adultes ; un jeune de moins de 13 ans n\'y voit que les jeunes. <span style="color:#1f9d55">●</span> = « Prêt à jouer ». Ceux qui ont coché « Je ne souhaite pas participer » ne reçoivent pas de défi.</p>' +
+        '<div class="kpis">' + cats.map(function (c) { var n = L.filter(function (x) { return x.categorie === c && x.participe; }).length; return '<div class="kpi"><b>' + n + '</b><span>' + c + '</span></div>'; }).join('') + '<div class="kpi"><b>' + L.filter(function (x) { return x.pret; }).length + '</b><span>prêts à jouer</span></div></div>' +
+        cats.map(function (c) {
+          var l = L.filter(function (x) { return x.categorie === c; });
+          return '<div class="sect">' + c + ' (' + l.filter(function (x) { return x.participe; }).length + ')</div>' + (l.length ? '<div class="tw"><table class="t"><tbody>' + l.map(function (x) {
+            return '<tr' + (x.participe ? '' : ' style="opacity:.6"') + '><td style="width:18px">' + (x.pret ? '<span title="Prêt à jouer" style="color:#1f9d55;font-size:16px">●</span>' : '') + '</td><td><b>' + esc(x.joueur) + '</b>' + (x.moins13 ? ' <span class="badge">- de 13 ans</span>' : '') + (x.participe ? '' : ' <span class="badge b-warn">ne participe pas</span>') + '</td><td class="small">' + esc(x.niveau || '') + (x.classement_fft ? ' · ' + esc(x.classement_fft) : '') + '</td><td class="act">' +
+              (x.participe ? '<button class="btn sm line" data-vsx="' + x.personne_id + '|0">Retirer</button>' : '<button class="btn sm" data-vsx="' + x.personne_id + '|1">Remettre</button>') + '</td></tr>';
+          }).join('') + '</tbody></table></div>' : '<div class="mut small">Personne pour l\'instant.</div>');
+        }).join('');
+      all('[data-vsx]', box).forEach(function (b) { b.onclick = function () { var v = b.dataset.vsx.split('|'); b.disabled = true; majChoix(v[0], v[1] === '1' ? { versus: true } : { versus: false, versus_pret: false }).then(function () { toast(v[1] === '1' ? 'Remis dans Versus' : 'Retiré de Versus'); arVersus(box, 'joueurs'); }).catch(function () { b.disabled = false; toast('Action impossible'); }); }; });
+    }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les joueurs Versus.</div>'; });
     return;
   }
   // Réglages : enregistrés dans reglages_publics (clé versus_reglages), lus par l'appli
@@ -1561,7 +1575,7 @@ function vueArena(m, arg, suite) {
   if (AR.circuit === 'masters' && (AR.tab === 'classement' || AR.tab === 'joueurs')) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
-      : chargerPers().then(function (l) { return l.filter(function (j) { return j.actif && estMasters(j); }).map(function (j) { return { id: j.id, prenom: j.prenom, nom: j.nom, niveau_arena: j.niveau_club }; }); }),
+      : Promise.all([q(sb.rpc('masters_classement')), chargerPers()]).then(function (r) { var P = r[1] || []; return (r[0] || []).map(function (x) { var p = P.filter(function (y) { return y.id === x.personne_id; })[0] || {}; return { id: x.personne_id, prenom: (x.rang + '. ') + (p.prenom || x.joueur), nom: p.nom || '', niveau_arena: x.niveau }; }); }),
     AR.formats ? AR.formats : q(sb.from('arena_formats').select('*').order('ordre'))
   ]).then(function (r) { AR.joueurs = AR.jc[AR.circuit] = r[0] || []; AR.formats = r[1] || []; if (AR.formC !== AR.circuit) { AR.form = null; AR.formC = AR.circuit; } });
   prep.then(function () {
