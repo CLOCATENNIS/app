@@ -16,7 +16,7 @@ var AFF = {
   LAY: { L: [42, 260, 484, 1315], R: [539, 262, 982, 1314], logo: [512, 118, 200], date: [512, 1392, 18] },
   LISTE: [
     { id: 'general', titre: 'Général', gauche: 'Général', droite: 'Général', fond: 'affiches/fond-general.jpg', niveau: true, lay: { L: [50, 263, 478, 1311], R: [547, 263, 975, 1311], logo: [112, 112, 170], date: [912, 112, 15, 'bloc'], acc: '#ff9a3c' } },
-    { id: 'gf', titre: 'Garçons / Filles', gauche: 'Garçons', droite: 'Filles', fond: null, niveau: true },
+    { id: 'gf', titre: 'Garçons / Filles', gauche: 'Garçons', droite: 'Filles', fond: 'affiches/fond-garcons-filles.jpg', niveau: true, lay: { L: [45, 260, 484, 1313], R: [540, 259, 982, 1314], logo: [512, 122, 190], date: [512, 1392, 18] } },
     { id: 'bv', titre: 'Blanc / Violet', gauche: 'Blanc', droite: 'Violet', fond: 'affiches/fond-blanc-violet.jpg', lay: { L: [45, 259, 486, 1314], R: [542, 260, 982, 1314], logo: [512, 122, 190], date: [512, 1392, 18] } },
     { id: 'ro', titre: 'Rouge / Orange', gauche: 'Rouge', droite: 'Orange', fond: 'affiches/fond-rouge-orange.jpg', lay: { L: [41, 229, 478, 1399], R: [544, 232, 980, 1396], logo: [512, 92, 175], date: [512, 191, 15] } },
     { id: 'vj', titre: 'Vert / Jaune', gauche: 'Vert', droite: 'Jaune', fond: 'affiches/fond-vert-jaune.jpg', lay: { L: [42, 234, 476, 1396], R: [543, 234, 980, 1397], logo: [512, 92, 175], date: [512, 191, 15] } }
