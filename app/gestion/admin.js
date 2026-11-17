@@ -1459,7 +1459,7 @@ function arLireScore(txt) {
 // Adresses : #/arena/<circuit> ou #/arena/<onglet>[/<id>] (onglets du Tweener).
 // ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
 var AR_ONGLETS = {
-  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs']],
+  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement']],
   masters: [['classement', 'Classement général'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants']],
   versus: [['joueurs', 'Joueurs par catégorie'], ['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['reglages', 'Réglages']]
 };
@@ -1572,6 +1572,7 @@ function vueArena(m, arg, suite) {
   if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], circuit: AR.circuit, titre: 'Inscriptions ' + circ[1], base: '#/arena/inscriptions/' });
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
   if (AR.circuit === 'versus') return arVersus(box, AR.tab);
+  if (AR.tab === 'affiches') return arAffiches(box); // affiches.js
   if (AR.circuit === 'masters' && (AR.tab === 'classement' || AR.tab === 'joueurs')) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
