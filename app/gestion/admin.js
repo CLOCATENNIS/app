@@ -1572,7 +1572,7 @@ function vueArena(m, arg, suite) {
   if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], circuit: AR.circuit, titre: 'Inscriptions ' + circ[1], base: '#/arena/inscriptions/' });
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
   if (AR.circuit === 'versus') return arVersus(box, AR.tab);
-  if (AR.tab === 'affiches') return arAffiches(box); // affiches.js
+  if (AR.tab === 'affiches') return window.arAffiches ? window.arAffiches(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Affiches indisponibles : recharge la page.</div>'); // affiches.js
   if (AR.circuit === 'masters' && (AR.tab === 'classement' || AR.tab === 'joueurs')) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))

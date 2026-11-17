@@ -1,4 +1,8 @@
 // Affiches des classements CLOC'ARENA Tweener (Gestion → CLOC'ARENA → Affiches classement)
+// admin.js est dans une fonction fermée : il passe ses outils (sb, q, chargerPers…) à window.arAffiches(box, outils).
+(function () {
+'use strict';
+var sb, q, chargerPers, esc, all, toast, $;
 // Classement en direct (arena_classement_v2 : points + 1 par participation ; départage victoires, matchs, niveau),
 // dessiné sur les fonds du dossier affiches/. Sans fond, l'appli dessine un fond simple aux bonnes couleurs.
 var AFF = {
@@ -176,7 +180,7 @@ function affPartager(toiles, a) {
 }
 
 // ---------- page ----------
-function arAffiches(box) {
+function arAffichesPage(box) {
   box.innerHTML = '<div class="card"><div class="skel" style="height:120px"></div></div>';
   affCharger().then(function () {
     box.innerHTML = '<div class="card stack" style="margin-bottom:12px"><b>Affiches des classements Tweener</b>' +
@@ -213,3 +217,9 @@ function arAffiches(box) {
     };
   }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement.</div>'; });
 }
+
+window.arAffiches = function (box, o) {
+  sb = o.sb; q = o.q; chargerPers = o.chargerPers; esc = o.esc; all = o.all; toast = o.toast; $ = o.$;
+  return arAffichesPage(box);
+};
+})();
