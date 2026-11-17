@@ -11,14 +11,15 @@ var AFF = {
   NIV: ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'],
   PILL: { Vert: ['#18be56', '#fff'], Violet: ['#7c3ce6', '#fff'], Rouge: ['#e82c38', '#fff'], Orange: ['#f58028', '#fff'], Jaune: ['#ffdc14', '#141414'], Blanc: ['#ececee', '#19191e'] },
   ACC: { Vert: '#46eb5a', Jaune: '#ffe228', Rouge: '#f53c4b', Orange: '#fa9632', Violet: '#b464ff', Blanc: '#ebeef5', 'Garçons': '#32beff', Filles: '#ff46c8', 'Général': '#ff46c8' },
-  // Panneaux du gabarit (coordonnées 1024 x 1536)
+  // Mise en page par défaut (fond simple), coordonnées 1024 x 1536. Chaque fond GPT a sa propre « lay » (panneaux mesurés sur l'image).
   BOX_L: [42, 260, 484, 1315], BOX_R: [539, 262, 982, 1314],
+  LAY: { L: [42, 260, 484, 1315], R: [539, 262, 982, 1314], logo: [512, 118, 200], date: [512, 1392, 18] },
   LISTE: [
     { id: 'general', titre: 'Général', gauche: 'Général', droite: 'Général', fond: null, niveau: true },
     { id: 'gf', titre: 'Garçons / Filles', gauche: 'Garçons', droite: 'Filles', fond: null, niveau: true },
     { id: 'bv', titre: 'Blanc / Violet', gauche: 'Blanc', droite: 'Violet', fond: null },
     { id: 'ro', titre: 'Rouge / Orange', gauche: 'Rouge', droite: 'Orange', fond: null },
-    { id: 'vj', titre: 'Vert / Jaune', gauche: 'Vert', droite: 'Jaune', fond: 'affiches/fond-vert-jaune.jpg' }
+    { id: 'vj', titre: 'Vert / Jaune', gauche: 'Vert', droite: 'Jaune', fond: 'affiches/fond-vert-jaune.jpg', lay: { L: [42, 234, 476, 1396], R: [543, 234, 980, 1397], logo: [512, 92, 175], date: [512, 191, 15] } }
   ],
   img: {}, data: null
 };
@@ -144,13 +145,14 @@ function affDessiner(a, page, idx, total) {
     var cv = document.createElement('canvas'); cv.width = AFF.W * AFF.K; cv.height = AFF.H * AFF.K;
     var c = cv.getContext('2d'); c.scale(AFF.K, AFF.K);
     if (r[0]) c.drawImage(r[0], 0, 0, AFF.W, AFF.H); else affFondSimple(c, a);
-    affTableau(c, AFF.BOX_L, page.g, AFF.ACC[a.gauche], page.dg, a.niveau);
-    affTableau(c, AFF.BOX_R, page.d, AFF.ACC[a.droite], page.dd, a.niveau);
-    if (r[1]) { var lw = 200, lh = lw * r[1].height / r[1].width; c.drawImage(r[1], 512 - lw / 2, 118 - lh / 2, lw, lh); }
+    var L = (r[0] && a.lay) || AFF.LAY;
+    affTableau(c, L.L, page.g, AFF.ACC[a.gauche], page.dg, a.niveau);
+    affTableau(c, L.R, page.d, AFF.ACC[a.droite], page.dd, a.niveau);
+    if (r[1]) { var lw = L.logo[2], lh = lw * r[1].height / r[1].width; c.drawImage(r[1], L.logo[0] - lw / 2, L.logo[1] - lh / 2, lw, lh); }
     var d = new Date(), txt = 'Classement au ' + d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     if (a.id === 'general' && total > 1) txt += '  ·  du ' + page.de + (page.de === 1 ? 'er' : 'e') + ' au ' + page.a + 'e';
     else if (total > 1) txt += '  ·  page ' + (idx + 1) + '/' + total;
-    c.save(); c.shadowColor = '#000'; c.shadowBlur = 8; affTexte(c, txt, 512, 1392, 'italic 700 18px Inter', '#fff', 'center'); c.restore();
+    c.save(); c.shadowColor = '#000'; c.shadowBlur = 8; affTexte(c, txt, L.date[0], L.date[1], 'italic 700 ' + L.date[2] + 'px Inter', '#fff', 'center'); c.restore();
     return cv;
   });
 }
