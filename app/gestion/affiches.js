@@ -179,6 +179,21 @@ function affPartager(toiles, a) {
   });
 }
 
+// Agrandir une affiche dans la page (Chrome bloque l'ouverture d'une image data: dans un nouvel onglet)
+function affZoom(cv) {
+  var f = document.createElement('div');
+  f.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(5,8,20,.88);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out';
+  var im = new Image(); im.src = cv.toDataURL('image/jpeg', 0.9);
+  im.style.cssText = 'max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.6)';
+  var x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Fermer');
+  x.style.cssText = 'position:fixed;top:12px;right:16px;width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:#102f4a;font-size:28px;line-height:1;cursor:pointer';
+  f.appendChild(im); f.appendChild(x);
+  var fermer = function () { f.remove(); document.removeEventListener('keydown', esc_); };
+  var esc_ = function (e) { if (e.key === 'Escape') fermer(); };
+  f.onclick = fermer; document.addEventListener('keydown', esc_);
+  document.body.appendChild(f);
+}
+
 // ---------- page ----------
 function arAffichesPage(box) {
   box.innerHTML = '<div class="card"><div class="skel" style="height:120px"></div></div>';
@@ -203,7 +218,7 @@ function arAffichesPage(box) {
       rendu(a).then(function (cvs) {
         var z = box.querySelector('[data-aff="' + a.id + '"] .aff-prev'); if (!z) return;
         z.innerHTML = '';
-        cvs.forEach(function (cv) { var im = new Image(); im.src = cv.toDataURL('image/jpeg', 0.7); im.style.cssText = 'height:240px;border-radius:8px;cursor:zoom-in'; im.onclick = function () { window.open(im.src, '_blank'); }; z.appendChild(im); });
+        cvs.forEach(function (cv) { var im = new Image(); im.src = cv.toDataURL('image/jpeg', 0.7); im.style.cssText = 'height:240px;border-radius:8px;cursor:zoom-in'; im.onclick = function () { affZoom(cv); }; z.appendChild(im); });
       }).catch(function () { var z = box.querySelector('[data-aff="' + a.id + '"] .aff-prev'); if (z) z.innerHTML = '<span class="mut small">Affiche impossible à dessiner.</span>'; });
     });
     var trouve = function (id) { return AFF.LISTE.filter(function (x) { return x.id === id; })[0]; };
