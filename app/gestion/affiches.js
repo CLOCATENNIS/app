@@ -210,14 +210,34 @@ function arAffichesPage(box) {
   affCharger().then(function () {
     box.innerHTML = '<div class="card stack" style="margin-bottom:12px"><b>Affiches des classements Tweener</b>' +
       '<span class="small mut">Toujours à jour : le classement est pris en direct (points + 1 point par participation ; à égalité : victoires, puis matchs, puis niveau). ' +
-      'Image pour WhatsApp et les réseaux, PDF pour imprimer en A3.</span>' +
-      '<div class="toolbar" style="margin:0"><button class="btn" id="aff-tout">Tout en PDF</button><span class="mut xs" id="aff-etat"></span></div></div>' +
+      'Image pour WhatsApp et les réseaux, PDF pour imprimer en A3. <b>Coche les pages que tu veux</b> : seules les pages cochées partent dans les téléchargements, le partage et le PDF du lot. Tes choix sont gardés.</span>' +
+      '<div class="toolbar" style="margin:0;flex-wrap:wrap"><button class="btn" id="aff-tout">PDF des pages cochées</button><button class="btn sm ghost" id="aff-tc">Tout cocher</button><button class="btn sm ghost" id="aff-td">Tout décocher</button><span class="mut xs" id="aff-etat"></span></div></div>' +
       '<div class="pgrid" id="aff-l">' + AFF.LISTE.map(function (a) {
         return '<div class="card stack" data-aff="' + a.id + '"><b>' + esc(a.titre) + '</b><span class="mut xs">' + (a.fond ? 'Fond arène' : 'Fond simple (le fond arène arrive)') + '</span>' +
-          '<div class="aff-prev" style="display:flex;gap:6px;overflow-x:auto"><div class="skel" style="height:180px;width:120px"></div></div>' +
+          '<div class="aff-prev" style="display:flex;gap:8px;overflow-x:auto"><div class="skel" style="height:180px;width:120px"></div></div>' +
           '<div class="toolbar" style="margin:0"><button class="btn sm" data-affi="' + a.id + '">Image</button><button class="btn sm ghost" data-affp="' + a.id + '">PDF</button><button class="btn sm ghost" data-affs="' + a.id + '">Partager</button></div></div>';
       }).join('') + '</div>';
-    var toiles = {};
+    var toiles = {}, NB = {};
+    // Pages décochées (« general:1 » = 2e page du Général) : tout est coché par défaut, les choix restent d'une fois sur l'autre
+    var EXCL = {};
+    try { EXCL = JSON.parse(localStorage.getItem('cloca-aff-exclues') || '{}') || {}; } catch (e) { EXCL = {}; }
+    var garder = function () { try { localStorage.setItem('cloca-aff-exclues', JSON.stringify(EXCL)); } catch (e) { } };
+    var coche = function (a, i) { return !EXCL[a.id + ':' + i]; };
+    var choisies = function (a, cvs) { return cvs.filter(function (c, i) { return coche(a, i); }); };
+    var nomPage = function (a, i, pages) { var p = pages[i]; if (pages.length < 2) return 'Dans le lot'; return a.id === 'general' && p.de ? 'Du ' + p.de + (p.de === 1 ? 'er' : 'e') + ' au ' + p.a + 'e' : 'Page ' + (i + 1) + '/' + pages.length; };
+    var compter = function () {
+      var n = 0, t = 0;
+      AFF.LISTE.forEach(function (a) { for (var i = 0; i < (NB[a.id] || 0); i++) { t++; if (coche(a, i)) n++; } });
+      $('aff-tout').textContent = 'PDF des pages cochées (' + n + '/' + t + ')';
+      $('aff-tout').disabled = !n;
+    };
+    var majVignette = function (a, i) {
+      var v = box.querySelector('[data-affv="' + a.id + ':' + i + '"]'); if (!v) return;
+      var ok = coche(a, i);
+      v.querySelector('img').style.opacity = ok ? '1' : '.3';
+      v.querySelector('input').checked = ok;
+      v.style.borderColor = ok ? 'var(--ac, #c4572a)' : 'transparent';
+    };
     var rendu = function (a) {
       if (toiles[a.id]) return toiles[a.id];
       var pages = affPages(a);
@@ -227,18 +247,36 @@ function arAffichesPage(box) {
     AFF.LISTE.forEach(function (a) {
       rendu(a).then(function (cvs) {
         var z = box.querySelector('[data-aff="' + a.id + '"] .aff-prev'); if (!z) return;
+        var pages = affPages(a); NB[a.id] = cvs.length;
         z.innerHTML = '';
-        cvs.forEach(function (cv) { var im = new Image(); im.src = cv.toDataURL('image/jpeg', 0.7); im.style.cssText = 'height:240px;border-radius:8px;cursor:zoom-in'; im.onclick = function () { affZoom(cv); }; z.appendChild(im); });
+        cvs.forEach(function (cv, i) {
+          var v = document.createElement('div'); v.dataset.affv = a.id + ':' + i;
+          v.style.cssText = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;padding:4px;border:2px solid transparent;border-radius:10px;flex:none';
+          var im = new Image(); im.src = cv.toDataURL('image/jpeg', 0.7); im.alt = a.titre + ' ' + nomPage(a, i, pages);
+          im.style.cssText = 'height:240px;border-radius:8px;cursor:zoom-in;transition:opacity .15s;display:block'; im.onclick = function () { affZoom(cv); };
+          var l = document.createElement('label'); l.style.cssText = 'display:flex;gap:6px;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer';
+          l.innerHTML = '<input type="checkbox" style="width:18px;height:18px;accent-color:var(--ac, #c4572a)"><span>' + esc(nomPage(a, i, pages)) + '</span>';
+          l.querySelector('input').onchange = function () { if (this.checked) delete EXCL[a.id + ':' + i]; else EXCL[a.id + ':' + i] = true; garder(); majVignette(a, i); compter(); };
+          v.appendChild(im); v.appendChild(l); z.appendChild(v); majVignette(a, i);
+        });
+        compter();
       }).catch(function () { var z = box.querySelector('[data-aff="' + a.id + '"] .aff-prev'); if (z) z.innerHTML = '<span class="mut small">Affiche impossible à dessiner.</span>'; });
     });
     var trouve = function (id) { return AFF.LISTE.filter(function (x) { return x.id === id; })[0]; };
-    all('[data-affi]', box).forEach(function (b) { b.onclick = function () { var a = trouve(b.dataset.affi); rendu(a).then(function (cvs) { cvs.forEach(function (cv, i) { affBlob(cv).then(function (bl) { affTelecharger(bl, affNomFichier(a, i, cvs.length)); }); }); }); }; });
-    all('[data-affp]', box).forEach(function (b) { b.onclick = function () { var a = trouve(b.dataset.affp); rendu(a).then(function (cvs) { return affPDF(cvs, affNomFichier(a, 0, 1).replace('.png', '.pdf')); }).catch(function () { toast('PDF impossible'); }); }; });
-    all('[data-affs]', box).forEach(function (b) { b.onclick = function () { var a = trouve(b.dataset.affs); rendu(a).then(function (cvs) { return affPartager(cvs, a); }); }; });
+    var avecPages = function (id, faire) { var a = trouve(id); return rendu(a).then(function (cvs) { var l = choisies(a, cvs); if (!l.length) { toast('Coche au moins une page de « ' + a.titre + ' »'); return; } return faire(a, cvs, l); }); };
+    all('[data-affi]', box).forEach(function (b) { b.onclick = function () { avecPages(b.dataset.affi, function (a, cvs, l) { l.forEach(function (cv) { var i = cvs.indexOf(cv); affBlob(cv).then(function (bl) { affTelecharger(bl, affNomFichier(a, i, cvs.length)); }); }); }); }; });
+    all('[data-affp]', box).forEach(function (b) { b.onclick = function () { avecPages(b.dataset.affp, function (a, cvs, l) { return affPDF(l, affNomFichier(a, l.length === 1 ? cvs.indexOf(l[0]) : 0, l.length === 1 ? cvs.length : 1).replace('.png', '.pdf')); }).catch(function () { toast('PDF impossible'); }); }; });
+    all('[data-affs]', box).forEach(function (b) { b.onclick = function () { avecPages(b.dataset.affs, function (a, cvs, l) { return affPartager(l, a); }); }; });
+    var toutes = function (oui) { AFF.LISTE.forEach(function (a) { for (var i = 0; i < (NB[a.id] || 0); i++) { if (oui) delete EXCL[a.id + ':' + i]; else EXCL[a.id + ':' + i] = true; majVignette(a, i); } }); garder(); compter(); };
+    $('aff-tc').onclick = function () { toutes(true); };
+    $('aff-td').onclick = function () { toutes(false); };
     $('aff-tout').onclick = function () {
       $('aff-etat').textContent = 'Préparation…';
-      Promise.all(AFF.LISTE.map(rendu)).then(function (l) { return affPDF([].concat.apply([], l), 'CLOCARENA_Tweener_Classements.pdf'); })
-        .then(function () { $('aff-etat').textContent = ''; }).catch(function () { $('aff-etat').textContent = ''; toast('PDF impossible'); });
+      Promise.all(AFF.LISTE.map(rendu)).then(function (l) {
+        var sel = [].concat.apply([], l.map(function (cvs, k) { return choisies(AFF.LISTE[k], cvs); }));
+        if (!sel.length) { toast('Coche au moins une page'); return; }
+        return affPDF(sel, 'CLOCARENA_Tweener_Classements.pdf');
+      }).then(function () { $('aff-etat').textContent = ''; }).catch(function () { $('aff-etat').textContent = ''; toast('PDF impossible'); });
     };
   }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement.</div>'; });
 }

@@ -288,6 +288,13 @@ nav.tabs .side-brand,nav.tabs .side-foot{display:none}
 .fete-head{background:linear-gradient(160deg,#0f3b2a,#14523a);border-radius:0 0 24px 24px}
 .fete-affiche{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(15,59,42,.28)}
 .fete-affiche img{display:block;width:100%;height:auto}
+.aff-bloc{display:flex;flex-direction:column;gap:8px}
+.aff-bloc .aff-dl{align-self:center}
+.aff-dl{min-height:40px;padding:8px 16px;font-size:14px;width:auto}
+.aff-grille .aff-dl{width:100%}
+.aff-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.aff-grille .fete-affiche{border-radius:12px;box-shadow:0 4px 14px rgba(15,59,42,.2)}
+#fete-tombola .aff-bloc .fete-affiche{box-shadow:0 4px 14px rgba(15,59,42,.2)}
 .fete-ok{border:2px solid var(--ok);background:color-mix(in srgb,var(--ok) 9%,var(--card))}
 .lot{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .lot:first-of-type{border-top:0}
@@ -490,6 +497,6 @@ button.javatar{cursor:pointer}
 <div id="app" class="wrap"><div style="padding:40px 16px"><div class="skel"></div></div></div>
 <nav class="tabs" id="tabs" aria-label="Navigation principale"><div class="side-brand"><a href="#/accueil"><img src="logo.png" alt=""><span><b>CLOCA Tennis</b><small>APPLI DU CLUB</small></span></a></div><div class="in" id="tabs-in"></div><div class="side-foot"><a href="/" target="_blank" rel="noopener">clocatennis.fr</a><a href="mailto:contact@clocatennis.fr">contact@clocatennis.fr</a></div></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=202611162015"></script>
+<script src="app.js?v=202611171430"></script>
 </body>
 </html>

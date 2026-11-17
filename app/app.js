@@ -1633,6 +1633,8 @@ document.addEventListener('scroll', function (e) {
   Array.prototype.forEach.call(c.querySelectorAll('.car-dots span'), function (d, k) { d.className = k === i ? 'on' : ''; });
 }, true);
 document.addEventListener('click', function (e) {
+  var az = e.target.closest && e.target.closest('[data-affzoom]');
+  if (az) { e.preventDefault(); zoomAffiche(az.dataset.affzoom, az.dataset.afftitre); return; }
   var b = e.target.closest && e.target.closest('[data-car]'); if (!b) return;
   var l = b.parentNode.querySelector('.car-l'); l.scrollBy({ left: +b.dataset.car * l.clientWidth, behavior: 'smooth' });
 });
@@ -1759,6 +1761,7 @@ function pageEvenement(id) {
     '<h1 style="margin-top:8px">' + esc(e.titre) + '</h1><div class="stack small" style="gap:4px;margin-top:10px;color:#dbe4ec">' +
     '<span>' + (multi ? 'Du ' + esc(fmtJour(d).toLowerCase()) + ' au ' + esc(fmtJour(fin).toLowerCase()) : esc(fmtJour(d))) + ' · ' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + '</span>' +
     (e.lieu ? '<span>' + esc(e.lieu) + '</span>' : '') + (e.encadrant ? '<span>Encadré par ' + esc(e.encadrant) + '</span>' : '') + '</div></div></div><main>';
+  if (e.affiche_url) h += blocAffiche(e.affiche_url, 'Affiche ' + e.titre, 'Affiche : ' + e.titre + ', ' + fmtJour(d));
   if (e.places_max) h += '<section class="card stack" style="gap:8px" id="places"><span class="mut small">Chargement des places…</span></section>';
   if (e.description || e.objectif) h += '<section class="card stack" style="gap:6px"><span class="eyebrow">Au programme</span><span style="white-space:pre-line">' + esc(e.description || e.objectif) + '</span></section>';
   if (e.prix_euros) h += '<section class="card"><span class="mut small">Tarif : <b style="color:var(--tx)">' + esc(String(e.prix_euros).replace('.', ',')) + ' €</b> · paiement au club house</span></section>';
@@ -3906,6 +3909,29 @@ function feteActive() {
   return (S.fetes || []).filter(function (f) { return f.actif && new Date(f.fin || f.debut).getTime() > now - 2 * 864e5; }).sort(function (x, y) { return (feteAdultes(x) ? 1 : 0) - (feteAdultes(y) ? 1 : 0); })[0] || null;
 }
 function feteImg(u) { return !u ? '' : /^https?:\/\//i.test(u) ? u : u.replace(/^\/?/, ''); }
+// Affiches d'une fête : [{ url, titre, place }] (place : haut, tombola, flyer, autre) ; avant la liste, l'affiche et le flyer seuls
+function affichesFete(f) {
+  if (f && Array.isArray(f.affiches) && f.affiches.length) return f.affiches.filter(function (a) { return a && a.url; });
+  var l = [];
+  if (f && f.affiche_url) l.push({ url: f.affiche_url, titre: 'Affiche', place: 'haut' });
+  if (f && f.flyer_url) l.push({ url: f.flyer_url, titre: 'Flyer d\'invitation', place: 'flyer' });
+  return l;
+}
+function affichesA(f, place) { return affichesFete(f).filter(function (a) { return a.place === place; }); }
+function slugAff(t) { return String(t || 'affiche').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'affiche'; }
+// Lien « Télécharger » : les images du dossier public Supabase sont servies en pièce jointe (?download=), les autres avec l'attribut download
+function lienTelechargement(u, nom) {
+  var url = feteImg(u), ext = (url.split('?')[0].match(/\.(jpe?g|png|webp)$/i) || [, 'jpg'])[1].toLowerCase(), fichier = slugAff(nom) + '.' + ext;
+  if (/\/storage\/v1\/object\/public\//.test(url)) return '<a class="btn ghost aff-dl" href="' + esc(url + (url.indexOf('?') < 0 ? '?' : '&') + 'download=' + encodeURIComponent(fichier)) + '">' + ic('dl', 18) + 'Télécharger</a>';
+  return '<a class="btn ghost aff-dl" href="' + esc(url) + '" download="' + esc(fichier) + '">' + ic('dl', 18) + 'Télécharger</a>';
+}
+// Une affiche : image à toucher pour l'agrandir, puis le bouton Télécharger
+function blocAffiche(u, titre, alt) {
+  return '<div class="aff-bloc"><button class="fete-affiche" data-affzoom="' + esc(feteImg(u)) + '" data-afftitre="' + esc(titre || 'Affiche') + '" aria-label="Agrandir l\'affiche"><img src="' + esc(feteImg(u)) + '" alt="' + esc(alt || titre || 'Affiche') + '" loading="lazy"></button>' + lienTelechargement(u, titre) + '</div>';
+}
+function zoomAffiche(u, titre) {
+  modale('<div class="stack" style="gap:10px"><img src="' + esc(u) + '" alt="' + esc(titre || 'Affiche') + '" style="width:100%;border-radius:12px;display:block">' + lienTelechargement(u, titre) + '</div>');
+}
 function feteLien(f) { return location.origin + location.pathname.replace(/[^\/]*$/, '') + '#/fete/' + encodeURIComponent(f.edition); }
 function feteJeton(ed) {
   var k = 'cloca-fete-' + ed, j = localStorageGet(k);
@@ -3959,7 +3985,7 @@ function pageFete(ed) {
   var d = new Date(f.debut), fin = f.fin ? new Date(f.fin) : null, passe = new Date(f.fin || f.debut) < new Date();
   var h = '<div class="darkhead fete-head"><div class="wrap">' + backLink('#/accueil', 'Accueil', true) +
     '<div class="kicker" style="margin-top:6px">' + (feteAdultes(f) ? '🥂 Entre adhérents adultes' : '🎄 Pour toute la famille') + '</div><h1>' + esc(f.titre) + '</h1>' + (f.sous_titre ? '<div style="color:#c9d6e2;margin-top:4px">' + esc(f.sous_titre) + '</div>' : '') + '</div></div><main class="wrap">';
-  if (f.affiche_url) h += '<button class="fete-affiche" id="fete-zoom" aria-label="Agrandir l\'affiche"><img src="' + esc(feteImg(f.affiche_url)) + '" alt="Affiche : ' + esc(f.titre) + ', ' + esc(fmtJour(d)) + '"></button>';
+  affichesA(f, 'haut').forEach(function (a) { h += blocAffiche(a.url, a.titre || 'Affiche ' + f.titre, 'Affiche : ' + f.titre + ', ' + fmtJour(d)); });
   h += '<section class="card stack" style="gap:10px"><div class="rdv"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div>' +
     '<div class="stack"><span class="disp" style="font-size:22px;line-height:1.1">' + esc(fmtJour(d)) + '</span><span class="mut small">' + fmtH(d) + (fin ? ' – ' + fmtH(fin) : '') + '</span>' +
     (f.lieu ? '<span class="mut small">' + ic('pin', 14) + ' ' + esc(f.lieu) + '</span>' : '') + '</div></div>' +
@@ -3984,11 +4010,14 @@ function chargerFete(f, passe) {
     var h = '';
     if (!passe) h += blocPresence(f, P);
     if (!feteAdultes(f)) h += blocInviter(f);
-    if (f.tombola_ouverte || lots.length || T.length) h += blocTombola(f, lots, T, P, passe);
+    if (f.tombola_ouverte || lots.length || T.length || affichesA(f, 'tombola').length) h += blocTombola(f, lots, T, P, passe);
+    var autres = affichesA(f, 'autre');
+    if (autres.length) h += '<section class="card stack" style="gap:10px"><b style="font-size:18px">Les affiches</b><div class="aff-grille">' + autres.map(function (a) {
+      return '<div class="stack" style="gap:6px"><button class="fete-affiche" data-affzoom="' + esc(feteImg(a.url)) + '" data-afftitre="' + esc(a.titre || 'Affiche') + '" aria-label="Agrandir : ' + esc(a.titre || 'affiche') + '"><img src="' + esc(feteImg(a.url)) + '" alt="' + esc(a.titre || 'Affiche') + '" loading="lazy"></button>' + (a.titre ? '<span class="small" style="font-weight:600">' + esc(a.titre) + '</span>' : '') + lienTelechargement(a.url, a.titre) + '</div>';
+    }).join('') + '</div></section>';
     $('fete-main').innerHTML = h;
     lierFete(f, P);
   });
-  if ($('fete-zoom')) $('fete-zoom').onclick = function () { modale('<img src="' + esc(feteImg(f.affiche_url)) + '" alt="Affiche" style="width:100%;border-radius:12px;display:block">'); };
 }
 
 // Une page réglée « Adhérents adultes » (ex. Apéro de Noël) parle aux adultes, pas aux familles
@@ -4025,8 +4054,9 @@ function blocPresence(f, P) {
     '<button class="btn" id="ff-ok">Oui, on vient ! 🎄</button>' + (P ? '<button class="btn ghost" id="ff-stop">Annuler la modification</button>' : '') + '</section>';
 }
 
+function flyerFete(f) { var a = affichesA(f, 'flyer')[0] || affichesA(f, 'haut')[0]; return a ? feteImg(a.url) : feteImg(f.flyer_url || f.affiche_url); }
 function blocInviter(f) {
-  var img = feteImg(f.flyer_url || f.affiche_url);
+  var img = flyerFete(f);
   return '<section class="card stack" style="gap:10px"><b style="font-size:18px">Invite tes amis 💌</b>' +
     '<span class="mut small">Envoie l\'invitation à tes copains, ta famille, tes voisins : ils reçoivent l\'image avec toutes les infos, sans passer par l\'appli.</span>' +
     '<button class="btn navy" id="fete-share">' + ic('people', 20, '#fff') + 'Envoyer l\'invitation</button>' +
@@ -4038,6 +4068,7 @@ function blocTombola(f, lots, T, P, passe) {
   var h = '<section class="card stack" style="gap:12px" id="fete-tombola"><div class="stack" style="gap:4px"><b style="font-size:18px">🎟️ Tombola</b>' +
     '<span class="small"><b>' + euros(f.prix_ticket) + ' le ticket</b> · <b>' + f.carnet_nb + ' tickets pour ' + euros(f.prix_carnet) + '</b></span>' +
     '<span class="mut small">Tirage pendant la fête. 100 % tennis !</span></div>';
+  affichesA(f, 'tombola').forEach(function (a) { h += blocAffiche(a.url, a.titre || 'Affiche tombola', a.titre || 'Affiche de la tombola'); });
   h += '<div class="stack" style="gap:6px"><span class="eyebrow">Les lots</span>' + (lots.length ? lots.map(function (l, i) {
     var gagne = f.tirage_publie && l.gagnant_nom;
     return '<div class="lot">' + (l.photo_url ? '<button class="lot-ph" data-lotimg="' + esc(l.photo_url) + '" aria-label="Voir la photo du lot"><img src="' + esc(l.photo_url) + '" alt=""></button>' : '<span class="lot-n">' + (i + 1) + '</span>') + '<div class="stack" style="flex:1;min-width:0"><b>' + esc(l.nom) + '</b>' + (l.detail ? '<span class="mut small">' + esc(l.detail) + '</span>' : '') +
@@ -4107,7 +4138,7 @@ function lierFete(f, P) {
   var lien = feteLien(f), d = new Date(f.debut);
   var texte = '🎄 ' + f.titre + ' du club CLOCA Tennis ! ' + fmtJour(d) + ', ' + fmtH(d) + (f.fin ? '-' + fmtH(new Date(f.fin)) : '') + ' au club CLOCA Tennis à Achères. Gratuit (hors goûter), pour les enfants et leurs familles. Viens avec nous ! 🎾';
   if ($('fete-share')) $('fete-share').onclick = function () {
-    var img = feteImg(f.flyer_url || f.affiche_url);
+    var img = flyerFete(f);
     var simple = function () {
       if (navigator.share) return navigator.share({ title: f.titre, text: texte }).catch(function () { });
       window.open('https://wa.me/?text=' + encodeURIComponent(texte), '_blank', 'noopener');
