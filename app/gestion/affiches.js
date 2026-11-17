@@ -15,7 +15,7 @@ var AFF = {
   BOX_L: [42, 260, 484, 1315], BOX_R: [539, 262, 982, 1314],
   LAY: { L: [42, 260, 484, 1315], R: [539, 262, 982, 1314], logo: [512, 118, 200], date: [512, 1392, 18] },
   LISTE: [
-    { id: 'general', titre: 'Général', gauche: 'Général', droite: 'Général', fond: null, niveau: true },
+    { id: 'general', titre: 'Général', gauche: 'Général', droite: 'Général', fond: 'affiches/fond-general.jpg', niveau: true, lay: { L: [50, 263, 478, 1311], R: [547, 263, 975, 1311], logo: [112, 112, 170], date: [912, 112, 15, 'bloc'], acc: '#ff9a3c' } },
     { id: 'gf', titre: 'Garçons / Filles', gauche: 'Garçons', droite: 'Filles', fond: null, niveau: true },
     { id: 'bv', titre: 'Blanc / Violet', gauche: 'Blanc', droite: 'Violet', fond: 'affiches/fond-blanc-violet.jpg', lay: { L: [45, 259, 486, 1314], R: [542, 260, 982, 1314], logo: [512, 122, 190], date: [512, 1392, 18] } },
     { id: 'ro', titre: 'Rouge / Orange', gauche: 'Rouge', droite: 'Orange', fond: 'affiches/fond-rouge-orange.jpg', lay: { L: [41, 229, 478, 1399], R: [544, 232, 980, 1396], logo: [512, 92, 175], date: [512, 191, 15] } },
@@ -48,15 +48,18 @@ function affCharger() {
 function affPages(a) {
   var D = AFF.data || [], M = AFF.MAX, pages = [];
   if (a.id === 'general') {
-    for (var i = 0; i < D.length; i += 2 * M) {
-      var c = D.slice(i, i + 2 * M), h = Math.ceil(c.length / 2);
+    // pages équilibrées (ex. 121 joueurs : 61 + 60 plutôt que 80 + 41)
+    var np = Math.max(1, Math.ceil(D.length / (2 * M))), parPage = Math.ceil(D.length / np);
+    for (var i = 0; i < D.length; i += parPage) {
+      var c = D.slice(i, i + parPage), h = Math.ceil(c.length / 2);
       pages.push({ g: c.slice(0, h), d: c.slice(h), dg: i + 1, dd: i + 1 + h, de: i + 1, a: i + c.length });
     }
     return pages.length ? pages : [{ g: [], d: [], dg: 1, dd: 1 }];
   }
   var filtre = function (n) { return D.filter(function (r) { return n === 'Garçons' ? r.sexe === 'M' : n === 'Filles' ? r.sexe === 'F' : r.niveau === n; }); };
   var G = filtre(a.gauche), Dr = filtre(a.droite), n = Math.max(1, Math.ceil(Math.max(G.length, Dr.length) / M));
-  for (var k = 0; k < n; k++) pages.push({ g: G.slice(k * M, (k + 1) * M), d: Dr.slice(k * M, (k + 1) * M), dg: k * M + 1, dd: k * M + 1 });
+  var pg = Math.ceil(G.length / n) || 1, pd = Math.ceil(Dr.length / n) || 1; // pages équilibrées de chaque côté
+  for (var k = 0; k < n; k++) pages.push({ g: G.slice(k * pg, (k + 1) * pg), d: Dr.slice(k * pd, (k + 1) * pd), dg: k * pg + 1, dd: k * pd + 1 });
   return pages;
 }
 
@@ -146,13 +149,18 @@ function affDessiner(a, page, idx, total) {
     var c = cv.getContext('2d'); c.scale(AFF.K, AFF.K);
     if (r[0]) c.drawImage(r[0], 0, 0, AFF.W, AFF.H); else affFondSimple(c, a);
     var L = (r[0] && a.lay) || AFF.LAY;
-    affTableau(c, L.L, page.g, AFF.ACC[a.gauche], page.dg, a.niveau);
-    affTableau(c, L.R, page.d, AFF.ACC[a.droite], page.dd, a.niveau);
+    affTableau(c, L.L, page.g, L.acc || AFF.ACC[a.gauche], page.dg, a.niveau);
+    affTableau(c, L.R, page.d, L.acc || AFF.ACC[a.droite], page.dd, a.niveau);
     if (r[1]) { var lw = L.logo[2], lh = lw * r[1].height / r[1].width; c.drawImage(r[1], L.logo[0] - lw / 2, L.logo[1] - lh / 2, lw, lh); }
-    var d = new Date(), txt = 'Classement au ' + d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    if (a.id === 'general' && total > 1) txt += '  ·  du ' + page.de + (page.de === 1 ? 'er' : 'e') + ' au ' + page.a + 'e';
-    else if (total > 1) txt += '  ·  page ' + (idx + 1) + '/' + total;
-    c.save(); c.shadowColor = '#000'; c.shadowBlur = 8; affTexte(c, txt, L.date[0], L.date[1], 'italic 700 ' + L.date[2] + 'px Inter', '#fff', 'center'); c.restore();
+    var d = new Date(), jour = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }), suite = '';
+    if (a.id === 'general' && total > 1) suite = 'du ' + page.de + (page.de === 1 ? 'er' : 'e') + ' au ' + page.a + 'e';
+    else if (total > 1) suite = 'page ' + (idx + 1) + '/' + total;
+    c.save(); c.shadowColor = '#000'; c.shadowBlur = 8;
+    if (L.date[3] === 'bloc') { // date sur plusieurs lignes (coin de l'affiche)
+      var lignes = ['Classement au', jour].concat(suite ? [suite] : []), h = L.date[2] * 1.5, y0 = L.date[1] - (lignes.length - 1) * h / 2;
+      lignes.forEach(function (t, i) { affTexte(c, t, L.date[0], y0 + i * h, 'italic ' + (i === 1 ? 800 : 700) + ' ' + (i === 1 ? L.date[2] + 3 : L.date[2]) + 'px Inter', i === 2 ? (L.acc || '#fff') : '#fff', 'center'); });
+    } else affTexte(c, 'Classement au ' + jour + (suite ? '  ·  ' + suite : ''), L.date[0], L.date[1], 'italic 700 ' + L.date[2] + 'px Inter', '#fff', 'center');
+    c.restore();
     return cv;
   });
 }
