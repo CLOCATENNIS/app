@@ -356,17 +356,33 @@ function vueEvenements(m, arg, O) {
     r = r.in('type', O.types);
     if (O.circuit) r = r.eq('circuit', O.circuit);
     if (EVF.type && O.types.indexOf(EVF.type) >= 0 && O.types.length > 1) r = r.eq('type', EVF.type);
-    q(r).then(function (l) {
+    var avecPages = O.types.indexOf('animation') >= 0;
+    Promise.all([q(r), avecPages ? q(sb.from('fetes').select('*').order('debut')).catch(function () { return []; }) : [], avecPages ? q(sb.from('fete_participations').select('edition, annule')).catch(function () { return []; }) : []]).then(function (R) {
+      var l = R[0], FTP = R[1] || [], PART = R[2] || [];
       EV = l;
-      $('e-l').innerHTML = l.length ? '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Événement</th><th>Groupes</th><th>Inscrits</th><th>État</th><th></th></tr></thead><tbody>' + l.map(function (e) {
+      var nbFam = function (ed) { return PART.filter(function (x) { return x.edition === ed && !x.annule; }).length; };
+      var pageDe = function (ed) { return FTP.filter(function (f) { return f.edition === ed; })[0]; };
+      // Pages pas encore reliées à l'agenda (anciennes) : une ligne avec « Mettre dans l'agenda »
+      var reliees = l.map(function (e) { return e.fete_edition; }).filter(Boolean);
+      var minuitP = new Date(); minuitP.setHours(0, 0, 0, 0);
+      var seules = FTP.filter(function (f) { var d = new Date(f.debut); return reliees.indexOf(f.edition) < 0 && (EVF.quand === 'avenir' ? d >= minuitP : d < minuitP); });
+      $('e-l').innerHTML = l.length || seules.length ? '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Événement</th><th>Groupes</th><th>Inscrits</th><th>État</th><th></th></tr></thead><tbody>' + l.map(function (e) {
         var d = new Date(e.debut), n = e.inscriptions && e.inscriptions[0] ? e.inscriptions[0].count : 0;
         var gs = groupesEvt(e).map(function (g) { return esc(nomGroupe(g).replace("CLOC'ARENA ", '')); }).join(', ');
         return '<tr class="click" data-e="' + e.id + '"><td class="small" style="white-space:nowrap"><b>' + esc(fmtJ(d)) + '</b><br>' + fmtH(d) + (e.fin ? ' – ' + fmtH(new Date(e.fin)) : '') + '</td>' +
-          '<td><b>' + esc(e.titre) + '</b>' + (e.affiche_url ? ' <span title="Affiche en ligne">🖼️</span>' : '') + '<div class="mut xs">' + TYPES_EVT[e.type] + (e.lieu ? ' · ' + esc(e.lieu) : '') + (e.encadrant ? ' · ' + esc(e.encadrant) : '') + '</div></td><td class="small">' + (gs || (e.public ? 'Public' : '—')) + '</td>' +
-          '<td class="small" style="white-space:nowrap">' + (!e.inscription_ouverte && (e.participations || []).length ? '<span title="Réponses « Je participe »"><b style="color:var(--ok)">✓ ' + e.participations.filter(function (x) { return x.reponse === 'oui'; }).length + '</b> · <span style="color:var(--ko)">✗ ' + e.participations.filter(function (x) { return x.reponse === 'non'; }).length + '</span></span>' : e.inscription_ouverte ? '<a href="' + (O.circuit || e.type === 'seance' ? '#/arena/inscriptions/' : '#/inscriptions/') + e.id + '">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</a><br><label class="xs mut" style="display:inline-flex;gap:4px;align-items:center">sur <input class="f" type="number" min="1" data-epl="' + e.id + '" value="' + esc(e.places_max) + '" placeholder="∞" title="Nombre de places (vide = illimité)" style="width:64px;min-height:32px;padding:2px 6px"> places</label>' + ((e.evenement_quotas || []).length ? '<div class="xs mut">' + e.evenement_quotas.map(function (x) { return esc(nomGroupe(x.groupe_id).replace("CLOC'ARENA ", '')) + ' ' + x.places; }).join(' · ') + '</div>' : '') : n ? '<a href="' + (O.circuit || e.type === 'seance' ? '#/arena/inscriptions/' : '#/inscriptions/') + e.id + '">' + n + '</a>' : '—') + '</td>' +
+          '<td><b>' + esc(e.titre) + '</b>' + (e.affiche_url ? ' <span title="Affiche en ligne">🖼️</span>' : '') + '<div class="mut xs">' + TYPES_EVT[e.type] + (e.fete_edition ? ' · avec page' : '') + (e.lieu ? ' · ' + esc(e.lieu) : '') + (e.encadrant ? ' · ' + esc(e.encadrant) : '') + '</div></td><td class="small">' + (gs || (e.public ? 'Public' : '—')) + '</td>' +
+          '<td class="small" style="white-space:nowrap">' + (e.fete_edition && pageDe(e.fete_edition) ? (function () { var n = nbFam(e.fete_edition), adu = pageDe(e.fete_edition).public_cible === 'adultes'; return '<a href="#/fetes/' + encodeURIComponent(e.fete_edition) + '" title="Confirmations de venue sur la page">' + n + (adu ? ' adhérent' : ' famille') + (n > 1 ? 's' : '') + '</a>' + (pageDe(e.fete_edition).tombola_ouverte ? '<div class="xs mut">+ tombola</div>' : ''); })() : !e.inscription_ouverte && (e.participations || []).length ? '<span title="Réponses « Je participe »"><b style="color:var(--ok)">✓ ' + e.participations.filter(function (x) { return x.reponse === 'oui'; }).length + '</b> · <span style="color:var(--ko)">✗ ' + e.participations.filter(function (x) { return x.reponse === 'non'; }).length + '</span></span>' : e.inscription_ouverte ? '<a href="' + (O.circuit || e.type === 'seance' ? '#/arena/inscriptions/' : '#/inscriptions/') + e.id + '">' + n + ' inscrit' + (n > 1 ? 's' : '') + '</a><br><label class="xs mut" style="display:inline-flex;gap:4px;align-items:center">sur <input class="f" type="number" min="1" data-epl="' + e.id + '" value="' + esc(e.places_max) + '" placeholder="∞" title="Nombre de places (vide = illimité)" style="width:64px;min-height:32px;padding:2px 6px"> places</label>' + ((e.evenement_quotas || []).length ? '<div class="xs mut">' + e.evenement_quotas.map(function (x) { return esc(nomGroupe(x.groupe_id).replace("CLOC'ARENA ", '')) + ' ' + x.places; }).join(' · ') + '</div>' : '') : n ? '<a href="' + (O.circuit || e.type === 'seance' ? '#/arena/inscriptions/' : '#/inscriptions/') + e.id + '">' + n + '</a>' : '—') + '</td>' +
           '<td>' + (e.statut === 'annule' ? '<span class="badge b-ko">Annulé</span>' : e.statut === 'deplace' ? '<span class="badge b-warn">Déplacé</span>' : '<span class="badge b-ok">Prévu</span>') + '</td>' +
-          '<td class="act"><button class="btn sm line" data-eopt="' + e.id + '" title="Budget, affiche et page, à la une, prévenir">Options</button> <button class="btn sm line" data-edup="' + e.id + '" title="Copier à la même heure la semaine suivante">+ 7 jours</button></td></tr>';
+          '<td class="act">' + (e.fete_edition && pageDe(e.fete_edition) ? '<a class="btn sm" href="#/fetes/' + encodeURIComponent(e.fete_edition) + '" title="Qui vient, affiches, tombola, réglages de la page">Page</a> ' : '') + '<button class="btn sm line" data-eopt="' + e.id + '" title="Budget, affiche et page, à la une, prévenir">Options</button>' + (e.fete_edition ? '' : ' <button class="btn sm line" data-edup="' + e.id + '" title="Copier à la même heure la semaine suivante">+ 7 jours</button>') + '</td></tr>';
+      }).join('') + seules.map(function (f) {
+        var d = new Date(f.debut), n = nbFam(f.edition), adu = f.public_cible === 'adultes';
+        return '<tr class="click" data-fp="' + esc(f.edition) + '"><td class="small" style="white-space:nowrap"><b>' + esc(fmtJ(d)) + '</b><br>' + fmtH(d) + (f.fin ? ' – ' + fmtH(new Date(f.fin)) : '') + '</td>' +
+          '<td><b>' + esc(f.titre) + '</b><div class="mut xs">Animation · page' + (f.tombola_ouverte ? ' · tombola' : '') + ' · <span style="color:var(--ac)">pas encore dans l\'agenda</span></div></td><td class="small">' + ({ jeunes: 'Jeunes', adultes: 'Adultes', tous: 'Tout le club' }[f.public_cible || 'tous']) + '</td>' +
+          '<td class="small"><a href="#/fetes/' + encodeURIComponent(f.edition) + '">' + n + (adu ? ' adhérent' : ' famille') + (n > 1 ? 's' : '') + '</a></td><td>' + (f.actif ? '<span class="badge b-ok">Prévu</span>' : '<span class="badge b-warn">Page masquée</span>') + '</td>' +
+          '<td class="act"><a class="btn sm" href="#/fetes/' + encodeURIComponent(f.edition) + '">Page</a> <button class="btn sm line" data-fag="' + esc(f.edition) + '">Mettre dans l\'agenda</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card empty">Aucun événement.</div>';
+      all('[data-fag]').forEach(function (b) { b.onclick = function () { var f = pageDe(b.dataset.fag); b.disabled = true; evtDePage(f, true).then(function () { toast('« ' + f.titre + ' » est maintenant une animation de l\'agenda'); charger(); }).catch(function () { b.disabled = false; toast('Ajout impossible'); }); }; });
+      all('[data-fp]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('a,button')) return; location.hash = '#/fetes/' + encodeURIComponent(tr.dataset.fp); }; });
       all('[data-epl]').forEach(function (inp) {
         inp.onchange = function () {
           var v = inp.value ? parseInt(inp.value, 10) : null;
@@ -461,6 +477,8 @@ function vueEvenements(m, arg, O) {
           return q(sb.from('evenement_quotas').delete().eq('evenement_id', id));
         }).then(function () {
           return qts.length ? q(sb.from('evenement_quotas').insert(qts.map(function (x) { return { evenement_id: id, groupe_id: x.groupe_id, places: x.places }; }))) : null;
+        }).then(function () {
+          if (!nouveau && e.fete_edition) return q(sb.from('fetes').update({ titre: row.titre, debut: row.debut, fin: row.fin, lieu: row.lieu }).eq('edition', e.fete_edition)).catch(function () { });
         }).then(function () {
           if ($('v-n').checked) diffuser({ titre: (row.statut === 'annule' ? 'Annulé · ' : row.statut === 'deplace' ? 'Changement · ' : '') + titre, texte: $('v-nm').value.trim() || titre, cible: 'evenement', evt: id, lien: '#/evenement/' + id, source: 'seance' });
           toast('Événement enregistré'); fermer(); charger();
@@ -3646,7 +3664,10 @@ function vueFetes(m, arg) {
           debut: combine($('fr-j').value, $('fr-hd').value).toISOString(), fin: $('fr-hf').value ? combine($('fr-j').value, $('fr-hf').value).toISOString() : null, lieu: $('fr-lieu').value.trim() || null, public_vise: $('fr-pub').value.trim() || null, public_cible: $('fr-cib').value,
           prix_ticket: +$('fr-pt').value || 0, carnet_nb: Math.max(1, parseInt($('fr-cn').value, 10) || 1), prix_carnet: +$('fr-pc').value || 0 };
         return q(sb.from('fetes').update(row).eq('edition', f.edition).select('*').single());
-      }).then(function (r) { Object.assign(fete, r); toast('Réglages enregistrés'); charger(); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
+      }).then(function (r) {
+        var cible = r.public_cible !== f.public_cible; Object.assign(fete, r);
+        return evtDePage(fete, cible).then(function () { toast('Réglages enregistrés (agenda mis à jour)'); }, function () { toast('Réglages enregistrés, mais l\'agenda n\'a pas pu être mis à jour'); });
+      }).then(function () { charger(); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
     };
   };
 
@@ -3739,11 +3760,12 @@ function hubEvenements(m) {
   var depuis = new Date(Date.now() - 864e5).toISOString();
   Promise.all([
     q(sb.from('fetes').select('edition, debut, fin').order('debut', { ascending: false })).catch(function () { return []; }),
-    q(sb.from('evenements').select('type').neq('type', 'seance').gte('debut', depuis)).catch(function () { return []; })
+    q(sb.from('evenements').select('type, fete_edition').neq('type', 'seance').gte('debut', depuis)).catch(function () { return []; })
   ]).then(function (r) {
     var FT = r[0] || [], E = r[1] || [], h = '';
     var nb = function (t) { var n = E.filter(function (x) { return x.type === t; }).length; return n ? n + ' à venir' : 'Rien de prévu'; };
-    var fetesAVenir = FT.filter(function (f) { return new Date(f.fin || f.debut) > new Date(Date.now() - 864e5); }).length, nAnim = E.filter(function (x) { return x.type === 'animation'; }).length + fetesAVenir;
+    var reliees = E.map(function (x) { return x.fete_edition; }).filter(Boolean);
+    var fetesAVenir = FT.filter(function (f) { return new Date(f.fin || f.debut) > new Date(Date.now() - 864e5) && reliees.indexOf(f.edition) < 0; }).length, nAnim = E.filter(function (x) { return x.type === 'animation'; }).length + fetesAVenir;
     h += carteHub('#/fetes/animation', '🎉', 'Animations', 'Fête de Noël, tombola, apéro, jeux (One Point Slam…), Miss Cup, animations ponctuelles', nAnim ? nAnim + ' à venir' : 'Rien de prévu', '#b8862b');
     h += carteHub('#/fetes/stage', '🏕️', 'Stages', 'Stages de vacances (dont stage d\'hiver multisport) et stages adultes', nb('stage'));
     h += carteHub('#/fetes/tournoi', '🏆', 'Tournois', 'Tournois et compétitions organisés au club', nb('tournoi'));
@@ -3753,11 +3775,33 @@ function hubEvenements(m) {
 }
 // ---------- Options d'un événement (assistant et bouton « Options » de chaque événement) ----------
 function slugPage(titre, jour) { return String(titre).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '-' + String(jour).slice(0, 4); }
-// Page dédiée (affiche, qui vient, lots) : créée masquée, on la complète dans ses réglages
+// Page dédiée (affiche, qui vient, lots) : créée masquée, on la complète dans ses réglages ; reliée à l'animation de l'agenda
 function creerPageEvt(e, publicCible, lots) {
   var page = { edition: slugPage(e.titre, e.debut), titre: e.titre, debut: e.debut, fin: e.fin || null, lieu: e.lieu || null, public_cible: publicCible || 'tous',
     actif: false, inscription_ouverte: true, tombola_ouverte: !!lots, prix_ticket: 2, carnet_nb: 5, prix_carnet: 8, tirage_publie: false };
-  return q(sb.from('fetes').insert(page).select('edition').single());
+  return q(sb.from('fetes').insert(page).select('edition').single()).then(function (p) {
+    if (!e.id) return p;
+    e.fete_edition = p.edition;
+    return q(sb.from('evenements').update({ fete_edition: p.edition }).eq('id', e.id).select('id').single()).then(function () { return p; }, function () { return p; });
+  });
+}
+// Une page (Fête de Noël…) est une animation de l'agenda : on crée ou met à jour son événement relié (evenements.fete_edition).
+// Groupes = public de la page (Jeunes, Adultes ou les deux) : à la création, ou quand « Visible pour » change.
+function evtDePage(f, groupes) {
+  return chargerGroupes().then(function () {
+    var noms = f.public_cible === 'jeunes' ? ['Jeunes'] : f.public_cible === 'adultes' ? ['Adultes'] : ['Jeunes', 'Adultes'];
+    var gs = A.groupes.filter(function (g) { return g.type === 'profil' && noms.indexOf(g.nom) >= 0; }).map(function (g) { return g.id; });
+    return q(sb.from('evenements').select('id').eq('fete_edition', f.edition).maybeSingle()).then(function (x) {
+      var row = { titre: f.titre, debut: f.debut, fin: f.fin || null, lieu: f.lieu || null };
+      var nouveau = !x;
+      return (x ? q(sb.from('evenements').update(row).eq('id', x.id).select('id').single())
+        : q(sb.from('evenements').insert(Object.assign({ type: 'animation', statut: 'prevu', public: true, inscription_ouverte: false, fete_edition: f.edition, created_by: A.user.id, description: f.sous_titre || f.public_vise || null }, row)).select('id').single())
+      ).then(function (r) {
+        if (!nouveau && !groupes) return r.id;
+        return q(sb.from('evenement_groupes').delete().eq('evenement_id', r.id)).then(function () { return gs.length ? q(sb.from('evenement_groupes').insert(gs.map(function (g) { return { evenement_id: r.id, groupe_id: g }; }))) : null; }).then(function () { return r.id; });
+      });
+    });
+  });
 }
 // Carte « à la une » sur l'accueil de l'appli, ajoutée en premier ; garde les cartes déjà en place (ou celles proposées par défaut)
 function ajouterUne(e, lien, publicCible) {
@@ -3789,7 +3833,7 @@ function optionsEvenement(e, apres) {
   ]).then(function (r) {
     B = (r[0] || []).map(function (l) { return { nom: l.nom, prix: String(l.prix).replace('.', ','), qte: String(+l.quantite) }; });
     if (!B.length) B.push({ nom: '', prix: '', qte: '1' });
-    page = (r[1] || []).filter(function (f) { return f.titre === e.titre && isoJour(new Date(f.debut)) === isoJour(new Date(e.debut)); })[0] || null;
+    page = (r[1] || []).filter(function (f) { return e.fete_edition ? f.edition === e.fete_edition : f.titre === e.titre && isoJour(new Date(f.debut)) === isoJour(new Date(e.debut)); })[0] || null;
     panneau('Options · ' + e.titre, '', function () { dessiner(); });
   });
   var total = function () { return B.reduce(function (s, l) { return s + (parseFloat(String(l.prix).replace(',', '.')) || 0) * (parseFloat(l.qte) || 0); }, 0); };
@@ -3967,7 +4011,7 @@ function nouvellePageFete() {
       var row = { edition: slug, titre: t, debut: combine(j, $('np-hd').value).toISOString(), fin: $('np-hf').value ? combine(j, $('np-hf').value).toISOString() : null, lieu: $('np-l').value.trim() || null, public_cible: $('np-c').value,
         actif: false, inscription_ouverte: true, tombola_ouverte: false, prix_ticket: 2, carnet_nb: 5, prix_carnet: 8, tirage_publie: false };
       b.disabled = true;
-      q(sb.from('fetes').insert(row).select('edition').single()).then(function (r) { fermer(); toast('Page créée : complète ses réglages'); A.feteOnglet = 'reglages'; location.hash = '#/fetes/' + encodeURIComponent(r.edition); })
+      q(sb.from('fetes').insert(row).select('edition').single()).then(function (r) { return evtDePage(row, true).catch(function () { }).then(function () { return r; }); }).then(function (r) { fermer(); toast('Page et animation de l\'agenda créées : complète ses réglages'); A.feteOnglet = 'reglages'; location.hash = '#/fetes/' + encodeURIComponent(r.edition); })
         .catch(function (e) { b.disabled = false; toast(/duplicate|unique/i.test(String(e && e.message)) ? 'Une page avec ce titre existe déjà cette année' : 'Création impossible'); });
     };
   });

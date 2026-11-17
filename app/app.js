@@ -215,7 +215,7 @@ function etatInsc(ev, qui) {
 
 // « Je participe » pour les séances sans inscription
 function maReponse(ev, p) { var r = ((AG && AG.part) || []).filter(function (x) { return x.evenement_id === ev.id && x.personne_id === p.id; })[0]; return r ? r.reponse : null; }
-function peutRepondre(ev) { return S.user && !ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date() && evGroupes(ev).ids.length; }
+function peutRepondre(ev) { return S.user && !ev.fete_edition && !ev.inscription_ouverte && ev.statut !== 'annule' && new Date(ev.debut) > new Date() && evGroupes(ev).ids.length; }
 function boutonsPart(ev, qui) {
   if (!peutRepondre(ev) || !qui || !qui.length) return ''; // personne du compte n'est concerné : pas de question sans boutons
   return '<span class="stack" style="gap:6px;margin-top:4px">' + qui.map(function (p) {
@@ -1474,7 +1474,8 @@ function clubEvenements() {
     if (f.tombola_ouverte) it.push({ d: now, h: '<a class="ev" href="#/noel/tombola"><div class="datebox" style="background:var(--sun);color:#12304a"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b style="color:#12304a">' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>🎟️ Tombola · ' + esc(f.titre) + '</b>' +
       '<span class="mut small">' + (+f.prix_ticket) + ' € le ticket' + (f.carnet_nb ? ', ' + (+f.prix_carnet) + ' € les ' + f.carnet_nb : '') + ' · tirage le ' + esc(fmtJour(d).toLowerCase()) + ', lots remis même aux absents</span><span><span class="badge" style="background:var(--ok);color:#fff">Tickets en vente jusqu\'au ' + d.getDate() + '</span></span></div></a>' });
   });
-  (S.evts || []).filter(function (e) { return e.type !== 'seance' && e.statut !== 'annule' && new Date(e.fin || e.debut) >= now; }).forEach(function (e) {
+  var pagesEnLigne = (S.fetes || []).filter(function (f) { return f.actif; }).map(function (f) { return f.edition; });
+  (S.evts || []).filter(function (e) { return e.type !== 'seance' && e.statut !== 'annule' && new Date(e.fin || e.debut) >= now && !(e.fete_edition && pagesEnLigne.indexOf(e.fete_edition) >= 0); }).forEach(function (e) {
     var d = new Date(e.debut);
     it.push({ d: d, h: '<a class="ev" href="#/evenement/' + e.id + '"><div class="datebox"><span>' + esc(d.toLocaleDateString('fr-FR', { month: 'short' })) + '</span><b>' + d.getDate() + '</b></div><div class="stack" style="flex:1;min-width:0"><b>' + esc(e.titre) + '</b><span class="mut small">' + [fmtH(d), e.lieu].filter(Boolean).map(esc).join(' · ') + '</span>' +
       (e.inscription_ouverte ? '<span><span class="badge" style="background:var(--ok);color:#fff">Inscriptions ouvertes</span></span>' : '') + '</div></a>' });
@@ -1753,6 +1754,7 @@ function formAnnonce(box) {
 // ---------- Événement ----------
 function pageEvenement(id) {
   var e = (S.evts || []).filter(function (x) { return x.id === id; })[0];
+  if (e && e.fete_edition && (S.fetes || []).some(function (f) { return f.edition === e.fete_edition; })) return pageFete(e.fete_edition);
   if (!e) return '<div class="pagehead">' + backLink('#/club/evenements', 'Vie du club') + '</div><main><section class="card empty">Événement introuvable.</section></main>';
   var d = new Date(e.debut), fin = e.fin ? new Date(e.fin) : null;
   var multi = fin && isoJour(fin) !== isoJour(d);
