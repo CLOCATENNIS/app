@@ -1444,6 +1444,12 @@ function clubActus() {
 }
 function pageActu(id) {
   var a = (S.pubs || []).filter(function (x) { return x.id === id; })[0];
+  if (!a && !RECH['actu:' + id]) {
+    // Actu publiée pendant que l'appli était déjà ouverte : on recharge les actus avant de conclure
+    RECH['actu:' + id] = 1;
+    chargerPublic().then(function () { if (location.hash === '#/actu/' + id) render(); }).catch(function () { });
+    return '<div class="pagehead">' + backLink('#/club/actus', 'Vie du club') + '</div><main><section class="card empty">Chargement de l\'actu…</section></main>';
+  }
   if (!a) return '<div class="pagehead">' + backLink('#/club/actus', 'Vie du club') + '</div><main><section class="card empty">Cette actu n\'est plus en ligne.</section></main>';
   var img = imgActu(a), link = safeUrl(a.lien);
   // Texte : paragraphes et listes numérotées (1️⃣, 2️⃣…) chacun sur sa ligne
@@ -3274,6 +3280,7 @@ function quandMsg(d) {
 // puis un filtre par catégorie de fils (CLOC'ARENA, Next Gen, Interclub, Double interne…), puis « Privés » (petites annonces).
 // Seuls les filtres où la personne a quelque chose apparaissent ; chaque filtre affiche ses non-lus.
 var MSGF = 'annonces';
+var RECH = {}; // pages déjà rechargées une fois (message ou actu arrivés après l'ouverture de l'appli)
 // « Club » réunit les fils de la vie sportive du club (CLOC'ARENA Tweener / Masters / Versus, CLOCA Next Gen…) : chacun ne voit que les siens
 var MSG_ORDRE = ['annonces', 'club', 'Interclub'];
 var MSG_NOM = { annonces: 'Annonces', club: 'Club', prives: 'Privés' };
@@ -3423,6 +3430,12 @@ function pageMessages() {
 function pageMessage(id) {
   var x = (S.msgs || []).filter(function (y) { return y.messages.id === id; })[0];
   var h = '<div class="pagehead wrap">' + backLink('#/messages', 'Messages') + '</div><main>';
+  if (!x && S.user && !S.apercu && !RECH['msg:' + id]) {
+    // Message arrivé pendant que l'appli était déjà ouverte (clic sur la notification) : on recharge la messagerie avant de conclure
+    RECH['msg:' + id] = 1;
+    chargerMessages().then(function () { if (location.hash === '#/message/' + id) render(); });
+    return h + '<section class="card empty">Chargement du message…</section></main>';
+  }
   if (!x) return h + '<section class="card empty">Message introuvable. Il a peut-être été retiré par le club.</section></main>';
   var m = x.messages;
   if (!x.lu_le && !S.apercu) { x.lu_le = new Date().toISOString(); q(sb.rpc('messages_lus', { ids: [m.id] })).catch(function () { }); }
@@ -4565,6 +4578,8 @@ function dessinerFil(d, enBas) {
 }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState !== 'visible' || !S.user) return;
+  // Retour sur l'appli : les messages du club arrivés entre-temps apparaissent (onglet Messages, pastille)
+  if (!S.apercu) chargerMessages().then(function () { var pg = document.body.getAttribute('data-page'); if (pg === 'messages' || pg === 'accueil') render(); });
   chargerNotifs().then(function () { if (document.body.getAttribute('data-page') === 'notifs') render(); });
   var d = DISC.id && (S.discs || []).filter(function (x) { return x.id === DISC.id; })[0];
   if (d) discMarquerLu(d); else chargerDiscussions().then(function () { if (document.body.getAttribute('data-page') === 'accueil' || document.body.getAttribute('data-page') === 'discussions') render(); });
