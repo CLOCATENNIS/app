@@ -4072,7 +4072,13 @@ function uneDefautG(evts, fetes) {
   ];
 }
 var UNE_COUL_G = [['ac', 'Terre battue', 'var(--ac)'], ['navy', 'Bleu', 'var(--navy)'], ['ok', 'Vert', 'var(--ok)'], ['sun', 'Doré', '#b8862b']];
-var UNE_PUBLIC_G = [['tous', 'Tout le club'], ['jeunes', 'Familles de l\'école de tennis'], ['adultes', 'Adhérents adultes']];
+var UNE_PUBLIC_G = [['tous', 'Tout le club'], ['jeunes', 'Familles de l\'école de tennis'], ['adultes', 'Adhérents adultes'], ['groupes', 'Seulement certains groupes']];
+// Libellé du public d'une carte à la une, avec les groupes ajoutés (ex. « Adhérents adultes + 2 groupes »)
+function unePublicLib(a) {
+  var p = a.public || 'tous', n = (a.groupes || []).length, lib = (UNE_PUBLIC_G.filter(function (x) { return x[0] === p; })[0] || UNE_PUBLIC_G[0])[1];
+  if (p === 'groupes') return n ? (a.groupes || []).map(nomGroupe).join(', ') : 'Aucun groupe choisi';
+  return p === 'tous' || !n ? lib : lib + ' + ' + n + ' groupe' + (n > 1 ? 's' : '');
+}
 function uneStatutG(a) {
   var auj = new Date(), iso = auj.getFullYear() + '-' + ('0' + (auj.getMonth() + 1)).slice(-2) + '-' + ('0' + auj.getDate()).slice(-2);
   var jm = function (d) { return d.split('-').reverse().slice(0, 2).join('/'); };
@@ -4115,6 +4121,9 @@ function vueAccueilApp(m, arg, O) {
       '<p class="mut xs" style="margin:0">Si le bouton mène à un événement de l\'agenda qui demande Présent / Absent, les familles concernées répondent directement sur la carte.</p>' +
       '<div class="ac-2"><label class="l">Pour qui<select class="f" data-un="' + i + '|public">' + UNE_PUBLIC_G.map(function (x) { return '<option value="' + x[0] + '"' + ((a.public || 'tous') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
       '<div class="l">Couleur<div class="chips">' + UNE_COUL_G.map(function (c) { return '<button class="chip' + ((a.couleur || 'ac') === c[0] ? ' on' : '') + '" data-ucoul="' + i + '|' + c[0] + '"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c[2] + ';margin-right:6px;vertical-align:-1px"></span>' + c[1] + '</button>'; }).join('') + '</div></div></div>' +
+      ((a.public || 'tous') === 'tous' ? '' : '<div class="l">' + (a.public === 'groupes' ? 'Groupes concernés' : 'Ajouter aussi ces groupes (facultatif)') +
+        '<span class="mut xs" style="font-weight:400;display:block">' + (a.public === 'groupes' ? 'Seules les familles de ces groupes voient la carte.' : 'Ex. des groupes ados qui peuvent aussi venir : leurs familles voient la carte en plus.') + '</span>' +
+        '<div data-ugs="' + i + '">' + choixGroupes(a.groupes || [], 'ug' + i) + '</div></div>') +
       '<div class="ac-2"><label class="l">À partir du (facultatif)<input class="f" type="date" data-un="' + i + '|debut" value="' + esc(a.debut || '') + '"></label><label class="l">Jusqu\'au, inclus (facultatif)<input class="f" type="date" data-un="' + i + '|fin" value="' + esc(a.fin || '') + '"></label></div>' +
       '<div class="chips"><button class="btn sm" data-uok="' + i + '">Fermer</button><button class="btn sm line" data-udup="' + i + '">Dupliquer</button><button class="btn sm ko" data-ux="' + i + '">Supprimer</button></div></div>';
   };
@@ -4126,7 +4135,7 @@ function vueAccueilApp(m, arg, O) {
         var st = uneStatutG(a);
         return '<div class="it" style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;gap:10px;align-items:center;justify-content:space-between;width:100%">' +
           '<div style="display:flex;gap:10px;align-items:center;min-width:0">' + (a.image ? '<img src="' + esc(imgG(a.image)) + '" alt="" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex:none">' : '<span style="width:6px;height:36px;border-radius:3px;flex:none;background:' + ((UNE_COUL_G.filter(function (c) { return c[0] === (a.couleur || 'ac'); })[0] || UNE_COUL_G[0])[2]) + '"></span>') +
-          '<span style="min-width:0"><b>' + esc(a.titre || 'Nouvelle annonce') + '</b><span class="xs" style="display:block;color:' + st[1] + ';font-weight:600">' + esc(st[0]) + ' · ' + esc((UNE_PUBLIC_G.filter(function (x) { return x[0] === (a.public || 'tous'); })[0] || UNE_PUBLIC_G[0])[1]) + '</span></span></div>' +
+          '<span style="min-width:0"><b>' + esc(a.titre || 'Nouvelle annonce') + '</b><span class="xs" style="display:block;color:' + st[1] + ';font-weight:600">' + esc(st[0]) + ' · ' + esc(unePublicLib(a)) + '</span></span></div>' +
           '<div class="chips" style="flex:none">' + fleches('une', i, E.une.length) + '<button class="btn sm line" data-ued="' + i + '">' + (UO === i ? 'Fermer' : 'Modifier') + '</button></div></div>' +
           (UO === i ? formUne(a, i) : '') + '</div>';
       }).join('') : '<div class="it mut small">Aucune annonce pour l\'instant.</div>') + '</div>' +
@@ -4166,6 +4175,7 @@ function vueAccueilApp(m, arg, O) {
     all('[data-uok]').forEach(function (b) { b.onclick = function () { UO = -1; dessiner(); }; });
     all('[data-un]').forEach(function (x) { x.oninput = x.onchange = function () { var v = x.dataset.un.split('|'); E.une[+v[0]][v[1]] = x.type === 'checkbox' ? x.checked : x.value; if (x.type === 'checkbox' || x.type === 'date' || x.tagName === 'SELECT') dessiner(); }; });
     all('[data-ulien]').forEach(function (x) { x.onchange = function () { var a = E.une[+x.dataset.ulien]; a.lien = x.value === 'autre' ? (/^https?:/.test(a.lien || '') ? a.lien : 'https://') : x.value; dessiner(); }; });
+    all('[data-ugs]').forEach(function (box) { var i = +box.dataset.ugs; all('input[name="ug' + i + '"]', box).forEach(function (x) { x.onchange = function () { E.une[i].groupes = lus(box, 'ug' + i); dessiner(); }; }); });
     all('[data-ucoul]').forEach(function (b) { b.onclick = function () { var v = b.dataset.ucoul.split('|'); E.une[+v[0]].couleur = v[1]; dessiner(); }; });
     all('[data-uimgx]').forEach(function (b) { b.onclick = function () { E.une[+b.dataset.uimgx].image = ''; dessiner(); }; });
     all('[data-uimg]').forEach(function (x) { x.onchange = function () { var i = +x.dataset.uimg, f = x.files[0]; if (!f) return; toast('Envoi de l\'image…'); envoyerPhoto(f, 'fetes').then(function (u) { E.une[i].image = u; dessiner(); toast('Image ajoutée : pense à enregistrer'); }).catch(function () { toast('Envoi de l\'image impossible'); }); }; });
@@ -4194,7 +4204,7 @@ function vueAccueilApp(m, arg, O) {
       v.tuiles = v.tuiles.filter(function (t) { if (t.type !== 'lien') return true; if (!String(t.titre || '').trim() || !String(t.lien || '').trim()) { err = err || 'Un lien personnalisé n\'a pas de titre ou de lien'; } return true; });
       v.partenaires = v.partenaires.filter(function (x) { return String(x.nom || '').trim(); });
       v.faq = v.faq.filter(function (x) { return String(x.q || '').trim(); });
-      v.une.forEach(function (a) { a.titre = String(a.titre || '').trim(); a.texte = String(a.texte || '').trim(); if (!a.titre) err = err || 'Une annonce à la une n\'a pas de titre'; if (a.debut && a.fin && a.fin < a.debut) err = err || 'L\'annonce « ' + a.titre + ' » finit avant de commencer'; if (a.lien === 'https://') a.lien = ''; });
+      v.une.forEach(function (a) { a.titre = String(a.titre || '').trim(); a.texte = String(a.texte || '').trim(); if (!a.titre) err = err || 'Une annonce à la une n\'a pas de titre'; if (a.debut && a.fin && a.fin < a.debut) err = err || 'L\'annonce « ' + a.titre + ' » finit avant de commencer'; if (a.public === 'groupes' && !(a.groupes || []).length) err = err || 'L\'annonce « ' + a.titre + ' » : choisis au moins un groupe'; if ((a.public || 'tous') === 'tous') delete a.groupes; if (a.lien === 'https://') a.lien = ''; });
       if (err) return toast(err);
       var b = this; b.disabled = true;
       q(sb.from('reglages_publics').upsert({ cle: 'accueil', valeur: v, maj_le: new Date().toISOString() })).then(function () { b.disabled = false; UO = -1; dessiner(); toast('Accueil enregistré : visible tout de suite dans l\'appli'); }).catch(function () { b.disabled = false; toast('Enregistrement impossible'); });
@@ -4203,7 +4213,8 @@ function vueAccueilApp(m, arg, O) {
   Promise.all([
     q(sb.from('reglages_publics').select('valeur').eq('cle', 'accueil').maybeSingle()),
     q(sb.from('evenements').select('id, titre, debut, type, statut').gte('debut', new Date().toISOString()).order('debut').limit(60)).catch(function () { return []; }),
-    q(sb.from('fetes').select('edition, titre, actif, public_cible, debut')).catch(function () { return []; })
+    q(sb.from('fetes').select('edition, titre, actif, public_cible, debut')).catch(function () { return []; }),
+    chargerGroupes().catch(function () { })
   ]).then(function (res) {
     var r = res[0];
     LIENS.evts = (res[1] || []).filter(function (e) { return e.statut !== 'annule' && e.type !== 'seance'; });

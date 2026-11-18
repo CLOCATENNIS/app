@@ -596,7 +596,10 @@ function uneVisibles(cfg) {
     if (a.actif === false || !a.titre) return false;
     if (a.debut && a.debut > auj) return false;
     if (a.fin && a.fin < auj) return false;
-    return feteConcerne({ public_cible: a.public || 'tous' });
+    // Groupes choisis dans la gestion : leurs familles voient la carte (en plus du public, ou seuls avec « Seulement certains groupes »)
+    var dansGroupe = (a.groupes || []).some(function (g) { return S.groupesDe && S.groupesDe[g] && S.groupesDe[g].length; });
+    if (a.public === 'groupes') return !!S.user && (S.isStaff || dansGroupe);
+    return feteConcerne({ public_cible: a.public || 'tous' }) || dansGroupe;
   });
 }
 // Ce que les annonces couvrent déjà : la carte Fête et la carte « Rendez-vous du club » ne s'affichent pas en double
