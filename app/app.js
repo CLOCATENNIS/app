@@ -999,7 +999,8 @@ function pageArenaAccueil() {
     '<a href="#/arena/versus" class="card stack" style="gap:10px;text-decoration:none;color:#fff;background:' + VERSUS_FOND + ';border:0;padding:22px">' +
       '<span class="xs" style="letter-spacing:1.4px;font-weight:700;opacity:.85">DÉFIS · MATCHS LIBRES FFT</span><span class="disp" style="font-size:34px;line-height:1">CLOC\'ARENA<br>Versus</span>' +
       '<span class="small" style="opacity:.9">Défie un joueur de ta catégorie et grimpe au classement de la saison.</span>' +
-      (circuitEnPrep('versus') ? '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>' : '<span><span class="badge" style="background:#e9a37f;color:#12304a">En cours</span></span>') + '<span class="small" style="font-weight:700">Découvrir →</span></a></main>';
+      (circuitEnPrep('versus') ? '<span><span class="badge" style="background:#e9a37f;color:#12304a">En préparation</span></span>' : '<span><span class="badge" style="background:#e9a37f;color:#12304a">En cours</span></span>') + '<span class="small" style="font-weight:700">Découvrir →</span></a>' +
+    '<p style="text-align:center;margin:4px 0 0"><a href="#/arena/regles/tweener" class="small mut" style="text-decoration:underline;text-underline-offset:3px">ⓘ Règles des circuits</a></p></main>';
 }
 // CLOC'ARENA Versus : circuit des défis (matchs libres FFT). En préparation : page d'info seulement, aucun défi possible.
 var VERSUS_FOND = 'linear-gradient(135deg,#0f3d2e,#2f7a4f)';
@@ -1059,7 +1060,7 @@ function pageMastersOuvert() {
       Array.prototype.forEach.call(document.querySelectorAll('[data-msopt]'), function (i) { i.onchange = function () { choixArena(i.dataset.msopt, { masters: !i.checked }, function () { render(); }); }; });
     }).catch(function () { if ($('ms-cl')) $('ms-cl').innerHTML = '<span class="mut small">Classement indisponible pour le moment.</span>'; });
   });
-  return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES ET JEUNES COMPÉTITEURS</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
+  return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES ET JEUNES COMPÉTITEURS</div><h1>CLOC\'ARENA Masters</h1>' + lienRegles('masters') + '</div></div><main>' +
     (circuitEnPrep('masters') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Masters est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">Un classement général. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi lancé par un joueur moins bien classé, tu gagnes un <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
     '<section class="card stack" style="gap:8px" id="ms-part" hidden></section>' +
@@ -1096,7 +1097,7 @@ function pageVersusOuvert() {
   });
   var V = (S.reglages && S.reglages.versus_reglages) || {}, F = V.formats || { Orange: ['F5', 'F6'], Vert: ['F5', 'F6', 'F7'], 'Jaune + Adultes': ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7'] }, D = V.durees || { F1: '2h', F2: '2h', F3: '1h30', F4: '1h30', F5: '1h', F6: '1h30', F7: '1h30' };
   var tv = V.tweener_v || 10, td = V.tweener_d || 4;
-  return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
+  return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1>' + lienRegles('versus') + '</div></div><main>' +
     (circuitEnPrep('versus') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Versus est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
     '<section class="card stack" style="gap:8px"><b>Le principe</b><span class="small">Tu défies un joueur de ta catégorie, vous choisissez ensemble le créneau et le format, et vous jouez un vrai match libre FFT au club. Le club le saisit dans ADOC : il compte pour ton palmarès FFT.</span>' +
     '<span class="small">Pas de classement Versus : chaque match validé rapporte des points dans ton classement CLOC\'ARENA. Tweener : <b>' + tv + ' pts</b> la victoire, <b>' + td + ' pts</b> la défaite' + (V.masters_v ? ' · Masters : <b>' + V.masters_v + ' pts</b> la victoire, <b>' + (V.masters_d || 0) + ' pts</b> la défaite' : '') + '.</span></section>' +
@@ -1107,7 +1108,7 @@ function pageVersusOuvert() {
 }
 function pageVersus() {
   if (circuitVisible('versus')) return pageVersusOuvert();
-  return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1></div></div><main>' +
+  return '<div class="darkhead" style="background:' + VERSUS_FOND + '"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">DÉFIS · MATCHS LIBRES FFT</div><h1>CLOC\'ARENA Versus</h1>' + lienRegles('versus') + '</div></div><main>' +
     '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des défis arrive bientôt</b>' +
     '<span class="mut small">Tu défies un joueur de ta catégorie, vous choisissez ensemble le créneau et le format, et vous jouez votre match au club. Chaque match compte pour le classement Versus de la saison et, selon les conditions, comme match libre pour ton classement FFT.</span></section>' +
     '<section class="card stack" style="gap:8px"><span class="eyebrow">Pour qui ?</span>' +
@@ -1116,12 +1117,12 @@ function pageVersus() {
 }
 function pageMasters() {
   if (circuitVisible('masters')) return pageMastersOuvert();
-  return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES</div><h1>CLOC\'ARENA Masters</h1></div></div><main>' +
+  return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES ET JEUNES COMPÉTITEURS</div><h1>CLOC\'ARENA Masters</h1>' + lienRegles('masters') + '</div></div><main>' +
     '<section class="card stack" style="gap:10px"><span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">En préparation</span><b>Le circuit des adultes arrive bientôt</b>' +
     '<span class="mut small">Matchs entre adhérents adultes, défis et classement de la saison, sur le même principe que CLOC\'ARENA Tweener pour les jeunes. Les infos seront publiées ici et dans les actus du club.</span></section></main>';
 }
 function pageArena() {
-  var h = '<div class="darkhead"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">JEUNES · SAISON 2026-2027</div><h1>CLOC\'ARENA Tweener</h1>' +
+  var h = '<div class="darkhead"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">JEUNES · SAISON 2026-2027</div><h1>CLOC\'ARENA Tweener</h1>' + lienRegles('tweener') +
     '<div class="seg" style="margin-top:14px">' + [['classement', 'Classement'], ['programme', 'Programme'], ['resultats', 'Résultats']].map(function (t) {
       return '<button data-atab="' + t[0] + '" class="' + (S.arenaTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>';
     }).join('') + '</div></div></div><main id="arena-main"><div class="skel"></div></main>';
@@ -1132,6 +1133,95 @@ function pageArena() {
     else arenaResultats();
   });
   return h;
+}
+// ---------- Fiches « Comment ça marche ? » des trois circuits (#/arena/regles/tweener|masters|versus) ----------
+var REGLES_CIRCUITS = {
+  tweener: { nom: 'Tweener', fond: '', kicker: 'JEUNES · SAISON 2026-2027' },
+  masters: { nom: 'Masters', fond: 'linear-gradient(135deg,#102f4a,#2f5b7d)', kicker: 'ADULTES ET JEUNES COMPÉTITEURS' },
+  versus: { nom: 'Versus', fond: VERSUS_FOND, kicker: 'MATCHS LIBRES FFT' }
+};
+function lienRegles(c) { return '<a href="#/arena/regles/' + c + '" class="xs" style="display:inline-block;margin-top:8px;color:#c9d6e2;text-decoration:underline;text-underline-offset:3px">ⓘ Comment ça marche ?</a>'; }
+function blocRegle(titre, corps) { return '<section class="card stack" style="gap:6px"><span class="eyebrow">' + titre + '</span>' + corps + '</section>'; }
+function listeRegle(l) { return '<ul class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">' + l.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>'; }
+function pReg(t) { return '<span class="small">' + t + '</span>'; }
+function contenuRegles(c) {
+  if (c === 'tweener') {
+    var F = (S.formats && S.formats.length) ? S.formats : [
+      { libelle: 'Flash match', description: 'Format personnalisable', points_victoire: 2, points_defaite: 1 },
+      { libelle: 'Tie-break', description: '1 tie-break à 7', points_victoire: 2, points_defaite: 1 },
+      { libelle: 'Super tie-break', description: '1 super tie-break à 10', points_victoire: 3, points_defaite: 1 },
+      { libelle: 'Match court', description: '1 set complet', points_victoire: 6, points_defaite: 3 },
+      { libelle: 'Match libre', description: '2 sets gagnants + super tie-break à 10 si 1-1', points_victoire: 10, points_defaite: 5 },
+      { libelle: 'Double', description: 'Match en double', points_victoire: 4, points_defaite: 2 }];
+    var V = (S.reglages && S.reglages.versus_reglages) || {};
+    return blocRegle('C\'est quoi ?', pReg('Le circuit de la saison pour les jeunes non compétiteurs, du niveau Blanc au niveau Jaune. On joue, on progresse, on marque des points.')) +
+      blocRegle('Quand ?', pReg('Des rassemblements le <b>lundi</b> et le <b>vendredi de 17h30 à 18h30</b>, et le <b>samedi de 14h30 à 16h</b>. Chaque séance concerne un ou plusieurs niveaux : le programme est dans l\'onglet Programme.')) +
+      blocRegle('Comment participer ?', listeRegle([
+        'Certaines séances sont <b>sur inscription</b>, avec un nombre de places limité. Tu peux être inscrit à une seule séance sur inscription à la fois.',
+        'Pour les autres, indique <b>« Je participe »</b> pour que les coachs s\'organisent.'])) +
+      blocRegle('Les points', listeRegle([
+        'Participation à un rassemblement : <b>1 point</b>.',
+        'Les points d\'un match dépendent du format joué ce jour-là :'
+      ]) + '<div class="stack" style="gap:0">' + F.map(function (f, i) {
+        return '<div class="small" style="display:flex;gap:8px;align-items:baseline;padding:6px 0;border-top:' + (i ? '1px solid var(--line)' : '0') + '"><span style="flex:1"><b>' + esc(f.libelle) + '</b>' + (f.description ? ' <span class="mut xs">· ' + esc(f.description) + '</span>' : '') + '</span><span style="white-space:nowrap">V <b>' + (+f.points_victoire) + '</b> · D <b>' + (+f.points_defaite) + '</b></span></div>';
+      }).join('') + '</div>' + listeRegle([
+        'Stage de vacances : <b>5 points</b> de bonus.',
+        'Match CLOC\'ARENA Versus (Orange, Vert, ados sélectionnés) : victoire <b>' + (V.tweener_v || 10) + '</b>, défaite <b>' + (V.tweener_d || 4) + '</b>.',
+        'Un joueur invité ne marque pas de points ; le joueur du club, lui, marque les siens.'])) +
+      blocRegle('Les classements', pReg('Général, filles, garçons, et un par niveau. En cas d\'égalité : les points, puis le nombre de victoires, puis le nombre de matchs, puis le niveau (le niveau le plus bas passe devant).'));
+  }
+  if (c === 'masters') {
+    return blocRegle('C\'est quoi ?', pReg('Le circuit des adultes et des ados compétiteurs, toute la saison, avec deux classements : le <b>Classement ATP</b> et les <b>Rush Points</b>.')) +
+      blocRegle('Qui joue ?', pReg('Tous les adultes et ados compétiteurs sont inclus. Si tu ne veux pas participer, coche « Je ne souhaite pas participer » sur la page Masters. Tu peux revenir quand tu veux.')) +
+      blocRegle('Le Classement ATP', listeRegle([
+        'Tu peux défier un joueur jusqu\'à <b>5 places au-dessus</b> de toi, avec le bouton Défier ' + icDefi(18) + ' dans le classement.',
+        '<b>Tu gagnes ton défi</b> : tu prends la place du joueur défié, et tous ceux entre vous deux reculent d\'une place.',
+        '<b>Tu gagnes un défi reçu</b> : tu montes d\'une place et tu gagnes le bonus <b>Portée +3</b> ✨ : ton prochain défi peut viser jusqu\'à 8 places au-dessus. Il ne sert qu\'une fois, n\'expire jamais, et tu le gardes tant que tu défies dans tes 5 places normales.',
+        '<b>Tu perds ton défi</b> : tu gardes ta place. Tu ne peux redéfier le même joueur qu\'une fois par mois.'])) +
+      blocRegle('Les Rush Points', listeRegle([
+        'Victoire : <b>5 points</b>. Défaite : <b>3 points</b>.',
+        'Séries de victoires d\'affilée : 3 victoires <b>+10</b>, 5 victoires <b>+25</b>, 10 victoires <b>+50</b>, 20 victoires <b>+100</b> (les bonus s\'additionnent). Une défaite remet la série à zéro.',
+        'Défense du trône : un joueur du top 5 qui gagne un défi reçu marque <b>+5</b>.',
+        'Trophées : premier match <b>+3</b> ; 5 adversaires différents <b>+10</b>.',
+        'Mission du mois : 2 matchs dans le mois <b>+5</b>, à refaire chaque mois.',
+        'En cas d\'égalité : les points, puis les victoires, puis les matchs joués, puis la meilleure place au Classement ATP.'])) +
+      blocRegle('Lancer et jouer un défi', '<ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">' + [
+        'Tu proposes jusqu\'à <b>5 créneaux</b> (date et plage horaire), au moins 48 h à l\'avance, et tu coches les formats que tu acceptes.',
+        'Ton adversaire a <b>3 jours</b> pour choisir un créneau et un format, ou te renvoyer jusqu\'à 5 créneaux à lui. Sans réponse, tu gagnes par forfait.',
+        'Le club réserve le terrain. Une discussion s\'ouvre avec ton adversaire et le club.',
+        'Après le match, un joueur poste le score et l\'autre le confirme. Sinon, le club valide.'].map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
+        pReg('Tu peux avoir jusqu\'à <b>5 défis en cours</b> (lancés et reçus). Si le classement bouge et qu\'un défi pas encore accepté n\'est plus possible, il s\'annule et tu es prévenu.')) +
+      blocRegle('Les formats', listeRegle([
+        '<b>A · 1 h</b> : 1 set de 6 jeux avec avantage, tie-break à 6/6.',
+        '<b>B · 1 h</b> : 2 sets de 4 jeux sans avantage, tie-break à 3/3, super tie-break à un set partout.',
+        '<b>C · 2 h</b> : 2 sets gagnants de 6 jeux sans avantage, super tie-break à un set partout.']));
+  }
+  return blocRegle('C\'est quoi ?', pReg('Des matchs libres officiels FFT entre joueurs du club. Ils sont enregistrés par le club dans ADOC et comptent pour ton palmarès FFT.')) +
+    blocRegle('Qui peut jouer ?', listeRegle([
+      'Orange contre Orange, Vert contre Vert.',
+      'Les adultes de NC à 30/1, et les ados balle jaune sélectionnés par le club (à partir de 13 ans).',
+      'Jusqu\'à 12 ans, les matchs peuvent être mixtes ; à partir de 13 ans, filles contre filles et garçons contre garçons.',
+      'Tu ne vois dans ta liste que les adversaires que tu peux affronter. Pour ne pas recevoir de défi, coche « Je ne souhaite pas participer ».'])) +
+    blocRegle('Comment ça marche ?', listeRegle([
+      'Tu proposes des créneaux et des formats FFT, ton adversaire choisit.',
+      'Le terrain : demande au club, ou réservation par les joueurs. Pour les Orange, les matchs se jouent sur un créneau encadré par un coach ou un jeune Next Gen.',
+      'Après le match, les deux joueurs confirment le score, puis le club l\'enregistre dans ADOC.',
+      'Un match par mois maximum contre le même adversaire.'])) +
+    blocRegle('Ce que ça te rapporte', listeRegle([
+      'Sur ton profil : matchs joués, victoires, défaites.',
+      'Trois distinctions par catégorie : <b>Meilleur joueur Versus</b> (meilleur ratio, 5 matchs minimum), <b>Meilleur participant Versus</b> (le plus de matchs), <b>Meilleur joueur du mois</b> (le plus de victoires dans le mois). Le meilleur joueur du mois passe sur Instagram et Facebook.',
+      'Si tu joues aussi le Masters : une victoire te fait monter de <b>3 places</b> au Classement ATP et rapporte 5 Rush Points ; une défaite te fait monter d\'<b>1 place</b> et rapporte 3 Rush Points.',
+      'Si tu joues le Tweener : victoire <b>10 points</b>, défaite <b>4 points</b>.']));
+}
+function pageReglesArena(c) {
+  if (!REGLES_CIRCUITS[c]) c = 'tweener';
+  var R = REGLES_CIRCUITS[c];
+  if (c === 'tweener' && !S.formats) { try { chargerFormats().then(function () { if (/#\/arena\/regles\/tweener/.test(location.hash)) render(); }).catch(function () { S.formats = []; }); } catch (e) { S.formats = []; } }
+  setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll('[data-rgl]'), function (b) { b.onclick = function () { location.hash = '#/arena/regles/' + b.dataset.rgl; }; }); });
+  return '<div class="darkhead"' + (R.fond ? ' style="background:' + R.fond + '"' : '') + '><div class="wrap">' + backLink('#/arena/' + c, 'CLOC\'ARENA ' + R.nom, true) +
+    '<div class="kicker" style="margin-top:8px">COMMENT ÇA MARCHE ?</div><h1>CLOC\'ARENA ' + R.nom + '</h1>' +
+    '<div class="seg" style="margin-top:14px">' + ['tweener', 'masters', 'versus'].map(function (k) { return '<button data-rgl="' + k + '" class="' + (k === c ? 'on' : '') + '">' + REGLES_CIRCUITS[k].nom + '</button>'; }).join('') + '</div></div></div><main>' +
+    contenuRegles(c) + '</main>';
 }
 function chargerClassement() {
   if (S.classement) return Promise.resolve(S.classement);
@@ -4620,7 +4710,7 @@ function render() {
   if (!(p === 'profil' && arg === 'accueil')) S.monAccEd = null;
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
-  else if (p === 'arena') actif = 'club', html = arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : arg === 'versus' ? pageVersus() : pageArenaAccueil();
+  else if (p === 'arena') actif = 'club', html = arg === 'regles' ? pageReglesArena(parts[2]) : arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : arg === 'versus' ? pageVersus() : pageArenaAccueil();
   else if (p === 'fiche' || p === 'joueur') { html = pageJoueur(arg); actif = 'club'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }
