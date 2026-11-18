@@ -102,9 +102,37 @@ function csv(nom, lignes) {
   var t = lignes.map(function (l) { return l.map(function (c) { c = String(c == null ? '' : c); return /[";\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(';'); }).join('\r\n');
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + t], { type: 'text/csv;charset=utf-8' })); a.download = nom; document.body.appendChild(a); a.click(); a.remove();
 }
+// Comment les gens répondent à un message (messagerie, actu) : en privé dans l'appli à une personne de l'équipe, par mail, ou pas de réponse
+var REPONSE = null; // { gens: [{user_id, nom}], adresses: [...] } chargé une fois
+function blocReponse(px) {
+  return '<div class="stack" id="' + px + '-rep" style="gap:4px"><span class="l" style="font-size:12px;font-weight:600;color:var(--mut)">Comment les gens répondent ?</span>' +
+    '<label class="c"><input type="radio" name="' + px + '-rm" value="prive" checked>Message privé dans l\'appli</label>' +
+    '<label class="l" id="' + px + '-rul" style="margin:0 0 6px 26px">Les réponses arrivent à<select class="f" id="' + px + '-ru"><option value="">Moi</option></select></label>' +
+    '<label class="c"><input type="radio" name="' + px + '-rm" value="mail">Par mail</label>' +
+    '<label class="l" id="' + px + '-ral" style="margin:0 0 6px 26px" hidden>Adresse de réponse<select class="f" id="' + px + '-ra"></select></label>' +
+    '<label class="c"><input type="radio" name="' + px + '-rm" value="aucun">Pas de réponse (message d\'info)</label></div>';
+}
+function lierReponse(px) {
+  var maj = function () { var m = modeReponse(px); $(px + '-rul').hidden = m !== 'prive'; $(px + '-ral').hidden = m !== 'mail'; };
+  all('input[name="' + px + '-rm"]').forEach(function (i) { i.onchange = maj; });
+  maj();
+  (REPONSE ? Promise.resolve(REPONSE) : Promise.all([q(sb.rpc('repondants_possibles')).catch(function () { return []; }), q(sb.from('adresses_reponse').select('*').order('ordre').order('libelle')).catch(function () { return []; })])
+    .then(function (r) { REPONSE = { gens: r[0] || [], adresses: (r[1] || []).filter(function (a) { return a.actif; }) }; return REPONSE; }))
+    .then(function (R) {
+      if (!$(px + '-ru')) return;
+      $(px + '-ru').innerHTML = R.gens.map(function (g) { return '<option value="' + g.user_id + '">' + esc(g.user_id === A.user.id ? 'Moi (' + g.nom + ')' : g.nom) + '</option>'; }).join('') || '<option value="">Moi</option>';
+      $(px + '-ra').innerHTML = R.adresses.map(function (a) { return '<option value="' + a.id + '">' + esc(a.libelle + ' · ' + a.email) + '</option>'; }).join('');
+      if (!R.adresses.length) { var mail = document.querySelector('input[name="' + px + '-rm"][value="mail"]'); if (mail) mail.closest('label').hidden = true; }
+    });
+}
+function modeReponse(px) { var i = document.querySelector('input[name="' + px + '-rm"]:checked'); return i ? i.value : 'prive'; }
+function lireReponse(px) {
+  var m = modeReponse(px);
+  return { repMode: m, repUser: m === 'prive' ? ($(px + '-ru').value || null) : null, repondre: m === 'mail' ? ($(px + '-ra').value || null) : null };
+}
 // Message dans la messagerie des personnes concernées + notification personnalisée
 function diffuser(o) {
-  return q(sb.rpc('envoyer_message', { p_titre: o.titre, p_texte: o.texte, p_cible: o.cible, p_groupes: o.groupes || null, p_evt: o.evt || null, p_repondre: o.repondre || null, p_lien: o.lien || null, p_source: o.source || 'direct', p_expediteur: o.expediteur || 'CLOCA Tennis' }))
+  return q(sb.rpc('envoyer_message', { p_titre: o.titre, p_texte: o.texte, p_cible: o.cible, p_groupes: o.groupes || null, p_evt: o.evt || null, p_repondre: o.repondre || null, p_lien: o.lien || null, p_source: o.source || 'direct', p_expediteur: o.expediteur || 'CLOCA Tennis', p_rep_mode: o.repMode || null, p_rep_user: o.repUser || null }))
     .then(function (r) {
       return sb.functions.invoke('notifier', { body: { mode: 'message', message_id: r.id } }).then(function (x) {
         var d = x.data || {};
@@ -304,9 +332,12 @@ function vueActus(m, arg) {
       '<label class="l">Visible par<select class="f" id="p-v"><option value="public"' + (a.visibilite === 'public' ? ' selected' : '') + '>Tout le monde</option><option value="connectes"' + (a.visibilite === 'connectes' ? ' selected' : '') + '>Adhérents connectés</option><option value="groupes"' + (a.visibilite === 'groupes' ? ' selected' : '') + '>Certains groupes</option></select></label>' +
       '<div id="p-gs"' + (a.visibilite === 'groupes' ? '' : ' hidden') + '>' + choixGroupes(gsel, 'pg') + '</div>' +
       '<label class="c"><input type="checkbox" id="p-n"' + (a.id ? '' : ' checked') + '>Envoyer aussi dans la messagerie des personnes concernées (avec notification)</label>' +
+      '<div id="p-repw" style="margin-left:26px"' + (a.id ? ' hidden' : '') + '>' + blocReponse('p') + '</div>' +
       '<div class="chips"><button class="btn" id="p-ok">' + (a.id ? 'Enregistrer' : 'Publier') + '</button><button class="btn line" id="p-an">Annuler</button></div></div>', function (r) {
       lierChips(r);
       $('p-v').onchange = function () { $('p-gs').hidden = this.value !== 'groupes'; };
+      lierReponse('p');
+      $('p-n').onchange = function () { $('p-repw').hidden = !this.checked; };
       $('p-an').onclick = fermer;
       $('p-ok').onclick = function () {
         var titre = $('p-t').value.trim(); if (!titre) return toast('Il faut un titre');
@@ -326,7 +357,7 @@ function vueActus(m, arg) {
             return vis === 'groupes' ? q(sb.from('publication_groupes').insert(gs.map(function (g) { return { publication_id: r2.id, groupe_id: g }; }))) : null;
           });
         }).then(function () {
-          if ($('p-n').checked) diffuser({ titre: (row.urgent ? '⚠️ ' : '') + titre, texte: row.texte || titre, cible: vis === 'groupes' ? 'groupes' : 'tous', groupes: vis === 'groupes' ? gs : null, lien: '#/actu/' + idPub, source: 'actu' });
+          if ($('p-n').checked) { var rp = lireReponse('p'); diffuser({ titre: (row.urgent ? '⚠️ ' : '') + titre, texte: row.texte || titre, cible: vis === 'groupes' ? 'groupes' : 'tous', groupes: vis === 'groupes' ? gs : null, lien: '#/actu/' + idPub, source: 'actu', repondre: rp.repondre, repMode: rp.repMode, repUser: rp.repUser }); }
           toast(a.id ? 'Actu modifiée' : 'Actu publiée'); fermer(); charger();
         }).catch(function () { toast('Enregistrement impossible'); $('p-ok').disabled = false; });
       };
@@ -2798,7 +2829,7 @@ var MSF = { vue: 'envoyes' };
 var CIBLES_MSG = { tous: 'Tout le club', coachs: 'Les coachs', nextgen: 'Les jeunes Next Gen', groupes: 'Des groupes', evenement: 'Une séance ou un événement' };
 var SOURCES_MSG = { direct: 'Message', actu: 'Actu', seance: 'Séance' };
 function vueMessages(m) {
-  m.innerHTML = entete('Messagerie', 'Les messages arrivent dans la boîte « Messages » de l\'appli des personnes concernées, avec une notification. Ils vont sur le compte de la famille : jamais de message privé à un enfant. Les réponses partent par mail à l\'adresse que tu choisis.', '<button class="btn" id="ms-new">Nouveau message</button>') +
+  m.innerHTML = entete('Messagerie', 'Les messages arrivent dans la boîte « Messages » de l\'appli des personnes concernées, avec une notification. Ils vont sur le compte de la famille : jamais de message privé à un enfant. Pour chaque message, tu choisis comment les gens répondent : en privé dans l\'appli, par mail ou pas de réponse.', '<button class="btn" id="ms-new">Nouveau message</button>') +
     '<div class="toolbar"><div class="chips">' + [['envoyes', 'Messages envoyés'], ['programmes', 'Programmés'], ['adresses', 'Adresses de réponse']].map(function (x) { return '<button class="chip' + (MSF.vue === x[0] ? ' on' : '') + '" data-msv="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div><div id="ms-l"><div class="skel"></div></div>';
   var AD = [], EV = [];
   var nomCible = function (x) {
@@ -2817,12 +2848,13 @@ function vueMessages(m) {
       '<label class="l" id="mn-el" hidden>Séance ou événement<select class="f" id="mn-e"><option value="">Choisir…</option>' + evts.map(function (e) { return '<option value="' + e.id + '">' + esc(fmtJ(new Date(e.debut)) + ' · ' + e.titre) + '</option>'; }).join('') + '</select><span class="mut xs" style="font-weight:400">Les familles des groupes de la séance, ou seulement les inscrits si elle est sur inscription.</span></label>' +
       '<label class="l">Objet<input class="f" id="mn-t" maxlength="120" placeholder="Ex. Pas de cours samedi 14 novembre"></label>' +
       '<label class="l">Message<textarea class="f" id="mn-x" rows="6" maxlength="4000"></textarea></label>' +
-      '<label class="l">Les réponses arrivent à<select class="f" id="mn-r">' + AD.filter(function (a) { return a.actif; }).map(function (a) { return '<option value="' + a.id + '">' + esc(a.libelle + ' · ' + a.email) + '</option>'; }).join('') + '</select></label>' +
+      blocReponse('mn') +
       '<label class="l">Quand ?<select class="f" id="mn-q"><option value="">Tout de suite</option><option value="prog">Programmer (date et heure)</option></select></label>' +
       '<div id="mn-qd" hidden style="display:flex;gap:8px;flex-wrap:wrap"><input class="f" type="date" id="mn-qj" style="flex:1;min-width:150px"><input class="f" type="time" id="mn-qh" step="300" style="width:130px"></div>' +
       '<span class="mut xs">Chaque famille voit à qui le message s\'adresse (ex. « Pour Enora, Mila ») et reçoit une notification si elle les a activées.</span>' +
       '<button class="btn" id="mn-ok">Envoyer</button></div>', function (r) {
       lierChips(r);
+      lierReponse('mn');
       $('mn-qd').hidden = true;
       $('mn-q').onchange = function () {
         var p = this.value === 'prog'; $('mn-qd').hidden = !p; $('mn-qd').style.display = p ? 'flex' : 'none';
@@ -2832,7 +2864,7 @@ function vueMessages(m) {
       $('mn-qd').style.display = 'none';
       $('mn-c').onchange = function () { $('mn-gs').hidden = this.value !== 'groupes'; $('mn-el').hidden = this.value !== 'evenement'; };
       $('mn-ok').onclick = function () {
-        var c = $('mn-c').value, gs = lus(r, 'mg'), t = $('mn-t').value.trim(), x = $('mn-x').value.trim();
+        var c = $('mn-c').value, gs = lus(r, 'mg'), t = $('mn-t').value.trim(), x = $('mn-x').value.trim(), rp = lireReponse('mn');
         if (c === 'groupes' && !gs.length) return toast('Choisis au moins un groupe');
         if (c === 'evenement' && !$('mn-e').value) return toast('Choisis la séance');
         if (!t || !x) return toast('Écris un objet et un message');
@@ -2843,13 +2875,13 @@ function vueMessages(m) {
           if (c === 'tous' && !confirm('Programmer ce message à tout le club ?')) return;
           $('mn-ok').disabled = true;
           return q(sb.from('messages_programmes').insert({ envoyer_le: quand.toISOString(), titre: t, texte: x, cible: c, groupes: c === 'groupes' ? gs : null, evenement_id: c === 'evenement' ? $('mn-e').value : null,
-            repondre: $('mn-r').value || null, expediteur: $('mn-de').value, lien: c === 'evenement' ? '#/evenement/' + $('mn-e').value : null }))
+            repondre: rp.repondre, repondre_mode: rp.repMode, repondre_user: rp.repUser, expediteur: $('mn-de').value, lien: c === 'evenement' ? '#/evenement/' + $('mn-e').value : null }))
             .then(function () { toast('Envoi programmé le ' + fmtJ(quand) + ' à ' + fmtH(quand)); fermer(); MSF.vue = 'programmes'; vueMessages(m); })
             .catch(function (e) { $('mn-ok').disabled = false; toast(e && e.message ? 'Programmation impossible : ' + e.message : 'Programmation impossible'); });
         }
         if (c === 'tous' && !confirm('Envoyer ce message à tout le club ?')) return;
         $('mn-ok').disabled = true;
-        diffuser({ titre: t, texte: x, cible: c, groupes: c === 'groupes' ? gs : null, evt: c === 'evenement' ? $('mn-e').value : null, repondre: $('mn-r').value || null, expediteur: $('mn-de').value,
+        diffuser({ titre: t, texte: x, cible: c, groupes: c === 'groupes' ? gs : null, evt: c === 'evenement' ? $('mn-e').value : null, repondre: rp.repondre, repMode: rp.repMode, repUser: rp.repUser, expediteur: $('mn-de').value,
           lien: c === 'evenement' ? '#/evenement/' + $('mn-e').value : null }).then(function (res) { if (res) { fermer(); charger(); } else $('mn-ok').disabled = false; });
       };
     });
@@ -2869,7 +2901,7 @@ function vueMessages(m) {
             '<span style="flex:1;min-width:200px"><b class="small">' + esc(x.titre) + '</b><br><span class="xs mut">' + esc(x.expediteur) + ' → ' + esc(nomCible(x)) + '</span></span>' +
             '<span class="xs"><b>' + lus2 + '</b> / ' + ds.length + ' lu' + (lus2 > 1 ? 's' : '') + '</span></summary>' +
             '<div class="stack" style="gap:8px;margin-top:10px;padding-left:102px"><div class="small" style="white-space:pre-line">' + esc(x.texte) + '</div>' +
-            (x.repondre_a ? '<span class="xs mut">Réponses à : ' + esc((x.repondre_libelle ? x.repondre_libelle + ' · ' : '') + x.repondre_a) + '</span>' : '') +
+            (x.repondre_mode === 'aucun' ? '<span class="xs mut">Pas de réponse (message d\'info)</span>' : x.repondre_mode === 'prive' ? '<span class="xs mut">Réponses en privé dans l\'appli à : ' + esc(x.repondre_libelle || 'l\'auteur') + '</span>' : x.repondre_a ? '<span class="xs mut">Réponses par mail à : ' + esc((x.repondre_libelle ? x.repondre_libelle + ' · ' : '') + x.repondre_a) + '</span>' : '') +
             '<button class="btn sm ko" data-msx="' + x.id + '" style="align-self:flex-start">Retirer de la messagerie</button></div></details>';
         }).join('') + '</div>' : '<div class="card empty">Aucun message envoyé pour le moment.</div>';
       } else if (MSF.vue === 'programmes') {

@@ -3249,7 +3249,7 @@ function lierNotifs() {
 function chargerMessages() {
   S.msgs = [];
   if (!S.user) return Promise.resolve();
-  var champs = 'user_id, pour, lu_le, messages(id, created_at, auteur, expediteur, titre, texte, lien, repondre_a, repondre_libelle, source, evenement_id)';
+  var champs = 'user_id, pour, lu_le, messages(id, created_at, auteur, expediteur, titre, texte, lien, repondre_a, repondre_libelle, repondre_mode, repondre_user, source, evenement_id)';
   // En aperçu, la direction voit les messages reçus par les comptes de cette famille (sans les marquer comme lus)
   var req = S.apercu ? q(sb.rpc('comptes_liste')).then(function (l) {
       var ids = (l || []).filter(function (c) { return c.foyer_id === S.apercu.foyer; }).map(function (c) { return c.user_id; });
@@ -3395,6 +3395,7 @@ function pageMessages() {
   var club = S.msgs || [], discs = S.discs || [], par = { annonces: [] }, nb = { annonces: nonLus().length };
   club.forEach(function (x) { par.annonces.push({ t: x.messages.created_at, h: ligneMsgClub(x) }); });
   discs.forEach(function (d) {
+    if (d.type === 'prive' && !d.dernier_le) return; // conversation ouverte mais encore vide : elle apparaît au premier message
     var c = msgCat(d);
     (par[c] = par[c] || []).push({ t: d.dernier_le || '', h: discLigne(d, false) });
     nb[c] = (nb[c] || 0) + (d.muet ? 0 : d.non_lus || 0);
@@ -3454,7 +3455,26 @@ function pageMessage(id) {
     setTimeout(lierPart);
   } else if (evM) {
     h += '<section class="card"><span class="mut small">Pas besoin de répondre à ce message : toutes les infos sont dans l\'agenda.</span></section>';
-  } else if (m.auteur && m.auteur !== S.user.id && !S.apercu) {
+  } else if (m.repondre_mode === 'aucun') {
+    // message d'info : pas de réponse
+  } else if (m.repondre_mode === 'prive' && (m.repondre_user || m.auteur) === S.user.id) {
+    h += '<section class="card"><span class="mut small">Les réponses à ce message t\'arrivent en privé (Messages → Privés).</span></section>';
+  } else if (m.repondre_mode === 'prive' && (m.repondre_user || m.auteur) && !S.apercu) {
+    // Réponse en privé dans l'appli : un bouton ouvre directement la conversation avec la personne choisie à l'envoi
+    var nomR = m.repondre_libelle || String(m.expediteur || '').split(' · ')[0];
+    h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Répondre</span><span class="mut small">Une question ? Écris directement à <b>' + esc(nomR) + '</b>, en privé dans l\'appli.</span>' +
+      '<button class="btn" id="rp-ouvrir">' + ic('send', 18, '#fff') + ' Écrire à ' + esc(nomR) + '</button></section>';
+    setTimeout(function () {
+      if (!$('rp-ouvrir')) return;
+      $('rp-ouvrir').onclick = function () {
+        var b = this; b.disabled = true;
+        q(sb.rpc('message_ouvrir_reponse', { p_message: m.id })).then(function (did) {
+          DISC_REP[did] = m.titre;
+          return chargerDiscussions().then(function () { go('#/discussion/' + did); });
+        }).catch(function () { b.disabled = false; toast('Impossible d\'ouvrir la conversation, réessaie'); });
+      };
+    });
+  } else if (!m.repondre_mode && m.auteur && m.auteur !== S.user.id && !S.apercu) {
     var qui = String(m.expediteur || '').split(' · ')[0];
     h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre à ' + esc(qui) + '</span><span class="mut small">Ta réponse arrive directement à ' + esc(qui) + ', dans une conversation privée (Messages → Privés).</span>' +
       '<textarea class="f" id="rp-t" rows="3" maxlength="2000" placeholder="Ta réponse…"></textarea><button class="btn" id="rp-go">' + ic('send', 18, '#fff') + ' Envoyer ma réponse</button>' + mail + '</section>';
@@ -3470,7 +3490,7 @@ function pageMessage(id) {
         }).catch(function () { b.disabled = false; toast('Envoi impossible, réessaie'); });
       };
     });
-  } else if (m.repondre_a) {
+  } else if (m.repondre_a && m.repondre_mode !== 'prive') {
     h += '<section class="card stack" style="gap:8px"><span class="eyebrow">Répondre</span><span class="mut small">Ta réponse part par mail à <b>' + esc(m.repondre_libelle || m.repondre_a) + '</b>.</span>' +
       '<a class="btn" href="mailto:' + esc(m.repondre_a) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(corps) + '">' + ic('mail', 20, '#fff') + ' Répondre par mail</a></section>';
   }
@@ -4282,6 +4302,7 @@ function chargerQuestionnaire(id, choix) {
 // ---------- Discussions : un fil par groupe (remplace les groupes WhatsApp) ----------
 // Les droits (qui lit, qui écrit) sont appliqués par la base. Un fil « hors ligne » (réglé dans la gestion) n'apparaît dans l'appli pour personne, direction comprise.
 var DISC = { id: null, msgs: [], canal: null, tout: false, luT: null };
+var DISC_REP = {}; // conversation ouverte avec « Écrire à … » : le premier message rappelle à quel message du club on répond
 function chargerDiscussions() {
   S.discs = []; S.discsHors = [];
   if (!S.user || S.apercu) return Promise.resolve();
@@ -4522,6 +4543,7 @@ function ouvrirFil(d) {
     q(sb.rpc('discussion_muet', { p_disc: d.id, p_muet: !d.muet })).then(function () { d.muet = !d.muet; toast(d.muet ? 'Notifications coupées pour ce fil' : 'Notifications réactivées'); render(); }).catch(function () { toast('Action impossible'); });
   };
   var t = $('disc-t');
+  if (t && DISC_REP[d.id]) { t.placeholder = 'Ta réponse à « ' + DISC_REP[d.id] + ' »…'; setTimeout(function () { t.focus(); }, 50); }
   if (t) {
     var taille = function () { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; };
     t.oninput = taille;
@@ -4531,8 +4553,10 @@ function ouvrirFil(d) {
       e.preventDefault();
       var v = t.value.trim();
       if (!v) return;
+      if (DISC_REP[d.id]) v = ('↩ « ' + DISC_REP[d.id] + ' »\n' + v).slice(0, 4000);
       var btn = $('disc-f').querySelector('button'); btn.disabled = true;
       q(sb.from('discussion_messages').insert({ discussion_id: d.id, texte: v }).select(champs).single()).then(function (m) {
+        delete DISC_REP[d.id];
         t.value = ''; taille(); btn.disabled = false; t.focus();
         if (DISC.msgs.map(function (x) { return x.id; }).indexOf(m.id) < 0) { DISC.msgs.push(m); dessinerFil(d, true); }
         d.dernier_texte = m.texte; d.dernier_auteur = m.auteur; d.dernier_le = m.created_at;
