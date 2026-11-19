@@ -1035,6 +1035,11 @@ function choixArena(pid, champs, apres) {
 function pageMastersOuvert() {
   setTimeout(function () {
     var box = $('ms-cl'); if (!box) return;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-msvue]'), function (b) { b.onclick = function () {
+      S.msVue = b.dataset.msvue;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-msvue]'), function (x) { x.classList.toggle('on', x === b); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-msbloc]'), function (x) { x.classList.toggle('on', x.dataset.msbloc === S.msVue); });
+    }; });
     if (!S.user) { box.innerHTML = '<span class="mut small">Connecte-toi pour voir le classement.</span>'; return; }
     var mesIds = (S.pers || []).map(function (p) { return p.id; });
     Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters, masters_retrait_le').in('personne_id', mesIds.length ? mesIds : ['00000000-0000-0000-0000-000000000000'])).catch(function () { return []; })]).then(function (r) {
@@ -1073,10 +1078,11 @@ function pageMastersOuvert() {
       if ($('ms-rush')) Promise.all([q(sb.rpc('masters_rush')), q(sb.from('masters_quetes').select('titre, description, periode, critere, objectif, points').eq('actif', true).order('ordre')).catch(function () { return []; })]).then(function (rr) {
         var R = rr[0] || [], Q = rr[1] || [], PER = { jour: 'chaque jour', semaine: 'chaque semaine', mois: 'chaque mois', saison: 'une fois dans la saison' };
         if (!$('ms-rush')) return;
-        $('ms-rush').innerHTML = '<span class="eyebrow">Rush Points</span><div class="stack" style="gap:0">' + R.slice(0, 50).map(function (x, k) {
+        $('ms-rush').innerHTML = '<div class="stack" style="gap:0">' + R.slice(0, 50).map(function (x, k) {
           var mine = mesIds.indexOf(x.personne_id) >= 0;
           return '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)' + (mine ? ';background:rgba(223,245,0,.18)' : '') + '"><b style="width:30px;text-align:right">' + (k + 1) + '</b><span style="flex:1;min-width:0">' + esc(x.joueur) + (x.serie >= 2 ? ' <span class="mut xs">🔥' + x.serie + '</span>' : '') + '</span><span class="mut xs">' + x.victoires + 'V · ' + x.matchs + 'M</span><b>' + (+x.points) + ' pts</b></div>';
-        }).join('') + '</div>' + (Q.length ? '<span class="eyebrow" style="margin-top:10px">Quêtes</span>' + Q.map(function (x) { return '<div class="small" style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1">🎯 <b>' + esc(x.titre) + '</b> <span class="mut xs">· ' + (PER[x.periode] || '') + '</span>' + (x.description ? '<br><span class="mut xs">' + esc(x.description) + '</span>' : '') + '</span><b>+' + (+x.points) + '</b></div>'; }).join('') : '');
+        }).join('') + '</div>';
+        if ($('ms-quetes')) { $('ms-quetes').innerHTML = Q.length ? '<span class="eyebrow">Quêtes</span>' + Q.map(function (x) { return '<div class="small" style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1">🎯 <b>' + esc(x.titre) + '</b> <span class="mut xs">· ' + (PER[x.periode] || '') + '</span>' + (x.description ? '<br><span class="mut xs">' + esc(x.description) + '</span>' : '') + '</span><b>+' + (+x.points) + '</b></div>'; }).join('') : ''; $('ms-quetes').style.display = Q.length ? '' : 'none'; }
       }).catch(function () { if ($('ms-rush')) $('ms-rush').innerHTML = '<span class="mut small">Rush Points indisponibles pour le moment.</span>'; });
     }).catch(function () { if ($('ms-cl')) $('ms-cl').innerHTML = '<span class="mut small">Classement indisponible pour le moment.</span>'; });
   });
@@ -1084,8 +1090,10 @@ function pageMastersOuvert() {
     (circuitEnPrep('masters') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Masters est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
     '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">🎾 Chaque joueur apporte ses balles. Deux classements : le <b>Classement ATP</b> et les <b>Rush Points</b>. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi reçu, tu montes d\'une place et tu gagnes le <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
     '<section class="card stack" style="gap:8px;display:none" id="ms-part"></section>' +
-    '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement ATP</span><div id="ms-cl"><div class="skel"></div></div></section>' +
-    '<section class="card stack" style="gap:8px" id="ms-rush"><div class="skel"></div></section></main>';
+    '<div class="seg ms-seg">' + [['atp', 'Classement ATP'], ['rush', 'Rush Points']].map(function (t) { return '<button data-msvue="' + t[0] + '" class="' + ((S.msVue || 'atp') === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+    '<div class="ms-duo"><section class="card stack' + ((S.msVue || 'atp') === 'atp' ? ' on' : '') + '" style="gap:8px" data-msbloc="atp"><span class="eyebrow">Classement ATP</span><div id="ms-cl"><div class="skel"></div></div></section>' +
+    '<section class="card stack' + (S.msVue === 'rush' ? ' on' : '') + '" style="gap:8px" data-msbloc="rush"><span class="eyebrow">Rush Points</span><div id="ms-rush"><div class="skel"></div></div></section></div>' +
+    '<section class="card stack" style="gap:8px;display:none" id="ms-quetes"></section></main>';
 }
 function pageVersusOuvert() {
   setTimeout(function () {
