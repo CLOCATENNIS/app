@@ -1548,7 +1548,7 @@ function arMasters(box, tab) {
       var nomP = function (id) { var p = P.filter(function (x) { return x.id === id; })[0]; return p ? p.prenom + ' ' + p.nom : '?'; };
       var dir = aRole('direction');
       if (tab === 'classement') {
-        box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Classement ATP par places. Un joueur peut défier jusqu\'à <b>5 places au-dessus</b> (<b>8</b> avec le bonus ✨). Le challenger qui gagne prend la place ; le défié qui gagne monte d\'une place, gagne le bonus et, dans le top 5, +5 Rush Points (défense du trône). <b>Déplacer</b> met un joueur à la place de ton choix (les autres se décalent) ; ✨ donne ou retire le bonus.</p>' +
+        box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Classement ATP par places. Un joueur peut défier jusqu\'à <b>5 places au-dessus</b> (<b>8</b> avec le bonus ✨). Le challenger qui gagne prend la place ; le défié qui gagne monte d\'une place, gagne le bonus et, dans le top 5, +5 Rush Points (défense du trône). Battre un joueur au moins 5 places au-dessus rapporte +5 (exploit). Un match Versus fait monter le gagnant de 3 places et le perdant d\'1. <b>Déplacer</b> met un joueur à la place de ton choix (les autres se décalent) ; ✨ donne ou retire le bonus.</p>' +
           '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau club</th><th>FFT</th><th>Matchs</th><th>Peut défier</th>' + (dir ? '<th></th>' : '') + '</tr></thead><tbody>' + L.map(function (x) {
             var haut = Math.max(1, x.rang - (x.bonus ? 8 : 5));
             return '<tr><td><b>' + x.rang + '</b></td><td><b>' + esc(x.joueur) + '</b>' + (x.bonus ? ' <span title="Bonus : 8 places">✨</span>' : '') + (x.place == null ? ' <span class="badge">nouveau</span>' : '') + '</td><td class="small">' + esc(x.niveau || '—') + '</td><td class="small">' + esc(x.classement_fft || '—') + '</td><td>' + x.matchs + '</td><td class="small">' + (x.rang > 1 ? 'n°' + haut + ' à ' + (x.rang - 1) : '—') + '</td>' +
@@ -1590,9 +1590,9 @@ function arMastersRush(box) {
     var L = r[0] || [], H = r[1] || [], P = r[2] || [];
     var nomP = function (id) { var p = P.filter(function (x) { return x.id === id; })[0]; return p ? p.prenom + ' ' + p.nom : '?'; };
     var n = function (v) { return (+v || 0).toLocaleString('fr-FR'); };
-    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Rush Points calculés automatiquement : victoire 5, défaite 3, séries (3 victoires +10, 5 +25, 10 +50, 20 +100), quêtes, défense du trône (+5), plus tes ajustements. Égalité : points, victoires, matchs, puis place au Classement ATP.</p>' +
+    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Rush Points calculés automatiquement : victoire 5, défaite 3, séries (3 victoires +10, 5 +25, 10 +50, 20 +100), quêtes, bonus (défense du trône +5, exploit +5 contre un joueur au moins 5 places au-dessus, matchs Versus +5 / +3), plus tes ajustements. Les joueurs reçoivent une notification « Ace ! » à chaque match validé. Égalité : points, victoires, matchs, puis place au Classement ATP.</p>' +
       '<div class="toolbar"><button class="btn" id="mr-aj">+ Ajuster des points</button></div>' +
-      '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Points</th><th>V / M</th><th class="small">Matchs</th><th class="small">Séries</th><th class="small">Quêtes</th><th class="small">Trône</th><th class="small">Ajust.</th><th></th></tr></thead><tbody>' + L.map(function (x, i) {
+      '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Points</th><th>V / M</th><th class="small">Matchs</th><th class="small">Séries</th><th class="small">Quêtes</th><th class="small">Bonus</th><th class="small">Ajust.</th><th></th></tr></thead><tbody>' + L.map(function (x, i) {
         return '<tr><td><b>' + (i + 1) + '</b></td><td><b>' + esc(x.joueur) + '</b>' + (x.serie >= 2 ? ' <span class="mut xs">🔥 ' + x.serie + '</span>' : '') + ' <span class="mut xs">· ATP ' + x.rang_atp + '</span></td><td><b>' + n(x.points) + '</b></td><td class="small">' + x.victoires + ' / ' + x.matchs + '</td><td class="small">' + n(x.pts_matchs) + '</td><td class="small">' + n(x.pts_series) + '</td><td class="small">' + n(x.pts_quetes) + '</td><td class="small">' + n(x.pts_trone) + '</td><td class="small">' + n(x.pts_ajust) + '</td>' +
           '<td class="act"><button class="btn sm line" data-mraj="' + x.personne_id + '">Ajuster</button></td></tr>';
       }).join('') + '</tbody></table></div>' +
@@ -1790,6 +1790,7 @@ function arSaisir(box) {
       ks.forEach(function (k) { rows.push({ match_id: mm.id, personne_id: F.e1[k], equipe: 1, invite: !!F.inv['1-' + k] }); rows.push({ match_id: mm.id, personne_id: F.e2[k], equipe: 2, invite: !!F.inv['2-' + k] }); });
       return q(sb.from('arena_match_joueurs').insert(rows));
     }).then(function () { return q(sb.from('arena_matchs').update({ statut: 'valide', valide_par: A.user.id }).eq('id', match.id)); }).then(function () {
+      if (AR.circuit === 'masters' || AR.circuit === 'versus') sb.functions.invoke('arena-notifier', { body: { match_id: match.id } }).catch(function () { }); // notifications « Ace ! » sur les téléphones
       toast('Résultat enregistré, classement à jour'); F.e1 = ['', '']; F.e2 = ['', '']; F.inv = {}; F.sets = []; arSaisir(box);
     }).catch(function () { if (match) sb.from('arena_matchs').delete().eq('id', match.id); toast('Enregistrement impossible'); b.disabled = false; });
   };

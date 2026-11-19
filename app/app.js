@@ -1082,7 +1082,7 @@ function pageMastersOuvert() {
   });
   return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES ET JEUNES COMPÉTITEURS</div><h1>CLOC\'ARENA Masters</h1>' + lienRegles('masters') + '</div></div><main>' +
     (circuitEnPrep('masters') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Masters est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
-    '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">Deux classements : le <b>Classement ATP</b> et les <b>Rush Points</b>. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi reçu, tu montes d\'une place et tu gagnes le <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
+    '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">🎾 Chaque joueur apporte ses balles. Deux classements : le <b>Classement ATP</b> et les <b>Rush Points</b>. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi reçu, tu montes d\'une place et tu gagnes le <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
     '<section class="card stack" style="gap:8px;display:none" id="ms-part"></section>' +
     '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement ATP</span><div id="ms-cl"><div class="skel"></div></div></section>' +
     '<section class="card stack" style="gap:8px" id="ms-rush"><div class="skel"></div></section></main>';
@@ -1203,18 +1203,21 @@ function contenuRegles(c) {
         'Victoire : <b>5 points</b>. Défaite : <b>3 points</b>.',
         'Séries de victoires d\'affilée : 3 victoires <b>+10</b>, 5 victoires <b>+25</b>, 10 victoires <b>+50</b>, 20 victoires <b>+100</b> (les bonus s\'additionnent). Une défaite remet la série à zéro.',
         'Défense du trône : un joueur du top 5 qui gagne un défi reçu marque <b>+5</b>.',
+        'Exploit : battre un joueur classé au moins 5 places au-dessus de toi rapporte <b>+5</b>.',
         'Quêtes : premier match <b>+3</b> ; 5 adversaires différents <b>+10</b> ; Mission du mois (2 matchs dans le mois) <b>+5</b>, à refaire chaque mois. D\'autres quêtes (du jour, de la semaine…) peuvent être ajoutées par le club : elles s\'affichent sur la page Masters.',
         'En cas d\'égalité : les points, puis les victoires, puis les matchs joués, puis la meilleure place au Classement ATP.'])) +
       blocRegle('Lancer et jouer un défi', '<ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">' + [
         'Tu proposes jusqu\'à <b>5 créneaux</b> (date et plage horaire), au moins 48 h à l\'avance, et tu coches les formats que tu acceptes.',
-        'Ton adversaire a <b>3 jours</b> pour choisir un créneau et un format, ou te renvoyer jusqu\'à 5 créneaux à lui. Sans réponse, tu gagnes par forfait.',
+        'Ton adversaire a <b>3 jours</b> pour choisir un créneau et un format, ou te renvoyer jusqu\'à 5 créneaux à lui. Sans réponse, le défi expire : personne ne gagne ni ne perd, et tu peux relancer.',
         'Le club réserve le terrain. Une discussion s\'ouvre avec ton adversaire et le club.',
-        'Après le match, un joueur poste le score et l\'autre le confirme. Sinon, le club valide.'].map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
+        '🎾 Chaque joueur apporte ses balles.',
+        'Après le match, un joueur poste le score et l\'autre le confirme. Sinon, le club valide. Tu reçois alors une notification « Ace ! » avec tes points, tes séries et tes quêtes réussies.'].map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
         pReg('Tu peux avoir jusqu\'à <b>5 défis en cours</b> (lancés et reçus). Si le classement bouge et qu\'un défi pas encore accepté n\'est plus possible, il s\'annule et tu es prévenu.')) +
       blocRegle('Les formats', listeRegle([
         '<b>A · 1 h</b> : 1 set de 6 jeux avec avantage, tie-break à 6/6.',
         '<b>B · 1 h</b> : 2 sets de 4 jeux sans avantage, tie-break à 3/3, super tie-break à un set partout.',
-        '<b>C · 2 h</b> : 2 sets gagnants de 6 jeux sans avantage, super tie-break à un set partout.']));
+        '<b>C · 2 h</b> : 2 sets gagnants de 6 jeux sans avantage, super tie-break à un set partout.'])) +
+      blocRegle('Fin de saison', pReg('En <b>mai-juin</b> : tournoi final à élimination directe. Les détails (qualifiés, dates, format) arrivent bientôt.'));
   }
   return blocRegle('C\'est quoi ?', pReg('Des matchs libres officiels FFT entre joueurs du club. Ils sont enregistrés par le club dans ADOC et comptent pour ton palmarès FFT.')) +
     blocRegle('Qui peut jouer ?', listeRegle([
@@ -1225,7 +1228,8 @@ function contenuRegles(c) {
     blocRegle('Comment ça marche ?', listeRegle([
       'Tu proposes des créneaux et des formats FFT, ton adversaire choisit.',
       'Le terrain : demande au club, ou réservation par les joueurs. Pour les Orange, les matchs se jouent sur un créneau encadré par un coach ou un jeune Next Gen.',
-      'Après le match, les deux joueurs confirment le score, puis le club l\'enregistre dans ADOC.',
+      '🎾 Chaque joueur apporte ses balles.',
+      'Après le match, les deux joueurs confirment le score, puis le club l\'enregistre dans ADOC. Tu reçois une notification « Ace ! » avec le résultat.',
       'Un match par mois maximum contre le même adversaire.'])) +
     blocRegle('Ce que ça te rapporte', listeRegle([
       'Sur ton profil : matchs joués, victoires, défaites.',
