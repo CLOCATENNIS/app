@@ -1032,9 +1032,31 @@ function choixArena(pid, champs, apres) {
   if (S.apercu) return toast('Aperçu : rien n\'est enregistré');
   q(sb.from('arena_choix').upsert(Object.assign({ personne_id: pid, maj_le: new Date().toISOString() }, champs))).then(function () { toast('C\'est noté'); if (apres) apres(); }).catch(function () { toast('Enregistrement impossible'); });
 }
+// Tournoi final Masters (top 4 du Classement ATP, demi-finales 1-4 et 2-3, finale)
+function saisonCourante(d) { d = d || new Date(); var y = d.getFullYear(); return d.getMonth() >= 7 ? y + '-' + (y + 1) : (y - 1) + '-' + y; }
+function afficherFinaleMasters() {
+  var sa = saisonCourante();
+  Promise.all([q(sb.from('masters_finale').select('*').eq('saison', sa).maybeSingle()), q(sb.rpc('masters_finale_noms', { s: sa })).catch(function () { return []; })]).then(function (r) {
+    var f = r[0], N = {}, el = $('ms-finale'); (r[1] || []).forEach(function (x) { N[x.personne_id] = x.joueur; });
+    if (!el || !f || !f.publie) return;
+    var nom = function (id) { return id ? esc(N[id] || '?') : '<span class="mut">à venir</span>'; };
+    var ligne = function (a, b, g, sc, t) {
+      var j = function (id) { return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;' + (g && g === id ? 'font-weight:800' : g ? 'opacity:.55' : '') + '"><span>' + (g && g === id ? '🏅 ' : '') + nom(id) + '</span></div>'; };
+      return '<div class="stack" style="gap:0;border:1px solid var(--line);border-radius:12px;padding:6px 12px"><span class="mut xs">' + t + (sc ? ' · ' + esc(sc) : '') + '</span>' + j(a) + '<div style="border-top:1px solid var(--line)"></div>' + j(b) + '</div>';
+    };
+    el.innerHTML = '<span class="eyebrow">Tournoi final ' + esc(f.saison) + '</span>' +
+      '<span class="small">Top 4 du Classement ATP · demi-finales puis finale' + (f.format ? ' · ' + esc(f.format) : ' · 1 set') + (f.date_finale ? ' · <b>' + esc(new Date(f.date_finale + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '</b>' : '') + '</span>' +
+      (f.f_gagnant ? '<div class="card" style="display:flex;gap:10px;align-items:center;background:linear-gradient(135deg,#102f4a,#2f5b7d);color:#fff;margin:4px 0"><span style="font-size:28px">🏆</span><span class="stack" style="gap:2px"><span class="xs" style="opacity:.85">CHAMPION CLOC\'ARENA MASTERS</span><b style="font-size:18px">' + nom(f.f_gagnant) + '</b></span></div>' : '') +
+      '<div class="grid2" style="gap:8px">' + ligne(f.s1_a, f.s1_b, f.s1_gagnant, f.s1_score, 'Demi-finale 1 (1er – 4e)') + ligne(f.s2_a, f.s2_b, f.s2_gagnant, f.s2_score, 'Demi-finale 2 (2e – 3e)') + '</div>' +
+      ligne(f.s1_gagnant, f.s2_gagnant, f.f_gagnant, f.f_score, 'Finale') +
+      (f.lot ? '<span class="small">🎁 ' + esc(f.lot) + '</span>' : '');
+    el.style.display = '';
+  }).catch(function () { });
+}
 function pageMastersOuvert() {
   setTimeout(function () {
     var box = $('ms-cl'); if (!box) return;
+    afficherFinaleMasters();
     Array.prototype.forEach.call(document.querySelectorAll('[data-msvue]'), function (b) { b.onclick = function () {
       S.msVue = b.dataset.msvue;
       Array.prototype.forEach.call(document.querySelectorAll('[data-msvue]'), function (x) { x.classList.toggle('on', x === b); });
@@ -1093,7 +1115,8 @@ function pageMastersOuvert() {
     '<div class="seg ms-seg">' + [['atp', 'Classement ATP'], ['rush', 'Rush Points']].map(function (t) { return '<button data-msvue="' + t[0] + '" class="' + ((S.msVue || 'atp') === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div>' +
     '<div class="ms-duo"><section class="card stack' + ((S.msVue || 'atp') === 'atp' ? ' on' : '') + '" style="gap:8px" data-msbloc="atp"><span class="eyebrow">Classement ATP</span><div id="ms-cl"><div class="skel"></div></div></section>' +
     '<section class="card stack' + (S.msVue === 'rush' ? ' on' : '') + '" style="gap:8px" data-msbloc="rush"><span class="eyebrow">Rush Points</span><div id="ms-rush"><div class="skel"></div></div></section></div>' +
-    '<section class="card stack" style="gap:8px;display:none" id="ms-quetes"></section></main>';
+    '<section class="card stack" style="gap:8px;display:none" id="ms-quetes"></section>' +
+    '<section class="card stack" style="gap:8px;display:none" id="ms-finale"></section></main>';
 }
 function pageVersusOuvert() {
   setTimeout(function () {
@@ -1225,7 +1248,7 @@ function contenuRegles(c) {
         '<b>A · 1 h</b> : 1 set de 6 jeux avec avantage, tie-break à 6/6.',
         '<b>B · 1 h</b> : 2 sets de 4 jeux sans avantage, tie-break à 3/3, super tie-break à un set partout.',
         '<b>C · 2 h</b> : 2 sets gagnants de 6 jeux sans avantage, super tie-break à un set partout.'])) +
-      blocRegle('Fin de saison', pReg('En <b>mai-juin</b> : tournoi final à élimination directe. Les détails (qualifiés, dates, format) arrivent bientôt.'));
+      blocRegle('Fin de saison', pReg('En <b>mai-juin</b>, le <b>top 4 du Classement ATP</b> se qualifie pour le tournoi final, le même jour : demi-finales (1er contre 4e, 2e contre 3e) puis finale, en <b>1 set</b>. Le vainqueur reçoit le titre <b>Champion CLOC\'ARENA Masters</b> sur sa fiche joueur, et un lot. La date est annoncée dans l\'appli.'));
   }
   return blocRegle('C\'est quoi ?', pReg('Des matchs libres officiels FFT entre joueurs du club. Ils sont enregistrés par le club dans ADOC et comptent pour ton palmarès FFT.')) +
     blocRegle('Qui peut jouer ?', listeRegle([
@@ -1427,6 +1450,10 @@ function pageJoueur(id) {
       if ($('jr-dem')) $('jr-dem').onclick = function () { demanderNiveau(f); };
       if ($('jr-photo')) $('jr-photo').onclick = function () { changerPhoto(f); };
       afficherPhoto(f.photo_path, $('jr-img'));
+      q(sb.rpc('masters_titres', { p: id })).then(function (t) {
+        var m = document.querySelector('#app main'); if (!m || !(t || []).length) return;
+        m.insertAdjacentHTML('afterbegin', '<section class="card" style="display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#102f4a,#2f5b7d);color:#fff"><span style="font-size:30px">🏆</span><span class="stack" style="gap:2px">' + t.map(function (x) { return '<b>' + esc(typeof x === 'string' ? x : (x.masters_titres || '')) + '</b>'; }).join('') + '</span></section>');
+      }).catch(function () { });
     }).catch(function () {
       $('app').innerHTML = '<div class="pagehead wrap">' + backLink('#/club', 'Retour') + '</div><main><section class="card empty">Fiche introuvable.</section></main>';
     });

@@ -1,0 +1,3 @@
+-- Tournoi final Masters (19/11/2026) : appliqué en base par la migration masters_finale
+-- Table masters_finale (une ligne par saison : top 4 ATP, demi-finales 1-4 et 2-3, finale, date, format, lot, visible ou non),
+-- fonctions masters_finale_noms(saison) et masters_titres(personne) pour le titre « Champion CLOC'ARENA Masters » sur la fiche joueur.

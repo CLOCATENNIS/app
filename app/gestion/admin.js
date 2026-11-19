@@ -1509,7 +1509,7 @@ function arLireScore(txt) {
 // ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
 var AR_ONGLETS = {
   tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement']],
-  masters: [['classement', 'Classement ATP'], ['rush', 'Rush Points'], ['quetes', 'Quêtes'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants']],
+  masters: [['classement', 'Classement ATP'], ['rush', 'Rush Points'], ['quetes', 'Quêtes'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants'], ['finale', 'Tournoi final']],
   versus: [['joueurs', 'Joueurs par catégorie'], ['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['reglages', 'Réglages']]
 };
 var CLASS_ORDRE = ['NC', '40', '30/5', '30/4', '30/3', '30/2', '30/1', '30', '15/5', '15/4', '15/3', '15/2', '15/1', '15', '5/6', '4/6', '3/6', '2/6', '1/6', '0'];
@@ -1542,6 +1542,7 @@ function mqCle(per, d) { // clé de période d'une quête validée à la main
 function arMasters(box, tab) {
   if (tab === 'rush') return arMastersRush(box);
   if (tab === 'quetes') return arMastersQuetes(box);
+  if (tab === 'finale') return arMastersFinale(box);
   if (tab === 'classement' || tab === 'joueurs') {
     Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters').eq('masters', false)).catch(function () { return []; }), chargerPers(), q(sb.rpc('masters_retraits')).catch(function () { return []; })]).then(function (r) {
       var L = r[0] || [], sortis = (r[1] || []).map(function (x) { return x.personne_id; }), P = r[2] || [], D = r[3] || [];
@@ -1583,6 +1584,49 @@ function arMasters(box, tab) {
     }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement Masters.</div>'; });
     return;
   }
+}
+// Tournoi final : top 4 du Classement ATP, demi-finales 1-4 et 2-3, finale, champion
+function saisonCourante(d) { d = d || new Date(); var y = d.getFullYear(); return d.getMonth() >= 7 ? y + '-' + (y + 1) : (y - 1) + '-' + y; }
+function arMastersFinale(box) {
+  var sa = saisonCourante();
+  Promise.all([q(sb.from('masters_finale').select('*').eq('saison', sa).maybeSingle()), q(sb.rpc('masters_classement')), chargerPers()]).then(function (r) {
+    var f = r[0], L = r[1] || [], P = r[2] || [];
+    var nom = function (id) { if (!id) return '<span class="mut">à venir</span>'; var p = P.filter(function (x) { return x.id === id; })[0]; return esc(p ? p.prenom + ' ' + p.nom : (L.filter(function (x) { return x.personne_id === id; })[0] || {}).joueur || '?'); };
+    var top = L.slice(0, 4).map(function (x) { return x.personne_id; });
+    var maj = function (champs, msg) { champs.maj_le = new Date().toISOString(); return q(sb.from('masters_finale').update(champs).eq('saison', sa)).then(function () { if (msg) toast(msg); arMastersFinale(box); }).catch(function () { toast('Enregistrement impossible'); }); };
+    if (!f) {
+      box.innerHTML = '<div class="card stack" style="gap:10px"><b>Tournoi final ' + sa + '</b><span class="mut small">Mai-juin : le top 4 du Classement ATP joue les demi-finales (1er contre 4e, 2e contre 3e) puis la finale, le même jour, en 1 set. Le vainqueur reçoit le titre « Champion CLOC\'ARENA Masters » sur sa fiche joueur.</span>' +
+        '<span class="small">Top 4 actuel : ' + (top.length === 4 ? L.slice(0, 4).map(function (x) { return '<b>' + x.rang + '. ' + esc(x.joueur) + '</b>'; }).join(' · ') : 'pas encore 4 joueurs classés') + '</span>' +
+        '<div class="toolbar"><button class="btn" id="mf-cree"' + (top.length === 4 ? '' : ' disabled') + '>Créer le tableau avec ce top 4</button></div><span class="mut xs">Le tableau reste invisible pour les adhérents tant que tu ne coches pas « Visible dans l\'appli ». Tu pourras le remettre à jour avec le top 4 du moment tant qu\'aucun match n\'est joué.</span></div>';
+      $('mf-cree').onclick = function () { this.disabled = true; q(sb.from('masters_finale').insert({ saison: sa, s1_a: top[0], s1_b: top[3], s2_a: top[1], s2_b: top[2] })).then(function () { toast('Tableau créé'); arMastersFinale(box); }).catch(function () { toast('Création impossible'); }); };
+      return;
+    }
+    var joue = !!(f.s1_gagnant || f.s2_gagnant || f.f_gagnant);
+    var match = function (k, titre, a, b, g, sc) {
+      var pret = a && b;
+      return '<div class="card stack" style="gap:8px"><b>' + titre + '</b>' +
+        [a, b].map(function (id) { return '<div class="toolbar" style="margin:0;align-items:center"><span class="grow">' + (g && g === id ? '🏅 <b>' + nom(id) + '</b>' : nom(id)) + '</span>' + (pret ? '<button class="btn sm ' + (g === id ? '' : 'line') + '" data-mfg="' + k + '|' + id + '">' + (g === id ? 'Gagnant ✓' : 'Gagnant') + '</button>' : '') + '</div>'; }).join('') +
+        (pret ? '<label class="l">Score<input class="f" data-mfs="' + k + '" value="' + esc(sc || '') + '" placeholder="ex. 6-4"></label>' : '<span class="mut xs">En attente des demi-finales.</span>') + '</div>';
+    };
+    box.innerHTML = '<div class="card stack" style="gap:10px"><div class="toolbar" style="margin:0;align-items:center"><b class="grow">Tournoi final ' + esc(f.saison) + '</b><label class="c"><input type="checkbox" id="mf-pub"' + (f.publie ? ' checked' : '') + '> Visible dans l\'appli</label></div>' +
+        '<div class="row3"><label class="l">Date<input class="f" type="date" id="mf-date" value="' + esc(f.date_finale || '') + '"></label><label class="l">Format<input class="f" id="mf-format" value="' + esc(f.format || '') + '" placeholder="ex. 1 set de 6 jeux, tie-break à 6/6"></label><label class="l">Lot<input class="f" id="mf-lot" value="' + esc(f.lot || '') + '" placeholder="ex. Bon d\'achat, trophée…"></label></div>' +
+        '<div class="toolbar"><button class="btn line" id="mf-inf">Enregistrer date, format et lot</button>' + (!joue ? '<button class="btn line" id="mf-top">Remettre le top 4 actuel</button>' : '') + '<button class="btn line" id="mf-sup">Supprimer le tableau</button></div></div>' +
+      (f.f_gagnant ? '<div class="card" style="display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#102f4a,#2f5b7d);color:#fff"><span style="font-size:30px">🏆</span><span class="stack"><span class="xs" style="opacity:.85">CHAMPION CLOC\'ARENA MASTERS ' + esc(f.saison) + '</span><b style="font-size:20px">' + nom(f.f_gagnant) + '</b><span class="xs" style="opacity:.85">Titre affiché sur sa fiche joueur' + (f.publie ? '' : ' dès que le tableau est visible') + '.</span></span></div>' : '') +
+      '<div class="grid2" style="gap:12px">' + match('s1', 'Demi-finale 1 · 1er contre 4e', f.s1_a, f.s1_b, f.s1_gagnant, f.s1_score) + match('s2', 'Demi-finale 2 · 2e contre 3e', f.s2_a, f.s2_b, f.s2_gagnant, f.s2_score) + '</div>' +
+      match('f', 'Finale', f.s1_gagnant, f.s2_gagnant, f.f_gagnant, f.f_score);
+    $('mf-pub').onchange = function () { maj({ publie: this.checked }, this.checked ? 'Tableau visible dans l\'appli' : 'Tableau masqué'); };
+    $('mf-inf').onclick = function () { maj({ date_finale: $('mf-date').value || null, format: $('mf-format').value.trim() || null, lot: $('mf-lot').value.trim() || null }, 'Infos enregistrées'); };
+    if ($('mf-top')) $('mf-top').onclick = function () { if (top.length < 4) return toast('Pas encore 4 joueurs classés'); maj({ s1_a: top[0], s1_b: top[3], s2_a: top[1], s2_b: top[2] }, 'Top 4 mis à jour'); };
+    $('mf-sup').onclick = function () { if (!confirm('Supprimer le tableau du tournoi final ' + sa + ' ?')) return; q(sb.from('masters_finale').delete().eq('saison', sa)).then(function () { toast('Tableau supprimé'); arMastersFinale(box); }).catch(function () { toast('Suppression impossible'); }); };
+    all('[data-mfg]', box).forEach(function (b) { b.onclick = function () {
+      var v = b.dataset.mfg.split('|'), k = v[0], champs = {};
+      champs[k + '_gagnant'] = f[k + '_gagnant'] === v[1] ? null : v[1];
+      if (k !== 'f' && f.f_gagnant) champs.f_gagnant = null; // une demi-finale change : la finale est à rejouer
+      var sc = box.querySelector('[data-mfs="' + k + '"]'); if (sc) champs[k + '_score'] = sc.value.trim() || null;
+      maj(champs, champs[k + '_gagnant'] ? (k === 'f' ? '🏆 Champion enregistré' : 'Qualifié pour la finale') : 'Gagnant retiré');
+    }; });
+    all('[data-mfs]', box).forEach(function (i) { i.onchange = function () { var c = {}; c[i.dataset.mfs + '_score'] = i.value.trim() || null; maj(c, 'Score enregistré'); }; });
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le tournoi final.</div>'; });
 }
 // Rush Points : classement par points (calculé par la base), détail et ajustements manuels
 function arMastersRush(box) {
@@ -1741,7 +1785,7 @@ function vueArena(m, arg, suite) {
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
   if (AR.circuit === 'versus') return arVersus(box, AR.tab);
   if (AR.tab === 'affiches') return window.arAffiches ? window.arAffiches(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Affiches indisponibles : recharge la page.</div>'); // affiches.js
-  if (AR.circuit === 'masters' && ['classement', 'joueurs', 'rush', 'quetes'].indexOf(AR.tab) >= 0) return arMasters(box, AR.tab);
+  if (AR.circuit === 'masters' && ['classement', 'joueurs', 'rush', 'quetes', 'finale'].indexOf(AR.tab) >= 0) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
       : Promise.all([q(sb.rpc('masters_classement')), chargerPers()]).then(function (r) { var P = r[1] || []; return (r[0] || []).map(function (x) { var p = P.filter(function (y) { return y.id === x.personne_id; })[0] || {}; return { id: x.personne_id, prenom: (x.rang + '. ') + (p.prenom || x.joueur), nom: p.nom || '', niveau_arena: x.niveau }; }); }),
