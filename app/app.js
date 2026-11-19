@@ -1037,7 +1037,7 @@ function pageMastersOuvert() {
     var box = $('ms-cl'); if (!box) return;
     if (!S.user) { box.innerHTML = '<span class="mut small">Connecte-toi pour voir le classement.</span>'; return; }
     var mesIds = (S.pers || []).map(function (p) { return p.id; });
-    Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters').in('personne_id', mesIds.length ? mesIds : ['00000000-0000-0000-0000-000000000000'])).catch(function () { return []; })]).then(function (r) {
+    Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters, masters_retrait_le').in('personne_id', mesIds.length ? mesIds : ['00000000-0000-0000-0000-000000000000'])).catch(function () { return []; })]).then(function (r) {
       if (!$('ms-cl')) return;
       var L = r[0] || [], C = r[1] || [];
       var moi = L.filter(function (x) { return mesIds.indexOf(x.personne_id) >= 0; });
@@ -1052,19 +1052,40 @@ function pageMastersOuvert() {
       Array.prototype.forEach.call(document.querySelectorAll('[data-defi]'), function (b) { b.onclick = function () { modale('<div class="stack" style="gap:10px"><div style="display:flex;gap:10px;align-items:center;color:var(--navy)">' + icDefi(40) + '<b style="font-size:18px">Défier ' + esc(b.dataset.nom) + '</b></div><p class="small" style="margin:0">Les défis se lanceront directement dans l\'appli très bientôt (créneaux, terrain, score).</p><p class="small" style="margin:0">En attendant : mettez-vous d\'accord, jouez le match au club, puis donnez le score à la direction sportive. Si tu gagnes, tu prends sa place.</p><button class="btn" id="df-ok">J\'ai compris</button></div>', function () { $('df-ok').onclick = fermerModale; }, true); }; });
       // Participation : un bouton par profil du compte concerné par Masters
       var dedans = moi.map(function (m) { return m.personne_id; }), dehors = C.filter(function (c) { return c.masters === false; }).map(function (c) { return c.personne_id; });
+      var enAttente = C.filter(function (c) { return c.masters_retrait_le && c.masters !== false; }).map(function (c) { return c.personne_id; });
       var lignes = (S.pers || []).filter(function (p) { return dedans.indexOf(p.id) >= 0 || dehors.indexOf(p.id) >= 0; }).map(function (p) {
+        if (enAttente.indexOf(p.id) >= 0) return '<div class="small" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>⏳ ' + esc(p.prenom) + ' : demande de retrait envoyée, en attente de validation du club.</span><button class="btn sm line" data-msann="' + esc(p.id) + '">Annuler ma demande</button></div>';
         var out = dehors.indexOf(p.id) >= 0;
         return '<label class="c" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-msopt="' + esc(p.id) + '"' + (out ? ' checked' : '') + '> ' + esc(p.prenom) + ' : je ne souhaite pas participer à CLOC\'ARENA Masters</label>';
       }).join('');
-      if ($('ms-part')) { $('ms-part').innerHTML = lignes ? '<span class="eyebrow">Ma participation</span>' + lignes + '<span class="mut xs">Tu peux revenir quand tu veux : ta place est gardée.</span>' : ''; $('ms-part').hidden = !lignes; }
-      Array.prototype.forEach.call(document.querySelectorAll('[data-msopt]'), function (i) { i.onchange = function () { choixArena(i.dataset.msopt, { masters: !i.checked }, function () { render(); }); }; });
+      if ($('ms-part')) { $('ms-part').innerHTML = lignes ? '<span class="eyebrow">Ma participation</span>' + lignes + '<span class="mut xs">Tout le monde est inclus au départ. Une demande de retrait est validée par le club ; tu peux revenir quand tu veux, ta place est gardée.</span>' : ''; $('ms-part').style.display = lignes ? '' : 'none'; }
+      Array.prototype.forEach.call(document.querySelectorAll('[data-msopt]'), function (i) { i.onchange = function () {
+        if (!i.checked) return choixArena(i.dataset.msopt, { masters: true }, function () { render(); }); // revenir : tout de suite
+        i.checked = false;
+        var p = (S.pers || []).filter(function (x) { return x.id === i.dataset.msopt; })[0] || {};
+        modale('<div class="stack" style="gap:10px"><b style="font-size:18px">Es-tu sûr ?</b><p class="small" style="margin:0">' + esc(p.prenom || '') + ' ne participera plus à CLOC\'ARENA Masters : plus de défis ni de classement. Ta demande sera validée par le club.</p><button class="btn" id="msr-ok">Oui, envoyer ma demande</button><button class="btn line" id="msr-non">Non, je reste</button></div>', function () {
+          $('msr-non').onclick = fermerModale;
+          $('msr-ok').onclick = function () { fermerModale(); if (S.apercu) return toast('Aperçu : rien n\'est enregistré'); q(sb.from('arena_choix').upsert({ personne_id: i.dataset.msopt, masters: false, maj_le: new Date().toISOString() })).then(function () { toast('Demande envoyée au club'); render(); }).catch(function () { toast('Enregistrement impossible'); }); };
+        }, true);
+      }; });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-msann]'), function (b) { b.onclick = function () { b.disabled = true; q(sb.rpc('masters_retrait_annuler', { p: b.dataset.msann })).then(function () { toast('Demande annulée : tu restes dans Masters'); render(); }).catch(function () { b.disabled = false; toast('Action impossible'); }); }; });
+      // Rush Points et quêtes
+      if ($('ms-rush')) Promise.all([q(sb.rpc('masters_rush')), q(sb.from('masters_quetes').select('titre, description, periode, critere, objectif, points').eq('actif', true).order('ordre')).catch(function () { return []; })]).then(function (rr) {
+        var R = rr[0] || [], Q = rr[1] || [], PER = { jour: 'chaque jour', semaine: 'chaque semaine', mois: 'chaque mois', saison: 'une fois dans la saison' };
+        if (!$('ms-rush')) return;
+        $('ms-rush').innerHTML = '<span class="eyebrow">Rush Points</span><div class="stack" style="gap:0">' + R.slice(0, 50).map(function (x, k) {
+          var mine = mesIds.indexOf(x.personne_id) >= 0;
+          return '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)' + (mine ? ';background:rgba(223,245,0,.18)' : '') + '"><b style="width:30px;text-align:right">' + (k + 1) + '</b><span style="flex:1;min-width:0">' + esc(x.joueur) + (x.serie >= 2 ? ' <span class="mut xs">🔥' + x.serie + '</span>' : '') + '</span><span class="mut xs">' + x.victoires + 'V · ' + x.matchs + 'M</span><b>' + (+x.points) + ' pts</b></div>';
+        }).join('') + '</div>' + (Q.length ? '<span class="eyebrow" style="margin-top:10px">Quêtes</span>' + Q.map(function (x) { return '<div class="small" style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span style="flex:1">🎯 <b>' + esc(x.titre) + '</b> <span class="mut xs">· ' + (PER[x.periode] || '') + '</span>' + (x.description ? '<br><span class="mut xs">' + esc(x.description) + '</span>' : '') + '</span><b>+' + (+x.points) + '</b></div>'; }).join('') : '');
+      }).catch(function () { if ($('ms-rush')) $('ms-rush').innerHTML = '<span class="mut small">Rush Points indisponibles pour le moment.</span>'; });
     }).catch(function () { if ($('ms-cl')) $('ms-cl').innerHTML = '<span class="mut small">Classement indisponible pour le moment.</span>'; });
   });
   return '<div class="darkhead" style="background:linear-gradient(135deg,#102f4a,#2f5b7d)"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">ADULTES ET JEUNES COMPÉTITEURS</div><h1>CLOC\'ARENA Masters</h1>' + lienRegles('masters') + '</div></div><main>' +
     (circuitEnPrep('masters') ? '<div class="alert" style="background:var(--sun);color:#12304a"><span><b>Aperçu équipe</b> · Masters est encore « en préparation » : les adhérents voient la page d\'info. Décoche la case dans la gestion pour l\'ouvrir.</span></div>' : '') +
-    '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">Un classement général. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi lancé par un joueur moins bien classé, tu gagnes un <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
-    '<section class="card stack" style="gap:8px" id="ms-part" hidden></section>' +
-    '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement général</span><div id="ms-cl"><div class="skel"></div></div></section></main>';
+    '<section class="card stack" style="gap:6px"><span class="eyebrow">Le principe</span><span class="small">Deux classements : le <b>Classement ATP</b> et les <b>Rush Points</b>. Tu peux défier les joueurs jusqu\'à <b>5 places au-dessus</b> de toi (' + icDefi(18) + '). Si tu gagnes, <b>tu prends sa place</b> et les joueurs entre vous reculent d\'une place. Si tu gagnes un défi reçu, tu montes d\'une place et tu gagnes le <b>bonus ✨</b> : ton prochain défi peut viser jusqu\'à 8 places au-dessus.</span></section>' +
+    '<section class="card stack" style="gap:8px;display:none" id="ms-part"></section>' +
+    '<section class="card stack" style="gap:8px"><span class="eyebrow">Classement ATP</span><div id="ms-cl"><div class="skel"></div></div></section>' +
+    '<section class="card stack" style="gap:8px" id="ms-rush"><div class="skel"></div></section></main>';
 }
 function pageVersusOuvert() {
   setTimeout(function () {
@@ -1172,7 +1193,7 @@ function contenuRegles(c) {
   }
   if (c === 'masters') {
     return blocRegle('C\'est quoi ?', pReg('Le circuit des adultes et des ados compétiteurs, toute la saison, avec deux classements : le <b>Classement ATP</b> et les <b>Rush Points</b>.')) +
-      blocRegle('Qui joue ?', pReg('Tous les adultes et ados compétiteurs sont inclus. Si tu ne veux pas participer, coche « Je ne souhaite pas participer » sur la page Masters. Tu peux revenir quand tu veux.')) +
+      blocRegle('Qui joue ?', pReg('Tous les adultes et ados compétiteurs sont inclus. Si tu ne veux pas participer, coche « Je ne souhaite pas participer » sur la page Masters et confirme : ta demande est validée par le club. Tu peux revenir quand tu veux.')) +
       blocRegle('Le Classement ATP', listeRegle([
         'Tu peux défier un joueur jusqu\'à <b>5 places au-dessus</b> de toi, avec le bouton Défier ' + icDefi(18) + ' dans le classement.',
         '<b>Tu gagnes ton défi</b> : tu prends la place du joueur défié, et tous ceux entre vous deux reculent d\'une place.',
@@ -1182,8 +1203,7 @@ function contenuRegles(c) {
         'Victoire : <b>5 points</b>. Défaite : <b>3 points</b>.',
         'Séries de victoires d\'affilée : 3 victoires <b>+10</b>, 5 victoires <b>+25</b>, 10 victoires <b>+50</b>, 20 victoires <b>+100</b> (les bonus s\'additionnent). Une défaite remet la série à zéro.',
         'Défense du trône : un joueur du top 5 qui gagne un défi reçu marque <b>+5</b>.',
-        'Trophées : premier match <b>+3</b> ; 5 adversaires différents <b>+10</b>.',
-        'Mission du mois : 2 matchs dans le mois <b>+5</b>, à refaire chaque mois.',
+        'Quêtes : premier match <b>+3</b> ; 5 adversaires différents <b>+10</b> ; Mission du mois (2 matchs dans le mois) <b>+5</b>, à refaire chaque mois. D\'autres quêtes (du jour, de la semaine…) peuvent être ajoutées par le club : elles s\'affichent sur la page Masters.',
         'En cas d\'égalité : les points, puis les victoires, puis les matchs joués, puis la meilleure place au Classement ATP.'])) +
       blocRegle('Lancer et jouer un défi', '<ol class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">' + [
         'Tu proposes jusqu\'à <b>5 créneaux</b> (date et plage horaire), au moins 48 h à l\'avance, et tu coches les formats que tu acceptes.',

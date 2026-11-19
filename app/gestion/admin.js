@@ -1509,7 +1509,7 @@ function arLireScore(txt) {
 // ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
 var AR_ONGLETS = {
   tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement']],
-  masters: [['classement', 'Classement général'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants']],
+  masters: [['classement', 'Classement ATP'], ['rush', 'Rush Points'], ['quetes', 'Quêtes'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants']],
   versus: [['joueurs', 'Joueurs par catégorie'], ['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['reglages', 'Réglages']]
 };
 var CLASS_ORDRE = ['NC', '40', '30/5', '30/4', '30/3', '30/2', '30/1', '30', '15/5', '15/4', '15/3', '15/2', '15/1', '15', '5/6', '4/6', '3/6', '2/6', '1/6', '0'];
@@ -1530,29 +1530,147 @@ var VS_DEF = { formats: { Orange: ['F5', 'F6'], Vert: ['F5', 'F6', 'F7'], 'Jaune
   orange_vert: false, plages: 3, expiration_h: 72, annulation_h: 24, confirmation_h: 72, meme_adversaire_mois: 1, defis_attente: 3, tweener_v: 10, tweener_d: 4, masters_v: '', masters_d: '', saison_debut: '', saison_fin: '' };
 // Participation Masters / Versus : tout le monde est inclus sauf ceux qui ne veulent pas ; la direction peut retirer ou remettre un joueur
 function majChoix(pid, champs) { return q(sb.from('arena_choix').upsert(Object.assign({ personne_id: pid, maj_le: new Date().toISOString() }, champs))); }
+var MQ_PER = { jour: 'Chaque jour', semaine: 'Chaque semaine', mois: 'Chaque mois', saison: 'Une fois dans la saison' };
+var MQ_CRI = { matchs: 'Matchs joués', victoires: 'Victoires', adversaires: 'Adversaires différents', manuel: 'Validée à la main par le club' };
+function mqCle(per, d) { // clé de période d'une quête validée à la main
+  d = d || new Date();
+  if (per === 'jour') return isoJour(d);
+  if (per === 'mois') return isoJour(d).slice(0, 7);
+  if (per === 'semaine') { var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), j = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - j); var a = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return t.getUTCFullYear() + '-' + pad(Math.ceil(((t - a) / 864e5 + 1) / 7)); }
+  return 'saison';
+}
 function arMasters(box, tab) {
+  if (tab === 'rush') return arMastersRush(box);
+  if (tab === 'quetes') return arMastersQuetes(box);
   if (tab === 'classement' || tab === 'joueurs') {
-    Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters').eq('masters', false)).catch(function () { return []; }), chargerPers()]).then(function (r) {
-      var L = r[0] || [], sortis = (r[1] || []).map(function (x) { return x.personne_id; }), P = r[2] || [];
+    Promise.all([q(sb.rpc('masters_classement')), q(sb.from('arena_choix').select('personne_id, masters').eq('masters', false)).catch(function () { return []; }), chargerPers(), q(sb.rpc('masters_retraits')).catch(function () { return []; })]).then(function (r) {
+      var L = r[0] || [], sortis = (r[1] || []).map(function (x) { return x.personne_id; }), P = r[2] || [], D = r[3] || [];
       var nomP = function (id) { var p = P.filter(function (x) { return x.id === id; })[0]; return p ? p.prenom + ' ' + p.nom : '?'; };
+      var dir = aRole('direction');
       if (tab === 'classement') {
-        box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Classement général par places. Un joueur peut défier jusqu\'à <b>5 places au-dessus</b> de lui (<b>8</b> avec un bonus ✨). S\'il gagne contre un mieux classé, il prend sa place et les joueurs entre les deux reculent d\'une place. Le mieux classé qui gagne un défi lancé par un moins bien classé gagne le bonus ; l\'utiliser le consomme. Classement de départ : ton fichier « Arena Masters classement pondéré ».</p>' +
-          '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau club</th><th>FFT</th><th>Matchs</th><th>Peut défier</th></tr></thead><tbody>' + L.map(function (x) {
+        box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Classement ATP par places. Un joueur peut défier jusqu\'à <b>5 places au-dessus</b> (<b>8</b> avec le bonus ✨). Le challenger qui gagne prend la place ; le défié qui gagne monte d\'une place, gagne le bonus et, dans le top 5, +5 Rush Points (défense du trône). <b>Déplacer</b> met un joueur à la place de ton choix (les autres se décalent) ; ✨ donne ou retire le bonus.</p>' +
+          '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau club</th><th>FFT</th><th>Matchs</th><th>Peut défier</th>' + (dir ? '<th></th>' : '') + '</tr></thead><tbody>' + L.map(function (x) {
             var haut = Math.max(1, x.rang - (x.bonus ? 8 : 5));
-            return '<tr><td><b>' + x.rang + '</b></td><td><b>' + esc(x.joueur) + '</b>' + (x.bonus ? ' <span title="Bonus : 8 places">✨</span>' : '') + (x.place == null ? ' <span class="badge">nouveau</span>' : '') + '</td><td class="small">' + esc(x.niveau || '—') + '</td><td class="small">' + esc(x.classement_fft || '—') + '</td><td>' + x.matchs + '</td><td class="small">' + (x.rang > 1 ? 'n°' + haut + ' à ' + (x.rang - 1) : '—') + '</td></tr>';
+            return '<tr><td><b>' + x.rang + '</b></td><td><b>' + esc(x.joueur) + '</b>' + (x.bonus ? ' <span title="Bonus : 8 places">✨</span>' : '') + (x.place == null ? ' <span class="badge">nouveau</span>' : '') + '</td><td class="small">' + esc(x.niveau || '—') + '</td><td class="small">' + esc(x.classement_fft || '—') + '</td><td>' + x.matchs + '</td><td class="small">' + (x.rang > 1 ? 'n°' + haut + ' à ' + (x.rang - 1) : '—') + '</td>' +
+              (dir ? '<td class="act" style="white-space:nowrap"><button class="btn sm line" data-mpl="' + x.personne_id + '" data-nom="' + esc(x.joueur) + '" data-rang="' + x.rang + '">Déplacer</button> <button class="btn sm line" data-mbo="' + x.personne_id + '|' + (x.bonus ? 0 : 1) + '" title="' + (x.bonus ? 'Retirer le bonus' : 'Donner le bonus') + '">' + (x.bonus ? '✨ Retirer' : '✨') + '</button></td>' : '') + '</tr>';
           }).join('') + '</tbody></table></div>';
+        all('[data-mpl]', box).forEach(function (b) { b.onclick = function () {
+          var v = prompt('Nouvelle place pour ' + b.dataset.nom + ' (actuellement ' + b.dataset.rang + (b.dataset.rang === '1' ? 'er' : 'e') + ') :', b.dataset.rang); if (v === null) return;
+          var n = parseInt(v, 10); if (!(n >= 1)) return toast('Indique une place (1, 2, 3…)');
+          b.disabled = true; q(sb.rpc('masters_placer', { p: b.dataset.mpl, rang_cible: n })).then(function () { toast(b.dataset.nom + ' passe ' + n + (n === 1 ? 'er' : 'e')); arMasters(box, tab); }).catch(function () { b.disabled = false; toast('Déplacement impossible'); });
+        }; });
+        all('[data-mbo]', box).forEach(function (b) { b.onclick = function () {
+          var v = b.dataset.mbo.split('|'); b.disabled = true;
+          var fin = function () { toast(v[1] === '1' ? 'Bonus ✨ donné' : 'Bonus retiré'); arMasters(box, tab); };
+          q(sb.from('masters_rang').update({ bonus: v[1] === '1', maj_le: new Date().toISOString() }).eq('personne_id', v[0]).select('personne_id')).then(function (l) {
+            if ((l || []).length) return fin();
+            return q(sb.rpc('masters_placer', { p: v[0], rang_cible: 99999 })).then(function () { return q(sb.from('masters_rang').update({ bonus: v[1] === '1' }).eq('personne_id', v[0])); }).then(fin);
+          }).catch(function () { b.disabled = false; toast('Action impossible'); });
+        }; });
         return;
       }
-      box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Tout le monde est dans Masters, sauf ceux qui ont coché « Je ne souhaite pas participer » dans l\'appli (ils peuvent revenir eux-mêmes). Tu peux aussi retirer ou remettre un joueur ici : sa place est gardée.</p>' +
+      var valideur = aRole(['direction', 'enseignant']);
+      box.innerHTML = (D.length ? '<div class="card stack" style="gap:8px;margin-bottom:12px;border-left:4px solid var(--warn,#e9a37f)"><b>Demandes de retrait (' + D.length + ')</b><span class="mut small">Ces adhérents ont coché « Je ne souhaite pas participer ». Ils restent au classement tant que la demande n\'est pas acceptée.</span>' +
+          D.map(function (d) { return '<div class="toolbar" style="margin:0;align-items:center"><span class="grow"><b>' + esc(d.joueur) + '</b> <span class="mut xs">demandé le ' + esc(new Date(d.demande_le).toLocaleDateString('fr-FR')) + '</span></span>' + (valideur ? '<button class="btn sm" data-mrt="' + d.personne_id + '|1">Accepter</button><button class="btn sm line" data-mrt="' + d.personne_id + '|0">Refuser</button>' : '') + '</div>'; }).join('') + '</div>' : '') +
+        '<p class="mut small" style="margin:0 0 10px">Tout le monde est dans Masters. Un adhérent qui ne veut pas participer coche la case dans l\'appli, confirme, puis la direction ou un enseignant valide sa demande ci-dessus. Tu peux aussi retirer ou remettre un joueur directement : sa place est gardée.</p>' +
         '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Niveau club</th><th>Participe</th></tr></thead><tbody>' + L.map(function (x) {
           return '<tr><td>' + x.rang + '</td><td><b>' + esc(x.joueur) + '</b></td><td class="small">' + esc(x.niveau || '—') + '</td><td><button class="btn sm line" data-msx="' + x.personne_id + '|0">Retirer</button></td></tr>';
         }).join('') + sortis.map(function (id) {
           return '<tr style="opacity:.6"><td>—</td><td><b>' + esc(nomP(id)) + '</b> <span class="badge b-warn">ne participe pas</span></td><td></td><td><button class="btn sm" data-msx="' + id + '|1">Remettre</button></td></tr>';
         }).join('') + '</tbody></table></div>';
       all('[data-msx]', box).forEach(function (b) { b.onclick = function () { var v = b.dataset.msx.split('|'); b.disabled = true; majChoix(v[0], { masters: v[1] === '1' }).then(function () { toast(v[1] === '1' ? 'Remis dans Masters' : 'Retiré de Masters'); arMasters(box, tab); }).catch(function () { b.disabled = false; toast('Action impossible'); }); }; });
+      all('[data-mrt]', box).forEach(function (b) { b.onclick = function () { var v = b.dataset.mrt.split('|'); b.disabled = true; q(sb.rpc('masters_retrait_traiter', { p: v[0], accepter: v[1] === '1' })).then(function () { toast(v[1] === '1' ? 'Retrait accepté' : 'Demande refusée : il reste dans Masters'); arMasters(box, tab); }).catch(function () { b.disabled = false; toast('Action impossible'); }); }; });
     }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger le classement Masters.</div>'; });
     return;
   }
+}
+// Rush Points : classement par points (calculé par la base), détail et ajustements manuels
+function arMastersRush(box) {
+  Promise.all([q(sb.rpc('masters_rush')), q(sb.from('arena_points').select('id, personne_id, type, motif, points, date_points, quete_id').eq('circuit', 'masters').in('type', ['ajustement', 'quete']).order('date_points', { ascending: false }).limit(200)), chargerPers()]).then(function (r) {
+    var L = r[0] || [], H = r[1] || [], P = r[2] || [];
+    var nomP = function (id) { var p = P.filter(function (x) { return x.id === id; })[0]; return p ? p.prenom + ' ' + p.nom : '?'; };
+    var n = function (v) { return (+v || 0).toLocaleString('fr-FR'); };
+    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Rush Points calculés automatiquement : victoire 5, défaite 3, séries (3 victoires +10, 5 +25, 10 +50, 20 +100), quêtes, défense du trône (+5), plus tes ajustements. Égalité : points, victoires, matchs, puis place au Classement ATP.</p>' +
+      '<div class="toolbar"><button class="btn" id="mr-aj">+ Ajuster des points</button></div>' +
+      '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Joueur</th><th>Points</th><th>V / M</th><th class="small">Matchs</th><th class="small">Séries</th><th class="small">Quêtes</th><th class="small">Trône</th><th class="small">Ajust.</th><th></th></tr></thead><tbody>' + L.map(function (x, i) {
+        return '<tr><td><b>' + (i + 1) + '</b></td><td><b>' + esc(x.joueur) + '</b>' + (x.serie >= 2 ? ' <span class="mut xs">🔥 ' + x.serie + '</span>' : '') + ' <span class="mut xs">· ATP ' + x.rang_atp + '</span></td><td><b>' + n(x.points) + '</b></td><td class="small">' + x.victoires + ' / ' + x.matchs + '</td><td class="small">' + n(x.pts_matchs) + '</td><td class="small">' + n(x.pts_series) + '</td><td class="small">' + n(x.pts_quetes) + '</td><td class="small">' + n(x.pts_trone) + '</td><td class="small">' + n(x.pts_ajust) + '</td>' +
+          '<td class="act"><button class="btn sm line" data-mraj="' + x.personne_id + '">Ajuster</button></td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="sect">Ajustements et quêtes validées à la main</div>' + (H.length ? '<div class="tw"><table class="t"><tbody>' + H.map(function (h) {
+        return '<tr><td class="small">' + esc(new Date(h.date_points).toLocaleDateString('fr-FR')) + '</td><td><b>' + esc(nomP(h.personne_id)) + '</b></td><td class="small">' + (h.type === 'quete' ? '🎯 ' : '') + esc(h.motif || '') + '</td><td><b>' + (h.points > 0 ? '+' : '') + n(h.points) + '</b></td><td class="act"><button class="btn sm line" data-mrsup="' + h.id + '">Annuler</button></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="mut small">Aucun ajustement pour l\'instant.</div>');
+    var ajuster = function (pid) {
+      panneau('Ajuster des Rush Points', '<div class="stack" style="gap:10px"><label class="l">Joueur<select class="f" id="mr-p">' + L.map(function (x) { return '<option value="' + x.personne_id + '"' + (x.personne_id === pid ? ' selected' : '') + '>' + esc(x.joueur) + ' (' + n(x.points) + ' pts)</option>'; }).join('') + '</select></label>' +
+        '<label class="l">Points (négatif pour retirer)<input class="f" type="number" step="0.5" id="mr-v" placeholder="ex. 5 ou -3"></label>' +
+        '<label class="l">Motif<input class="f" id="mr-m" maxlength="120" placeholder="ex. Correction d\'un score, bonus fair-play…"></label>' +
+        '<button class="btn" id="mr-ok">Enregistrer</button></div>', function () {
+        $('mr-ok').onclick = function () {
+          var v = parseFloat(String($('mr-v').value).replace(',', '.')), m = $('mr-m').value.trim();
+          if (!v) return toast('Indique un nombre de points'); if (!m) return toast('Indique un motif');
+          this.disabled = true;
+          q(sb.from('arena_points').insert({ personne_id: $('mr-p').value, type: 'ajustement', motif: m, points: v, circuit: 'masters', created_by: A.user.id })).then(function () { fermer(); toast('Points ajustés'); arMastersRush(box); }).catch(function () { $('mr-ok').disabled = false; toast('Enregistrement impossible'); });
+        };
+      });
+    };
+    $('mr-aj').onclick = function () { ajuster(null); };
+    all('[data-mraj]', box).forEach(function (b) { b.onclick = function () { ajuster(b.dataset.mraj); }; });
+    all('[data-mrsup]', box).forEach(function (b) { b.onclick = function () { if (!confirm('Annuler cette ligne de points ?')) return; b.disabled = true; q(sb.from('arena_points').delete().eq('id', b.dataset.mrsup)).then(function () { toast('Ligne annulée'); arMastersRush(box); }).catch(function () { b.disabled = false; toast('Action impossible'); }); }; });
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les Rush Points.</div>'; });
+}
+// Quêtes Masters : créées par la direction (jour, semaine, mois, saison), validées automatiquement ou à la main
+function arMastersQuetes(box) {
+  Promise.all([q(sb.from('masters_quetes').select('*').order('actif', { ascending: false }).order('ordre').order('created_at')), q(sb.rpc('masters_classement'))]).then(function (r) {
+    var Q = r[0] || [], L = r[1] || [];
+    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Les quêtes rapportent des Rush Points. <b>Automatiques</b> : l\'appli compte les matchs, victoires ou adversaires différents sur la période. <b>À la main</b> : tu valides toi-même les joueurs qui l\'ont réussie. Une quête « chaque jour / semaine / mois » se refait à chaque nouvelle période.</p>' +
+      '<div class="toolbar"><button class="btn" id="mq-new">+ Nouvelle quête</button></div>' +
+      (Q.length ? '<div class="stack" style="gap:8px">' + Q.map(function (x) {
+        var auto = x.critere !== 'manuel';
+        return '<div class="card stack" style="gap:6px' + (x.actif ? '' : ';opacity:.6') + '"><div class="toolbar" style="margin:0;align-items:center"><b class="grow">🎯 ' + esc(x.titre) + ' <span class="badge">+' + (+x.points) + ' pts</span>' + (x.actif ? '' : ' <span class="badge b-warn">en pause</span>') + '</b>' +
+          (!auto && x.actif ? '<button class="btn sm" data-mqv="' + x.id + '">Valider pour un joueur</button>' : '') + '<button class="btn sm line" data-mqe="' + x.id + '">Modifier</button></div>' +
+          '<span class="small">' + esc(MQ_PER[x.periode] || x.periode) + ' · ' + (auto ? esc(MQ_CRI[x.critere]) + ' : <b>' + x.objectif + '</b>' : 'validée à la main') + (x.debut || x.fin ? ' · du ' + esc(x.debut || '…') + ' au ' + esc(x.fin || '…') : '') + '</span>' +
+          (x.description ? '<span class="mut small">' + esc(x.description) + '</span>' : '') + '</div>';
+      }).join('') + '</div>' : '<div class="card empty">Aucune quête.</div>');
+    var form = function (x) {
+      x = x || { titre: '', description: '', periode: 'saison', critere: 'matchs', objectif: 1, points: 5, debut: '', fin: '', actif: true, ordre: Q.length + 1 };
+      var opt = function (o, v) { return Object.keys(o).map(function (k) { return '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + o[k] + '</option>'; }).join(''); };
+      panneau(x.id ? 'Modifier la quête' : 'Nouvelle quête', '<div class="stack" style="gap:10px">' +
+        '<label class="l">Titre<input class="f" id="mq-t" maxlength="80" value="' + esc(x.titre) + '" placeholder="ex. Mission du week-end"></label>' +
+        '<label class="l">Description (vue par les joueurs)<input class="f" id="mq-d" maxlength="160" value="' + esc(x.description || '') + '"></label>' +
+        '<div class="row3"><label class="l">Période<select class="f" id="mq-p">' + opt(MQ_PER, x.periode) + '</select></label>' +
+        '<label class="l">Comment elle se valide<select class="f" id="mq-c">' + opt(MQ_CRI, x.critere) + '</select></label>' +
+        '<label class="l">Objectif<input class="f" type="number" min="1" id="mq-o" value="' + esc(x.objectif) + '"></label></div>' +
+        '<div class="row3"><label class="l">Rush Points gagnés<input class="f" type="number" step="0.5" id="mq-pts" value="' + esc(x.points) + '"></label>' +
+        '<label class="l">Début (facultatif)<input class="f" type="date" id="mq-db" value="' + esc(x.debut || '') + '"></label>' +
+        '<label class="l">Fin (facultatif)<input class="f" type="date" id="mq-fn" value="' + esc(x.fin || '') + '"></label></div>' +
+        '<label class="c"><input type="checkbox" id="mq-a"' + (x.actif ? ' checked' : '') + '> Quête active</label>' +
+        '<div class="toolbar"><button class="btn" id="mq-ok">Enregistrer</button>' + (x.id ? '<button class="btn line" id="mq-sup">Supprimer</button>' : '') + '</div></div>', function () {
+        var maj = function () { $('mq-o').disabled = $('mq-c').value === 'manuel'; }; $('mq-c').onchange = maj; maj();
+        $('mq-ok').onclick = function () {
+          var row = { titre: $('mq-t').value.trim(), description: $('mq-d').value.trim() || null, periode: $('mq-p').value, critere: $('mq-c').value, objectif: Math.max(1, parseInt($('mq-o').value, 10) || 1), points: parseFloat(String($('mq-pts').value).replace(',', '.')) || 0, debut: $('mq-db').value || null, fin: $('mq-fn').value || null, actif: $('mq-a').checked, ordre: x.ordre || 0 };
+          if (!row.titre) return toast('Donne un titre à la quête');
+          this.disabled = true;
+          (x.id ? q(sb.from('masters_quetes').update(row).eq('id', x.id)) : q(sb.from('masters_quetes').insert(row))).then(function () { fermer(); toast('Quête enregistrée'); arMastersQuetes(box); }).catch(function () { $('mq-ok').disabled = false; toast('Enregistrement impossible'); });
+        };
+        if ($('mq-sup')) $('mq-sup').onclick = function () { if (!confirm('Supprimer cette quête ? Les points déjà donnés à la main pour elle seront retirés. Pour l\'arrêter sans rien retirer, décoche « Quête active ».')) return; q(sb.from('masters_quetes').delete().eq('id', x.id)).then(function () { fermer(); toast('Quête supprimée'); arMastersQuetes(box); }).catch(function () { toast('Suppression impossible'); }); };
+      });
+    };
+    $('mq-new').onclick = function () { form(null); };
+    all('[data-mqe]', box).forEach(function (b) { b.onclick = function () { form(Q.filter(function (x) { return x.id === b.dataset.mqe; })[0]); }; });
+    all('[data-mqv]', box).forEach(function (b) { b.onclick = function () {
+      var x = Q.filter(function (y) { return y.id === b.dataset.mqv; })[0];
+      panneau('Valider « ' + x.titre + ' »', '<div class="stack" style="gap:10px"><span class="mut small">' + esc(MQ_PER[x.periode]) + ' · +' + (+x.points) + ' Rush Points. Une seule fois par joueur ' + (x.periode === 'saison' ? 'dans la saison' : 'et par période') + '.</span>' +
+        '<label class="l">Joueur<select class="f" id="mqv-p">' + L.map(function (j) { return '<option value="' + j.personne_id + '">' + esc(j.joueur) + '</option>'; }).join('') + '</select></label>' +
+        '<label class="l">Date de réussite<input class="f" type="date" id="mqv-d" value="' + isoJour(new Date()) + '"></label>' +
+        '<button class="btn" id="mqv-ok">Valider</button></div>', function () {
+        $('mqv-ok').onclick = function () {
+          var d = $('mqv-d').value ? new Date($('mqv-d').value + 'T12:00:00') : new Date();
+          this.disabled = true;
+          q(sb.from('arena_points').insert({ personne_id: $('mqv-p').value, type: 'quete', motif: 'Quête : ' + x.titre, points: +x.points, circuit: 'masters', quete_id: x.id, periode_cle: mqCle(x.periode, d), date_points: d.toISOString(), created_by: A.user.id }))
+            .then(function () { fermer(); toast('Quête validée : +' + (+x.points) + ' pts'); }).catch(function (e) { $('mqv-ok').disabled = false; toast(/duplicate|unique/i.test(String(e && (e.message || e.code))) || (e && e.code === '23505') ? 'Déjà validée pour ce joueur sur cette période' : 'Validation impossible'); });
+        };
+      });
+    }; });
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les quêtes.</div>'; });
 }
 function arVersus(box, tab) {
   var vide = function (titre, texte) { box.innerHTML = '<div class="card stack" style="gap:8px"><b>' + titre + '</b><span class="small mut">' + texte + '</span><span class="badge" style="align-self:flex-start">Arrive avec les défis dans l\'appli (V1)</span></div>'; };
@@ -1606,7 +1724,7 @@ function vueArena(m, arg, suite) {
   else if (arg) { AR.tab = arg; if (arg === 'seances' || arg === 'inscriptions') AR.circuit = 'tweener'; } // séances et inscriptions : Tweener
   var dir = aRole('direction');
   // Tweener : séances et inscriptions (bureau compris). Masters et Versus : direction sportive.
-  var tabs = AR_ONGLETS[AR.circuit].filter(function (t) { return t[0] === 'seances' ? peut('evenements') : t[0] === 'inscriptions' ? peut('inscriptions') : dir; });
+  var tabs = AR_ONGLETS[AR.circuit].filter(function (t) { return t[0] === 'seances' ? peut('evenements') : t[0] === 'inscriptions' ? peut('inscriptions') : (AR.circuit === 'masters' && t[0] === 'joueurs') ? (dir || aRole('enseignant')) : dir; });
   if (!tabs.some(function (t) { return t[0] === AR.tab; })) AR.tab = tabs.length ? tabs[0][0] : '';
   var circ = AR_CIRCUITS.filter(function (c) { return c[0] === AR.circuit; })[0];
   m.innerHTML = entete('CLOC\'ARENA', 'Les trois circuits du club. Les résultats sont saisis uniquement par la direction sportive.') +
@@ -1619,10 +1737,11 @@ function vueArena(m, arg, suite) {
   if (AR.circuit !== 'tweener') arPreparation(AR.circuit, circ[1]);
   if (AR.tab === 'seances') return vueEvenements(box, suite, { titre: 'Séances ' + circ[1], sous: 'Dates, groupes, places et inscriptions des séances ' + circ[1] + '. Elles apparaissent dans l\'agenda des adhérents des groupes choisis.', types: ['seance'], def: 'seance', btn: 'Nouvelle séance', circuit: AR.circuit });
   if (AR.tab === 'inscriptions') return vueInscriptions(box, suite, { types: ['seance'], circuit: AR.circuit, titre: 'Inscriptions ' + circ[1], base: '#/arena/inscriptions/' });
+  if (!dir && AR.circuit === 'masters' && AR.tab === 'joueurs') return arMasters(box, 'joueurs'); // les enseignants valident les demandes de retrait
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
   if (AR.circuit === 'versus') return arVersus(box, AR.tab);
   if (AR.tab === 'affiches') return window.arAffiches ? window.arAffiches(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Affiches indisponibles : recharge la page.</div>'); // affiches.js
-  if (AR.circuit === 'masters' && (AR.tab === 'classement' || AR.tab === 'joueurs')) return arMasters(box, AR.tab);
+  if (AR.circuit === 'masters' && ['classement', 'joueurs', 'rush', 'quetes'].indexOf(AR.tab) >= 0) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
       : Promise.all([q(sb.rpc('masters_classement')), chargerPers()]).then(function (r) { var P = r[1] || []; return (r[0] || []).map(function (x) { var p = P.filter(function (y) { return y.id === x.personne_id; })[0] || {}; return { id: x.personne_id, prenom: (x.rang + '. ') + (p.prenom || x.joueur), nom: p.nom || '', niveau_arena: x.niveau }; }); }),
