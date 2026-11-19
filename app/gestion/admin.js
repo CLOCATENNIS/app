@@ -2236,7 +2236,7 @@ function reservationsDouble() {
       }).catch(function () { toast('Action impossible'); });
     };
     all('[data-rsok]', box).forEach(function (b) { b.onclick = function () { maj(b.dataset.rsok, { statut: 'confirmee' }, 'Réservation confirmée : les joueurs sont prévenus'); }; });
-    all('[data-rsko]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Pourquoi ? (ex. terrain déjà pris, proposez 18h)'); if (m === null) return; maj(b.dataset.rsko, { statut: 'refusee', motif: m.trim().slice(0, 300) || null }, 'Demande refusée : les joueurs sont prévenus'); }; });
+    all('[data-rsko]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Pourquoi ? (ex. terrain déjà pris, proposez 18h30)'); if (m === null) return; maj(b.dataset.rsko, { statut: 'refusee', motif: m.trim().slice(0, 300) || null }, 'Demande refusée : les joueurs sont prévenus'); }; });
     all('[data-rsan]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Annuler cette réservation ? Motif pour les joueurs :'); if (m === null) return; maj(b.dataset.rsan, { statut: 'refusee', motif: (m.trim() || 'Réservation annulée par le club').slice(0, 300) }, 'Réservation annulée : les joueurs sont prévenus'); }; });
     all('[data-rsmod]', box).forEach(function (b) {
       b.onclick = function () {

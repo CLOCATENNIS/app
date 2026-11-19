@@ -2054,16 +2054,17 @@ function formResa(a, b, box) {
   var terrains = (S.reglages && Array.isArray(S.reglages.terrains_double) && S.reglages.terrains_double.length) ? S.reglages.terrains_double : ['Couvert 1', 'Couvert 2', 'Terre 3', 'Terre 4', 'Quick 5', 'Quick 6', 'Quick 7'];
   var joueurs = [[a.id, 1, a.joueur1], [a.id, 2, a.joueur2], [b.id, 1, b.joueur1], [b.id, 2, b.joueur2]].filter(function (x) { return x[2]; });
   var moiEq = localStorageGet('dbl-eq') || '', moiJ = localStorageGet('dbl-j') || '1';
-  var heures = []; for (var H = 8; H <= 20; H++) ['00', '30'].forEach(function (mm) { if (!(H === 20 && mm === '30')) heures.push((H < 10 ? '0' : '') + H + ':' + mm); });
+  // Créneaux du club : toujours à la demi-heure (8h30, 9h30… 20h30, fin max 22h30), comme le paramétrage des terrains
+  var heures = []; for (var H = 8; H <= 20; H++) heures.push((H < 10 ? '0' : '') + H + ':30');
   var demain = new Date(); var iso = isoJour(demain);
   modale('<div class="stack" style="gap:12px"><h2 style="margin:0;font-size:21px">Demander une réservation</h2>' +
     '<span class="small"><b>' + esc(nomEq(a)) + '</b><br><span class="mut">contre</span> <b>' + esc(nomEq(b)) + '</b></span>' +
-    '<span class="mut small">Créneau de 2 heures. Mettez-vous d\'accord à 4 avant d\'envoyer : le club réserve le terrain et vous prévient par notification.</span>' +
+    '<span class="mut small">Créneau de 2 heures, toujours à la demi-heure (8h30, 9h30, 10h30…). Mettez-vous d\'accord à 4 avant d\'envoyer : le club réserve le terrain et vous prévient par notification.</span>' +
     '<label class="f">Jour<input class="f" type="date" id="rs-j" min="' + iso + '"></label>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Début<select class="f" id="rs-h">' + heures.map(function (h) { return '<option' + (h === '10:00' ? ' selected' : '') + '>' + h + '</option>'; }).join('') + '</select></label><label class="f">Fin<input class="f" id="rs-f" disabled></label></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Début<select class="f" id="rs-h">' + heures.map(function (h) { return '<option' + (h === '10:30' ? ' selected' : '') + '>' + h + '</option>'; }).join('') + '</select></label><label class="f">Fin<input class="f" id="rs-f" disabled></label></div>' +
     '<label class="f">Terrain<select class="f" id="rs-t">' + terrains.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('') + '</select></label>' +
     '<label class="f">Je suis<select class="f" id="rs-m"><option value="">Choisir…</option>' + joueurs.map(function (x) { var v = x[0] + '|' + x[1]; return '<option value="' + esc(v) + '"' + (x[0] === moiEq && String(x[1]) === moiJ ? ' selected' : '') + '>' + esc(x[2]) + '</option>'; }).join('') + '</select></label>' +
-    '<label class="f">Un mot pour le club (facultatif)<input class="f" id="rs-n" maxlength="300" placeholder="Ex. sinon 11h possible"></label>' +
+    '<label class="f">Un mot pour le club (facultatif)<input class="f" id="rs-n" maxlength="300" placeholder="Ex. sinon 11h30 possible"></label>' +
     '<label style="display:flex;gap:10px;align-items:flex-start" class="small"><input type="checkbox" id="rs-ok" style="width:20px;height:20px;flex:none;margin-top:1px"> Les 4 joueurs sont d\'accord sur ce jour, cette heure et ce terrain.</label>' +
     '<button class="btn" id="rs-go">Envoyer la demande</button></div>', function () {
     var fin = function () { var h = $('rs-h').value.split(':'); $('rs-f').value = (+h[0] + 2) + ':' + h[1]; };
