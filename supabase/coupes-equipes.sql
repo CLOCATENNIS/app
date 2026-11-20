@@ -36,3 +36,50 @@ create or replace function prive.coupes_maj() returns trigger language plpgsql s
 begin new.maj_le := now(); return new; end $$;
 drop trigger if exists coupes_maj on public.coupes_equipes;
 create trigger coupes_maj before update on public.coupes_equipes for each row execute function prive.coupes_maj();
+
+-- Minuterie du coach (20/11/2026) : à la fin du chrono, une notification fait sonner et vibrer le téléphone,
+-- même verrouillé ou appli fermée. L'appli enregistre l'heure de fin ; la base vérifie toutes les 5 secondes
+-- et demande à la fonction « minuterie-notifier » d'envoyer la notification.
+create table if not exists public.minuteries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid(),
+  fin_le timestamptz not null,
+  titre text not null default 'Coup de sifflet !',
+  texte text not null default '',
+  url text not null default '/app/',
+  cle text,                                      -- ex. « coupe:<id> » : relancer remplace la minuterie précédente
+  statut text not null default 'attente',
+  cree_le timestamptz not null default now(),
+  envoye_le timestamptz
+);
+do $$ begin
+  alter table public.minuteries add constraint minuteries_statut_chk check (statut in ('attente', 'envoye', 'annule'));
+exception when duplicate_object then null; end $$;
+create index if not exists minuteries_a_envoyer on public.minuteries (fin_le) where statut = 'attente';
+alter table public.minuteries enable row level security;
+drop policy if exists minuteries_miennes on public.minuteries;
+create policy minuteries_miennes on public.minuteries for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()) and fin_le <= now() + interval '3 hours' and url like '/app/%');
+grant select, insert, update on public.minuteries to authenticated;
+
+create or replace function prive.minuteries_envoyer() returns int
+language plpgsql security definer set search_path = '' as $$
+declare r record; n int := 0; secret text := (select valeur from prive.reglages where cle = 'cron_secret');
+begin
+  for r in select id from public.minuteries where statut = 'attente' and fin_le <= now() + interval '2 seconds'
+           order by fin_le for update skip locked
+  loop
+    perform net.http_post(
+      url := 'https://ccvfdsriogqerdcopuuv.supabase.co/functions/v1/minuterie-notifier',
+      body := jsonb_build_object('id', r.id),
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', secret),
+      timeout_milliseconds := 10000);
+    update public.minuteries set statut = 'envoye', envoye_le = now() where id = r.id;
+    n := n + 1;
+  end loop;
+  delete from public.minuteries where cree_le < now() - interval '2 days';
+  return n;
+end $$;
+revoke all on function prive.minuteries_envoyer() from public, anon, authenticated;
+select cron.schedule('minuteries', '5 seconds', 'select prive.minuteries_envoyer()');

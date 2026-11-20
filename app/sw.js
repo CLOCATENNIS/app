@@ -1,6 +1,6 @@
 // Service worker : les infos viennent toujours du réseau pour rester à jour.
 // La page d'accueil est gardée en réserve pour que l'appli s'ouvre même sans connexion.
-var CACHE='cloca-v93';
+var CACHE='cloca-v94';
 var SHELL=['./','index.html','app.js','confidentialite.html','manifest.webmanifest','icon-192.png','icon-512.png','logo.png','balle.png','cloche.png'];
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(SHELL)}).catch(function(){}));
@@ -27,7 +27,8 @@ self.addEventListener('fetch',function(e){
 self.addEventListener('push',function(e){
   var d={};try{d=e.data?e.data.json():{}}catch(x){d={title:'CLOCA Tennis',body:e.data?e.data.text():''}}
   e.waitUntil(self.registration.showNotification(d.title||'CLOCA Tennis',{
-    body:d.body||'',icon:'/app/icon-192.png',badge:'/app/badge-96.png',tag:d.tag||undefined,data:{url:d.url||'/app/'}
+    body:d.body||'',icon:'/app/icon-192.png',badge:'/app/badge-96.png',tag:d.tag||undefined,data:{url:d.url||'/app/'},
+    vibrate:d.vibrate||undefined,renotify:!!(d.renotify&&d.tag),requireInteraction:!!d.requireInteraction
   }));
 });
 self.addEventListener('notificationclick',function(e){

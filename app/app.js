@@ -4028,6 +4028,38 @@ function eqFinal(c) {
   var R = c.tours[4].rencontres; if (R.length < 2) return null;
   var f = eqVainqueurs(R[0]), p = eqVainqueurs(R[1]); return f && p ? [f.g, f.p, p.g, p.p] : null;
 }
+// Génération automatique pour une équipe de 5 : chacun fait 1 simple et est capitaine 1 fois,
+// et chaque paire de double ne joue ensemble qu'une seule fois sur les 5 tours (les 10 paires possibles).
+function eqMelange(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+function eqPlan(J) {
+  var p = eqMelange(J.slice(0, 5)), k = Math.floor(Math.random() * 5);
+  return [0, 1, 2, 3, 4].map(function (t) {
+    var r = function (i) { return p[(t + i) % 5]; }, A = [r(1), r(4)], B = [r(2), r(3)], inv = Math.random() < 0.5;
+    return { cap: p[(t + k) % 5], d1: inv ? B : A, d2: inv ? A : B, s: r(0) };
+  });
+}
+function eqCopie(o) { return JSON.parse(JSON.stringify(o)); }
+function eqCompoFaite(cp) { return !!(cp.cap || eqJoueursDe(cp).length); }
+// Remplit les compositions des tours déjà créés ; demi-finales et finales reprennent le plan quand on les lance
+function eqGenerer(c, idx) {
+  var faits = [], impossibles = [];
+  idx.forEach(function (i) {
+    var J = (c.equipes[i] || {}).joueurs || [];
+    if (J.length !== 5) { impossibles.push(eqNomEq(c, i) + ' (' + J.length + ' joueurs)'); return; }
+    var plan = eqPlan(J); c.equipes[i].plan = plan;
+    eqPour(c, i, function (r, s, ti) { r.compo[s] = eqCopie(plan[ti]); });
+    faits.push(i);
+  });
+  return { faits: faits, impossibles: impossibles };
+}
+function eqPreremplir(c, ti) { c.tours[ti].rencontres.forEach(function (r) { ['a', 'b'].forEach(function (s) { var pl = (c.equipes[r[s]] || {}).plan; if (pl && pl[ti]) r.compo[s] = eqCopie(pl[ti]); }); }); }
+function eqLancerGeneration(c, idx) {
+  var deja = false; idx.forEach(function (i) { eqPour(c, i, function (r, s) { if (eqCompoFaite(r.compo[s])) deja = true; }); });
+  if (deja && !confirm('Des compositions sont déjà remplies. Les remplacer par une génération automatique ?')) return;
+  var g = eqGenerer(c, idx);
+  if (g.impossibles.length) toast('Génération impossible pour ' + g.impossibles.join(', ') + ' : il faut 5 joueurs');
+  if (g.faits.length) { toast('Compositions générées : tu peux tout modifier'); eqSauver(true, true); eqDessiner(); }
+}
 function eqTourActuel(c) { for (var i = 0; i < 5; i++) { var R = c.tours[i].rencontres; if (!R.length || R.some(function (r) { return !eqRes(r).fini; })) return i; } return 4; }
 // Ce qu'un joueur a déjà fait sur les autres tours : capitaine, simple
 function eqDejaFait(c, i, ti) {
@@ -4118,9 +4150,10 @@ function eqEntete() {
   if ($('eq-titre')) $('eq-titre').textContent = c.titre;
   if ($('eq-sous')) $('eq-sous').textContent = (c.jour ? fmtJour(new Date(c.jour + 'T12:00:00')) + ' · ' : '') + c.equipes.length + ' équipes · tours de ' + (c.duree || 10) + ' min';
 }
-function eqSauver(vite) {
+function eqSauver(vite, equipes) {
   clearTimeout(EQ.save); var c = EQ.c; if (!c) return;
-  var f = function () { q(sb.from('coupes_equipes').update({ tours: c.tours }).eq('id', c.id)).catch(function () { toast('Score non enregistré : vérifie ta connexion'); }); };
+  var v = equipes ? { tours: c.tours, equipes: c.equipes } : { tours: c.tours };
+  var f = function () { q(sb.from('coupes_equipes').update(v).eq('id', c.id)).catch(function () { toast('Score non enregistré : vérifie ta connexion'); }); };
   if (vite) f(); else EQ.save = setTimeout(f, 600);
 }
 function eqDessiner() {
@@ -4154,6 +4187,7 @@ function eqVueTour(c, ti) {
     return h + '<section class="card stack" style="gap:10px"><span class="small">' + (ok ? 'Finale : <b>' + esc(eqNomEq(c, eqVainqueurs(D[0]).g)) + ' – ' + esc(eqNomEq(c, eqVainqueurs(D[1]).g)) + '</b>. Match pour la 3e place : <b>' + esc(eqNomEq(c, eqVainqueurs(D[0]).p)) + ' – ' + esc(eqNomEq(c, eqVainqueurs(D[1]).p)) + '</b>.' : 'La finale et le match pour la 3e place se lancent quand les deux demi-finales ont un vainqueur.') + '</span>' +
       (ok ? '<button class="btn" id="eq-finales">Lancer les finales</button>' : '') + '</section>';
   }
+  h += '<section class="card" style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="small">Compositions faites par les capitaines, ou générées par l\'appli puis modifiables.</span><button class="btn line" id="eq-gen" style="width:auto;flex:none;padding:0 14px">Générer</button></section>';
   h += t.rencontres.map(function (r, ri) { return eqCarteRencontre(c, ti, ri); }).join('');
   var F = ti === 4 && eqFinal(c);
   if (F) h += eqPodium(c, F);
@@ -4237,17 +4271,35 @@ function eqVueEquipes(c) {
   var h = c.equipes.map(function (e, i) {
     var cap = {}, sim = {};
     eqPour(c, i, function (r, s, ti) { var x = r.compo[s]; if (x.cap) (cap[x.cap] = cap[x.cap] || []).push(ti < 3 ? 'T' + (ti + 1) : ti === 3 ? 'Demi' : 'Finale'); if (x.s) (sim[x.s] = sim[x.s] || []).push(ti < 3 ? 'T' + (ti + 1) : ti === 3 ? 'Demi' : 'Finale'); });
-    return '<section class="card stack" style="gap:6px"><b style="font-size:17px">' + esc(eqNomEq(c, i)) + '</b><table style="width:100%;border-collapse:collapse;font-size:15px"><thead><tr><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Joueur</th><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Capitaine</th><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Simple</th></tr></thead><tbody>' +
+    return '<section class="card stack" style="gap:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:17px">' + esc(eqNomEq(c, i)) + '</b><button class="chip" data-eqgen="' + i + '">Générer ses compositions</button></div><table style="width:100%;border-collapse:collapse;font-size:15px"><thead><tr><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Joueur</th><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Capitaine</th><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Simple</th></tr></thead><tbody>' +
       (e.joueurs || []).map(function (n) { return '<tr style="border-top:1px solid var(--bd)"><td style="padding:6px 4px">' + esc(n) + '</td><td style="padding:6px 4px">' + (cap[n] ? esc(cap[n].join(', ')) : '<span class="mut">—</span>') + '</td><td style="padding:6px 4px">' + (sim[n] ? esc(sim[n].join(', ')) : '<span class="mut">—</span>') + '</td></tr>'; }).join('') +
       '</tbody></table></section>';
   }).join('');
   return h + '<div class="grid2" style="gap:10px"><button class="btn line" id="eq-modif">Modifier les équipes</button><button class="btn line" id="eq-arch">Archiver</button></div>';
 }
+// Minuterie côté serveur : à la fin, notification qui sonne et vibre même téléphone verrouillé ou appli fermée.
+// Relancer remplace la précédente ; Stop l'annule.
+function eqMinuterie(c, fin) {
+  if (!S.user) return;
+  var cle = 'coupe:' + c.id, t = EQ_TOURS[+EQ.vue] || 'Tour';
+  q(sb.from('minuteries').update({ statut: 'annule' }).eq('cle', cle).eq('statut', 'attente')).catch(function () { }).then(function () {
+    if (!fin) return;
+    return q(sb.from('minuteries').insert({ fin_le: new Date(fin).toISOString(), titre: '⏱ Coup de sifflet !', texte: t + ' terminé · ' + c.titre + ' · le jeu en cours est annulé', url: '/app/#/equipes/' + c.id, cle: cle }))
+      .catch(function () { toast('Minuterie non programmée : garde l\'appli ouverte'); });
+  });
+}
+function eqSonnerieOk() { return pushPossible() && Notification.permission === 'granted' && localStorageGet('cloca-push') === (S.user && S.user.id); }
+function eqSonnerieHtml() {
+  if (eqSonnerieOk()) return '<span class="xs" style="color:var(--ok);font-weight:600">🔔 Ça sonne aussi téléphone verrouillé ou appli fermée</span>';
+  if (estIos() && !estInstallee()) return '<span class="mut xs">Pour que ça sonne appli fermée : installe l\'appli sur l\'écran d\'accueil (Safari › Partager › Sur l\'écran d\'accueil).</span>';
+  if (!pushPossible() || Notification.permission === 'denied') return '<span class="mut xs">Notifications bloquées sur ce téléphone : garde l\'appli ouverte pour entendre le sifflet.</span>';
+  return '<button class="chip" id="eq-push" style="align-self:flex-start">🔔 Activer la sonnerie appli fermée</button>';
+}
 // Chrono du tour (gardé sur le téléphone : il continue si on change de page)
 function eqChronoFin() { return +(localStorageGet('eq-chrono-' + EQ.c.id) || 0); }
 function eqChronoHtml() {
-  return '<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:8px;z-index:5"><div class="stack" style="gap:0;min-width:0"><span class="eyebrow">Chrono · ' + (EQ.c.duree || 10) + ' min</span><b id="eq-chrono" style="font-size:32px;font-variant-numeric:tabular-nums;line-height:1.1">--:--</b><span class="mut xs">Au sifflet, le jeu en cours est annulé</span></div>' +
-    '<div style="display:flex;gap:6px;flex:none"><button class="btn" id="eq-go" style="width:auto;padding:0 16px">Lancer</button><button class="btn line" id="eq-stop" style="width:auto;padding:0 14px">Stop</button></div></section>';
+  return '<section class="card stack" style="gap:8px;position:sticky;top:8px;z-index:5"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div class="stack" style="gap:0;min-width:0"><span class="eyebrow">Chrono · ' + (EQ.c.duree || 10) + ' min</span><b id="eq-chrono" style="font-size:32px;font-variant-numeric:tabular-nums;line-height:1.1">--:--</b><span class="mut xs">Au sifflet, le jeu en cours est annulé</span></div>' +
+    '<div style="display:flex;gap:6px;flex:none"><button class="btn" id="eq-go" style="width:auto;padding:0 16px">Lancer</button><button class="btn line" id="eq-stop" style="width:auto;padding:0 14px">Stop</button></div></div>' + eqSonnerieHtml() + '</section>';
 }
 function eqBip() {
   try {
@@ -4287,16 +4339,23 @@ function eqLier() {
   Array.prototype.forEach.call(document.querySelectorAll('[data-eqpd]'), function (b) {
     b.onclick = function () { var x = b.dataset.eqpd.split('|'); c.tours[+x[0]].rencontres[+x[1]].sc[x[2]].pd = x[3]; eqSauver(true); eqRedessiner(); };
   });
+  if ($('eq-gen')) $('eq-gen').onclick = function () { eqLancerGeneration(c, c.equipes.map(function (e, i) { return i; })); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-eqgen]'), function (b) { b.onclick = function () { eqLancerGeneration(c, [+b.dataset.eqgen]); }; });
   if ($('eq-demis')) $('eq-demis').onclick = function () {
     var P = eqPoule(c); if (!P.fini && !confirm('La poule n\'est pas terminée. Lancer quand même les demi-finales avec le classement actuel ?')) return;
-    c.tours[3].rencontres = [eqRencontre(P.L[0].i, P.L[3].i), eqRencontre(P.L[1].i, P.L[2].i)]; eqSauver(true); eqDessiner();
+    c.tours[3].rencontres = [eqRencontre(P.L[0].i, P.L[3].i), eqRencontre(P.L[1].i, P.L[2].i)]; eqPreremplir(c, 3); eqSauver(true); eqDessiner();
   };
   if ($('eq-finales')) $('eq-finales').onclick = function () {
     var D = c.tours[3].rencontres, a = eqVainqueurs(D[0]), b = eqVainqueurs(D[1]); if (!a || !b) return;
-    c.tours[4].rencontres = [eqRencontre(a.g, b.g), eqRencontre(a.p, b.p)]; eqSauver(true); eqDessiner();
+    c.tours[4].rencontres = [eqRencontre(a.g, b.g), eqRencontre(a.p, b.p)]; eqPreremplir(c, 4); eqSauver(true); eqDessiner();
   };
-  if ($('eq-go')) $('eq-go').onclick = function () { localStorageSet('eq-chrono-' + c.id, String(Date.now() + (c.duree || 10) * 60000)); EQ.siffle = false; try { EQ.ac = EQ.ac || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } eqTick(); };
-  if ($('eq-stop')) $('eq-stop').onclick = function () { localStorageSet('eq-chrono-' + c.id, ''); eqTick(); };
+  if ($('eq-go')) $('eq-go').onclick = function () {
+    var fin = Date.now() + (c.duree || 10) * 60000;
+    localStorageSet('eq-chrono-' + c.id, String(fin)); EQ.siffle = false; try { EQ.ac = EQ.ac || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } eqTick();
+    eqMinuterie(c, fin);
+  };
+  if ($('eq-stop')) $('eq-stop').onclick = function () { localStorageSet('eq-chrono-' + c.id, ''); eqTick(); eqMinuterie(c, null); };
+  if ($('eq-push')) $('eq-push').onclick = function () { var b = $('eq-push'); b.disabled = true; activerPush().then(function () { toast('Sonnerie activée sur ce téléphone'); eqDessiner(); }).catch(function (e) { b.disabled = false; toast(e && e.message === 'refus' ? 'Notifications refusées' : 'Activation impossible sur cet appareil'); }); };
   if ($('eq-modif')) $('eq-modif').onclick = function () { EQ.form = 'modifier'; eqDessiner(); window.scrollTo(0, 0); };
   if ($('eq-arch')) $('eq-arch').onclick = function () {
     if (!confirm('Archiver cette rencontre ? Elle disparaît de la liste (rien n\'est effacé).')) return;
