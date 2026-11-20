@@ -1508,8 +1508,8 @@ function arLireScore(txt) {
 // Adresses : #/arena/<circuit> ou #/arena/<onglet>[/<id>] (onglets du Tweener).
 // ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
 var AR_ONGLETS = {
-  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement']],
-  masters: [['classement', 'Classement ATP'], ['rush', 'Rush Points'], ['quetes', 'Quêtes'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants'], ['finale', 'Tournoi final']],
+  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement'], ['notifs', 'Notifications']],
+  masters: [['classement', 'Classement ATP'], ['rush', 'Rush Points'], ['quetes', 'Quêtes'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants'], ['finale', 'Tournoi final'], ['notifs', 'Notifications']],
   versus: [['joueurs', 'Joueurs par catégorie'], ['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['reglages', 'Réglages']]
 };
 var CLASS_ORDRE = ['NC', '40', '30/5', '30/4', '30/3', '30/2', '30/1', '30', '15/5', '15/4', '15/3', '15/2', '15/1', '15', '5/6', '4/6', '3/6', '2/6', '1/6', '0'];
@@ -1763,6 +1763,79 @@ function arVersus(box, tab) {
     };
   }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les réglages.</div>'; });
 }
+// ---------- Notifications automatiques CLOC'ARENA (table arena_notif_messages, envoi par la tâche prive.arena_notif_traiter) ----------
+// Pour chaque classement : des messages « prise de la 1re place » et « perte de la 1re place », l'appli en tire un au hasard.
+// Messages de secours (classement 'tous') : utilisés quand un classement n'a aucun message actif. Récap de résultats : Tweener, une notif par soirée.
+var NT_CLASS = {
+  tweener: [['tweener:general', 'Général'], ['tweener:filles', 'Filles'], ['tweener:garcons', 'Garçons'], ['tweener:niveau:Blanc', 'Blanc'], ['tweener:niveau:Violet', 'Violet'], ['tweener:niveau:Rouge', 'Rouge'], ['tweener:niveau:Orange', 'Orange'], ['tweener:niveau:Vert', 'Vert'], ['tweener:niveau:Jaune', 'Jaune']],
+  masters: [['masters:atp', 'Classement ATP'], ['masters:rush', 'Rush Points']]
+};
+var NT_TYPES = {
+  resultats: ['🎾 Récap de résultats', 'Envoyé à chaque joueur de la séance, 2 min après ta dernière saisie : un seul message pour toute la soirée.', ['prenom', 'bilan', 'points']],
+  prise_tete: ['👑 Prise de la 1re place', 'Envoyé au joueur qui devient n°1 de ce classement.', ['prenom', 'classement']],
+  perte_tete: ['⚔️ Perte de la 1re place', 'Envoyé au joueur qui n\'est plus n°1 de ce classement.', ['prenom', 'classement', 'rival']]
+};
+var NT_VARS = { prenom: ['{prenom}', 'prénom du joueur', 'Manon'], classement: ['{classement}', 'nom du classement', 'Rouge'], rival: ['{rival}', 'prénom du nouveau n°1', 'Izia'], bilan: ['{bilan}', 'ex. « 5 victoires sur 7 matchs »', '5 victoires sur 7 matchs'], points: ['{points}', 'ex. « 23 pts »', '23 pts'] };
+var NT = { sel: {} };
+function ntApercu(t, lab) { return Object.keys(NT_VARS).reduce(function (s, k) { return s.split(NT_VARS[k][0]).join(k === 'classement' && lab ? lab : NT_VARS[k][2]); }, t || ''); }
+function arNotifs(box, circuit) {
+  var C = NT_CLASS[circuit] || NT_CLASS.tweener;
+  var secs = (circuit === 'tweener' ? [['resultats', '🎾 Récap de résultats']] : []).concat(C.map(function (c) { return [c[0], c[1]]; }), [['tous', 'Messages de secours']]);
+  if (!secs.some(function (s) { return s[0] === NT.sel[circuit]; })) NT.sel[circuit] = secs[0][0];
+  var sel = NT.sel[circuit];
+  q(sb.from('arena_notif_messages').select('*').order('created_at')).then(function (M) {
+    M = M || [];
+    var liste = function (type, cle) { return M.filter(function (m) { return m.type === type && m.classement === cle; }); };
+    var actifs = function (cle) { return M.filter(function (m) { return m.actif && m.classement === cle && m.type !== 'resultats'; }).length; };
+    var carte = function (type, cle) {
+      var T = NT_TYPES[type], L = liste(type, cle), n = L.filter(function (m) { return m.actif; }).length, lab = (C.filter(function (c) { return c[0] === cle; })[0] || [])[1];
+      return '<div class="card stack" style="gap:8px"><div class="toolbar" style="margin:0;align-items:center"><b class="grow">' + T[0] + ' <span class="badge' + (n >= 5 ? '' : ' b-warn') + '">' + n + ' actif' + (n > 1 ? 's' : '') + ' · 5 conseillés</span></b><button class="btn sm" data-ntnew="' + type + '|' + cle + '">+ Ajouter</button></div>' +
+        '<span class="mut small">' + T[1] + (cle !== 'tous' && type !== 'resultats' && !n ? ' <b>Aucun message ici pour l\'instant : l\'appli prend un message de secours.</b>' : '') + '</span>' +
+        (L.length ? L.map(function (m) {
+          return '<div class="toolbar" style="margin:0;align-items:center;padding:8px 0;border-top:1px solid var(--bd)' + (m.actif ? '' : ';opacity:.55') + '"><span class="grow small">' + esc(m.texte) + '<div class="xs mut" style="margin-top:2px">Aperçu : ' + esc(ntApercu(m.texte, lab)) + '</div></span>' +
+            '<label class="c xs" title="Actif : peut être tiré au sort"><input type="checkbox" data-ntact="' + m.id + '"' + (m.actif ? ' checked' : '') + '> actif</label>' +
+            '<button class="btn sm line" data-nted="' + m.id + '">Modifier</button><button class="btn sm line" data-ntsup="' + m.id + '" aria-label="Supprimer">✕</button></div>';
+        }).join('') : '<div class="mut small">Aucun message.</div>') + '</div>';
+    };
+    box.innerHTML = '<p class="mut small" style="margin:0 0 10px">Les notifications partent toutes seules dès que tu saisis des résultats, seulement aux joueurs concernés et à leurs familles. Pour chaque classement, mets jusqu\'à 5 messages (ou plus) : l\'appli en tire un <b>au hasard</b> à chaque fois. Si un joueur prend plusieurs classements d\'un coup, le message vient du plus important (Général, puis Filles / Garçons, puis niveau) et {classement} les cite tous.</p>' +
+      '<div class="chips" style="margin-bottom:12px">' + secs.map(function (s) {
+        var n = s[0] === 'resultats' ? M.filter(function (m) { return m.actif && m.type === 'resultats'; }).length : actifs(s[0]);
+        return '<button class="chip' + (s[0] === sel ? ' on' : '') + '" data-ntsel="' + s[0] + '">' + esc(s[1]) + '<span class="nb">' + (n || '') + '</span></button>';
+      }).join('') + '</div>' +
+      (sel === 'resultats' ? carte('resultats', 'tous') : '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start">' + carte('prise_tete', sel) + carte('perte_tete', sel) + '</div>') +
+      (sel === 'tous' ? '<p class="mut xs" style="margin-top:8px">Messages de secours : utilisés pour tous les classements qui n\'ont pas encore leurs propres messages actifs.</p>' : '');
+    all('[data-ntsel]', box).forEach(function (b) { b.onclick = function () { NT.sel[circuit] = b.dataset.ntsel; arNotifs(box, circuit); }; });
+    var form = function (m) {
+      var T = NT_TYPES[m.type], cl = m.classement === 'tous' ? (m.type === 'resultats' ? 'Tweener' : 'secours (tous les classements)') : ((C.filter(function (c) { return c[0] === m.classement; })[0] || [])[1] || m.classement);
+      panneau((m.id ? 'Modifier' : 'Nouveau message') + ' · ' + T[0].replace(/^\S+\s/, ''), '<div class="stack" style="gap:10px"><span class="mut small">Classement : <b>' + esc(cl) + '</b>. ' + T[1] + '</span>' +
+        '<label class="l">Message (200 caractères max)<textarea class="f" id="nt-t" rows="4" maxlength="200">' + esc(m.texte || '') + '</textarea></label>' +
+        '<div class="small">Variables (touche pour insérer) :</div><div class="chips">' + T[2].map(function (k) { return '<button class="chip" type="button" data-ntvar="' + NT_VARS[k][0] + '" title="' + esc(NT_VARS[k][1]) + '">' + NT_VARS[k][0] + '</button>'; }).join('') + '</div>' +
+        '<span class="mut xs">' + T[2].map(function (k) { return NT_VARS[k][0] + ' = ' + NT_VARS[k][1]; }).join(' · ') + '</span>' +
+        '<div class="card small" style="background:var(--bg,#f6f7f9)"><b class="xs mut">APERÇU SUR LE TÉLÉPHONE</b><div id="nt-ap" style="margin-top:4px"></div></div>' +
+        '<label class="c"><input type="checkbox" id="nt-a"' + (m.actif !== false ? ' checked' : '') + '> Actif (peut être tiré au sort)</label>' +
+        '<button class="btn" id="nt-ok">Enregistrer</button></div>', function () {
+        var lab = (C.filter(function (c) { return c[0] === m.classement; })[0] || [])[1], ta = $('nt-t'), maj = function () { $('nt-ap').textContent = ntApercu(ta.value, lab) || '…'; };
+        ta.oninput = maj; maj();
+        all('[data-ntvar]').forEach(function (b) { b.onclick = function () {
+          var v = b.dataset.ntvar, d = ta.selectionStart || ta.value.length, f = ta.selectionEnd || d;
+          ta.value = (ta.value.slice(0, d) + v + ta.value.slice(f)).slice(0, 200); ta.focus(); ta.selectionStart = ta.selectionEnd = d + v.length; maj();
+        }; });
+        $('nt-ok').onclick = function () {
+          var t = ta.value.trim();
+          if (t.length < 3) return toast('Écris un message');
+          if (T[2].indexOf('prenom') >= 0 && t.indexOf('{prenom}') < 0 && !confirm('Le message ne contient pas {prenom}. Les parents ne sauront pas de quel enfant il s\'agit. Enregistrer quand même ?')) return;
+          var row = { type: m.type, classement: m.classement, texte: t, actif: $('nt-a').checked };
+          this.disabled = true;
+          (m.id ? q(sb.from('arena_notif_messages').update(row).eq('id', m.id)) : q(sb.from('arena_notif_messages').insert(row))).then(function () { fermer(); toast('Message enregistré'); arNotifs(box, circuit); }).catch(function () { $('nt-ok').disabled = false; toast('Enregistrement impossible'); });
+        };
+      });
+    };
+    all('[data-ntnew]', box).forEach(function (b) { b.onclick = function () { var v = b.dataset.ntnew.split('|'); form({ type: v[0], classement: v[1], texte: '', actif: true }); }; });
+    all('[data-nted]', box).forEach(function (b) { b.onclick = function () { form(M.filter(function (m) { return m.id === b.dataset.nted; })[0]); }; });
+    all('[data-ntact]', box).forEach(function (c) { c.onchange = function () { c.disabled = true; q(sb.from('arena_notif_messages').update({ actif: c.checked }).eq('id', c.dataset.ntact)).then(function () { toast(c.checked ? 'Message activé' : 'Message en pause'); arNotifs(box, circuit); }).catch(function () { c.disabled = false; toast('Action impossible'); }); }; });
+    all('[data-ntsup]', box).forEach(function (b) { b.onclick = function () { if (!confirm('Supprimer ce message ?')) return; b.disabled = true; q(sb.from('arena_notif_messages').delete().eq('id', b.dataset.ntsup)).then(function () { toast('Message supprimé'); arNotifs(box, circuit); }).catch(function () { b.disabled = false; toast('Suppression impossible'); }); }; });
+  }).catch(function () { box.innerHTML = '<div class="card empty">Impossible de charger les messages de notification.</div>'; });
+}
 function vueArena(m, arg, suite) {
   if (arg === 'tweener' || arg === 'masters' || arg === 'versus') AR.circuit = arg;
   else if (arg) { AR.tab = arg; if (arg === 'seances' || arg === 'inscriptions') AR.circuit = 'tweener'; } // séances et inscriptions : Tweener
@@ -1785,6 +1858,7 @@ function vueArena(m, arg, suite) {
   if (!dir) { box.innerHTML = '<div class="card empty">Réservé à la direction sportive.</div>'; return; }
   if (AR.circuit === 'versus') return arVersus(box, AR.tab);
   if (AR.tab === 'affiches') return window.arAffiches ? window.arAffiches(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Affiches indisponibles : recharge la page.</div>'); // affiches.js
+  if (AR.tab === 'notifs') return arNotifs(box, AR.circuit);
   if (AR.circuit === 'masters' && ['classement', 'joueurs', 'rush', 'quetes', 'finale'].indexOf(AR.tab) >= 0) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
