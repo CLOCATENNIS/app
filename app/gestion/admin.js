@@ -225,7 +225,7 @@ function compteurs() {
 }
 function cadre(contenu) {
   var moi = A.user.email;
-  $('root').innerHTML = '<div class="layout"><aside><div class="brand"><img src="../logo.png" alt=""><div><b>CLOCA Tennis</b><br><span>ESPACE GESTION</span></div></div>' +
+  $('root').innerHTML = '<div class="layout"><aside><a class="brand" href="../#/accueil" title="Revenir à l\'appli (accueil)" aria-label="Revenir à l\'appli CLOCA Tennis"><img src="../logo.png" alt=""><div><b>CLOCA Tennis</b><br><span>ESPACE GESTION</span></div></a>' +
     '<nav class="nav" aria-label="Gestion">' + RUBRIQUES.map(function (r) {
       var mods = r[1].filter(peut); if (!mods.length) return '';
       if (!r[0]) return '<a href="#/accueil" class="rubl' + (A.view === 'accueil' ? ' on' : '') + '">' + icg('home') + '<span class="lbl">Tableau de bord</span></a>';
