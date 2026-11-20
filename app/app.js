@@ -4308,8 +4308,10 @@ function eqSonnerieHtml() {
 // Chrono du tour (gardé sur le téléphone : il continue si on change de page)
 function eqChronoFin() { return +(localStorageGet('eq-chrono-' + EQ.c.id) || 0); }
 function eqChronoHtml() {
-  return '<section class="card stack" style="gap:8px;position:sticky;top:8px;z-index:5"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div class="stack" style="gap:0;min-width:0"><span class="eyebrow">Chrono · ' + (EQ.c.duree || 10) + ' min</span><b id="eq-chrono" style="font-size:32px;font-variant-numeric:tabular-nums;line-height:1.1">--:--</b><span class="mut xs">Au sifflet, le jeu en cours est annulé</span></div>' +
-    '<div style="display:flex;gap:6px;flex:none"><button class="btn" id="eq-go" style="width:auto;padding:0 16px">Lancer</button><button class="btn line" id="eq-stop" style="width:auto;padding:0 14px">Stop</button></div></div>' + eqSonnerieHtml() + '</section>';
+  return '<section class="card stack" style="gap:8px;position:sticky;top:8px;z-index:5"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div class="stack" style="gap:0;min-width:0"><span class="eyebrow">Chrono du tour</span><b id="eq-chrono" style="font-size:32px;font-variant-numeric:tabular-nums;line-height:1.1">--:--</b><span class="mut xs">Au sifflet, le jeu en cours est annulé</span></div>' +
+    '<div style="display:flex;gap:6px;flex:none"><button class="btn" id="eq-go" style="width:auto;padding:0 16px">Lancer</button><button class="btn line" id="eq-stop" style="width:auto;padding:0 14px">Stop</button></div></div>' +
+    '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="small" style="font-weight:700">Durée</span><button class="chip" data-eqmin="-1" aria-label="Une minute de moins" style="padding:6px 12px;min-width:0">−</button><b style="min-width:50px;text-align:center">' + (EQ.c.duree || 10) + ' min</b><button class="chip" data-eqmin="1" aria-label="Une minute de plus" style="padding:6px 12px;min-width:0">+</button>' +
+    [10, 12, 15].map(function (m) { return '<button class="chip ' + ((EQ.c.duree || 10) === m ? 'on' : '') + '" data-eqminv="' + m + '" style="padding:6px 10px;min-width:0">' + m + '</button>'; }).join('') + '</div>' + eqSonnerieHtml() + '</section>';
 }
 function eqBip() {
   try {
@@ -4365,6 +4367,13 @@ function eqLier() {
     eqMinuterie(c, fin);
   };
   if ($('eq-stop')) $('eq-stop').onclick = function () { localStorageSet('eq-chrono-' + c.id, ''); eqTick(); eqMinuterie(c, null); };
+  var duree = function (m) {
+    m = Math.max(1, Math.min(60, m)); if (m === (c.duree || 10)) return; c.duree = m;
+    q(sb.from('coupes_equipes').update({ duree: m }).eq('id', c.id)).catch(function () { toast('Durée non enregistrée'); });
+    eqEntete(); eqRedessiner();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-eqmin]'), function (b) { b.onclick = function () { duree((c.duree || 10) + +b.dataset.eqmin); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-eqminv]'), function (b) { b.onclick = function () { duree(+b.dataset.eqminv); }; });
   if ($('eq-push')) $('eq-push').onclick = function () { var b = $('eq-push'); b.disabled = true; activerPush().then(function () { toast('Sonnerie activée sur ce téléphone'); eqDessiner(); }).catch(function (e) { b.disabled = false; toast(e && e.message === 'refus' ? 'Notifications refusées' : 'Activation impossible sur cet appareil'); }); };
   if ($('eq-modif')) $('eq-modif').onclick = function () { EQ.form = 'modifier'; eqDessiner(); window.scrollTo(0, 0); };
   if ($('eq-arch')) $('eq-arch').onclick = function () {
