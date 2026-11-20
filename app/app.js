@@ -3941,8 +3941,8 @@ function evtsDuCoach(du, au) {
 var CO = { jour: 0, tab: 'jour' };
 function pageCoach() {
   var nc = nomCoachCompte();
-  var tabs = [['jour', 'Mes cours', 'cal'], ['evts', 'Séances et événements', 'trophy']].concat([['missions', 'Missions', 'check'], ['groupes', 'Mes groupes', 'user']]);
-  var titres = { jour: 'Mes cours', evts: 'Séances et événements', missions: 'Missions', groupes: 'Mes groupes' };
+  var tabs = [['jour', 'Mes cours', 'cal'], ['evts', 'Séances et événements', 'trophy']].concat([['missions', 'Missions', 'check'], ['groupes', 'Mes groupes', 'user'], ['equipes', 'Par équipes', 'people']]);
+  var titres = { jour: 'Mes cours', evts: 'Séances et événements', missions: 'Missions', groupes: 'Mes groupes', equipes: 'Rencontres par équipes' };
   var h = enModeCoach()
     ? '<div class="hero coach-mode"><div class="wrap"><div class="hero-row"><img class="logo" src="' + LOGO + '" alt="Logo CLOCA Tennis">' +
       '<div style="flex:1"><div class="hello">Espace coach</div><div class="hello-name">' + esc(nomAffiche() || nc) + '</div></div>' + cloche() + '</div>' +
@@ -3964,8 +3964,10 @@ function pageCoach() {
     if (ev.length) h += '<div class="dayhead">Séances et événements</div>' + ev.map(carteEvtCoach).join('');
   } else if (CO.tab === 'evts') {
     var du = debutJour(new Date()), au = new Date(du.getTime() + 35 * 864e5), l = evtsDuCoach(du, au);
+    h += '<a class="ev" href="#/coach/equipes"><span class="bar" style="background:var(--ac)"></span><div class="stack" style="flex:1"><b class="t">Rencontres par équipes</b><span class="mut small">Format Coupe Davis : compositions, scores, classement, bonus capitaine</span></div><span class="mut">›</span></a>';
     h += l.length ? l.map(carteEvtCoach).join('') : '<section class="card empty">Aucune séance ni événement à encadrer dans les 5 prochaines semaines.</section>';
   } else if (CO.tab === 'missions') h += '<div id="missions"><div class="skel"></div></div>';
+  else if (CO.tab === 'equipes') h += '<div id="eq-liste"><div class="skel"></div></div>';
   else {
     var mesGroupes = [];
     ((AG && AG.creneaux) || []).forEach(function (cr) { if ((nc && encadrePar(cr.encadrant, nc)) || S.gere.indexOf(cr.groupe_id) >= 0) mesGroupes.push(cr); });
@@ -3975,12 +3977,331 @@ function pageCoach() {
     }).join('') : '<section class="card empty">' + (nc ? 'Aucun cours avec ton prénom (' + esc(nc) + ') dans les créneaux.' : 'La direction doit indiquer ton prénom de coach dans l\'Équipe du club.') + '</section>';
   }
   setTimeout(function () {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-cot]'), function (b) { b.onclick = function () { CO.tab = b.dataset.cot; render(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-cot]'), function (b) { b.onclick = function () { CO.tab = b.dataset.cot; go('#/coach/' + b.dataset.cot); }; });
     if ($('cj-p')) { $('cj-p').onclick = function () { CO.jour--; render(); }; $('cj-n').onclick = function () { CO.jour++; render(); }; }
     if (CO.tab === 'missions') remplirMissions();
+    if (CO.tab === 'equipes') eqListe();
     remplirComptesEvt();
   });
   return h + '</main>';
+}
+// ---------- Rencontres par équipes (format Coupe Davis) : espace coach ----------
+// 4 équipes, 5 tours : 3 tours de poule (chacun contre chacun), demi-finales 1er–4e et 2e–3e, puis finale et match pour la 3e place.
+// À chaque tour, une rencontre = Double 1, Double 2 et Simple joués en même temps. Le capitaine change à chaque tour ;
+// s'il gagne son match, toute son équipe gagne 5 points de bonus CLOC'ARENA (récap à reporter dans la gestion).
+// Au sifflet, le jeu en cours est annulé ; à égalité de jeux, un point décisif départage.
+var EQ = { c: null, vue: '0', timer: null, save: null, ouvert: {}, siffle: false, form: null };
+var EQ_M = [['d1', 'Double 1'], ['d2', 'Double 2'], ['s', 'Simple']];
+var EQ_POULE = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]];
+var EQ_TOURS = ['Tour 1', 'Tour 2', 'Tour 3', 'Demi-finales', 'Finales'];
+var EQ_BONUS = 5;
+function eqCompoVide() { return { cap: '', d1: ['', ''], d2: ['', ''], s: '' }; }
+function eqRencontre(a, b) { return { a: a, b: b, compo: { a: eqCompoVide(), b: eqCompoVide() }, sc: { d1: { a: '', b: '', pd: '' }, d2: { a: '', b: '', pd: '' }, s: { a: '', b: '', pd: '' } } }; }
+function eqToursInit() { return EQ_POULE.map(function (t) { return { rencontres: t.map(function (p) { return eqRencontre(p[0], p[1]); }) }; }).concat([{ rencontres: [] }, { rencontres: [] }]); }
+function eqNormaliser(t) { t = Array.isArray(t) && t.length ? t : eqToursInit(); while (t.length < 5) t.push({ rencontres: [] }); return t; }
+function eqNomEq(c, i) { var e = c.equipes[i]; return e ? (e.nom || 'Équipe ' + (i + 1)) : '?'; }
+function eqVal(v) { return v !== '' && v != null; }
+function eqGagnant(m) { if (!m || !eqVal(m.a) || !eqVal(m.b)) return null; var a = +m.a, b = +m.b; return a > b ? 'a' : b > a ? 'b' : (m.pd || null); }
+function eqRes(r) {
+  var o = { a: 0, b: 0, ja: 0, jb: 0, fini: true, v: null };
+  EQ_M.forEach(function (x) { var m = r.sc[x[0]], g = eqGagnant(m); if (g) o[g]++; else o.fini = false; if (eqVal(m.a)) o.ja += +m.a; if (eqVal(m.b)) o.jb += +m.b; });
+  o.v = o.a >= 2 ? 'a' : o.b >= 2 ? 'b' : null;
+  return o;
+}
+function eqJoueursDe(cp) { return [cp.d1[0], cp.d1[1], cp.d2[0], cp.d2[1], cp.s].filter(Boolean); }
+function eqMatchDe(cp, nom) { if (!nom) return null; if (cp.d1.indexOf(nom) >= 0) return 'd1'; if (cp.d2.indexOf(nom) >= 0) return 'd2'; if (cp.s === nom) return 's'; return null; }
+function eqBonusCap(r, s) { var cp = r.compo[s], m = eqMatchDe(cp, cp.cap); return !!(m && eqGagnant(r.sc[m]) === s); }
+function eqPour(c, i, fn) { c.tours.forEach(function (t, ti) { t.rencontres.forEach(function (r) { if (r.a === i) fn(r, 'a', ti); else if (r.b === i) fn(r, 'b', ti); }); }); }
+// Classement de la poule (tours 1 à 3) : matchs gagnés, puis différence de jeux, puis jeux gagnés
+function eqPoule(c) {
+  var L = c.equipes.map(function (e, i) { return { i: i, j: 0, rg: 0, mg: 0, jp: 0, jc: 0 }; }), fini = true;
+  c.tours.slice(0, 3).forEach(function (t) { t.rencontres.forEach(function (r) {
+    var o = eqRes(r), A = L[r.a], B = L[r.b]; if (!o.fini) fini = false; if (!A || !B) return;
+    A.mg += o.a; B.mg += o.b; A.jp += o.ja; A.jc += o.jb; B.jp += o.jb; B.jc += o.ja;
+    if (o.fini) { A.j++; B.j++; } if (o.v === 'a') A.rg++; else if (o.v === 'b') B.rg++;
+  }); });
+  L.sort(function (x, y) { return y.mg - x.mg || (y.jp - y.jc) - (x.jp - x.jc) || y.jp - x.jp || x.i - y.i; });
+  return { L: L, fini: fini };
+}
+function eqVainqueurs(r) { var o = eqRes(r); return o.v ? { g: r[o.v], p: r[o.v === 'a' ? 'b' : 'a'] } : null; }
+function eqFinal(c) {
+  var R = c.tours[4].rencontres; if (R.length < 2) return null;
+  var f = eqVainqueurs(R[0]), p = eqVainqueurs(R[1]); return f && p ? [f.g, f.p, p.g, p.p] : null;
+}
+function eqTourActuel(c) { for (var i = 0; i < 5; i++) { var R = c.tours[i].rencontres; if (!R.length || R.some(function (r) { return !eqRes(r).fini; })) return i; } return 4; }
+// Ce qu'un joueur a déjà fait sur les autres tours : capitaine, simple
+function eqDejaFait(c, i, ti) {
+  var cap = {}, sim = {};
+  eqPour(c, i, function (r, s, t2) { if (t2 === ti) return; var x = r.compo[s]; if (x.cap) cap[x.cap] = t2; if (x.s) sim[x.s] = t2; });
+  return { cap: cap, sim: sim };
+}
+function eqAlertes(c, ti, r, s) {
+  var cp = r.compo[s], al = [], js = eqJoueursDe(cp), d = eqDejaFait(c, r[s], ti);
+  js.forEach(function (n, k) { var t = n + ' est placé deux fois'; if (js.indexOf(n) !== k && al.indexOf(t) < 0) al.push(t); });
+  if (cp.cap && js.length === 5 && js.indexOf(cp.cap) < 0) al.push('Le capitaine ' + cp.cap + ' n\'est placé dans aucun match');
+  if (cp.cap && d.cap[cp.cap] != null) al.push(cp.cap + ' a déjà été capitaine (' + EQ_TOURS[d.cap[cp.cap]] + ')');
+  if (cp.s && d.sim[cp.s] != null) al.push(cp.s + ' a déjà joué son simple (' + EQ_TOURS[d.sim[cp.s]] + ')');
+  return al;
+}
+
+// ----- Liste (onglet de l'espace coach) -----
+function eqListe() {
+  var box = $('eq-liste'); if (!box) return;
+  if (EQ.form === 'nouveau') { box.innerHTML = eqForm(null); eqLierForm(null); return; }
+  q(sb.from('coupes_equipes').select('id, titre, jour, equipes, archive').eq('archive', false).order('jour', { ascending: false }).order('cree_le', { ascending: false })).then(function (l) {
+    l = l || [];
+    box.innerHTML = '<section class="card stack" style="gap:8px"><span class="small">4 équipes, 5 tours : poule, demi-finales et finales. Double 1, Double 2 et Simple en même temps, capitaine différent à chaque tour, <b>+' + EQ_BONUS + ' pts CLOC\'ARENA</b> pour l\'équipe quand le capitaine gagne son match.</span>' +
+      '<button class="btn" id="eq-nouveau">' + ic('plus', 18) + 'Créer une rencontre par équipes</button></section>' +
+      (l.length ? l.map(function (c) {
+        return '<a class="ev" href="#/equipes/' + c.id + '"><span class="bar" style="background:var(--ac)"></span><div class="stack" style="flex:1"><b class="t">' + esc(c.titre) + '</b><span class="mut small">' + (c.jour ? esc(fmtJour(new Date(c.jour + 'T12:00:00'))) + ' · ' : '') + (c.equipes || []).length + ' équipes</span></div></a>';
+      }).join('') : '<section class="card empty">Aucune rencontre par équipes pour le moment.</section>');
+    if ($('eq-nouveau')) $('eq-nouveau').onclick = function () { EQ.form = 'nouveau'; eqListe(); };
+  }).catch(function () { box.innerHTML = '<section class="card empty">Impossible de charger les rencontres par équipes.</section>'; });
+}
+// Création ou modification : titre, date, durée d'un tour, 4 équipes (un joueur par ligne)
+function eqForm(c) {
+  var dem = new Date(); dem.setDate(dem.getDate() + 1);
+  var eqs = c ? c.equipes : [0, 1, 2, 3].map(function (i) { return { nom: 'Équipe ' + (i + 1), joueurs: [] }; });
+  return '<section class="card stack" style="gap:12px"><b style="font-size:17px">' + (c ? 'Modifier les équipes' : 'Nouvelle rencontre par équipes') + '</b>' +
+    '<label class="f">Titre<input class="f" id="eqf-titre" value="' + esc(c ? c.titre : 'Rencontres par équipes') + '"></label>' +
+    '<div class="grid2" style="gap:10px"><label class="f">Date<input class="f" type="date" id="eqf-jour" value="' + esc(c ? c.jour || '' : isoJour(dem)) + '"></label>' +
+    '<label class="f">Minutes par tour<input class="f" type="number" inputmode="numeric" min="1" max="60" id="eqf-duree" value="' + esc(c ? c.duree || 10 : 10) + '"></label></div>' +
+    eqs.map(function (e, i) {
+      return '<div class="stack" style="gap:6px;padding:10px;border:1px solid var(--bd);border-radius:12px"><label class="f">Nom de l\'équipe<input class="f" id="eqf-n' + i + '" value="' + esc(e.nom) + '"></label>' +
+        '<label class="f">Joueurs (un par ligne, 5 conseillés)<textarea class="f" id="eqf-j' + i + '" rows="5" placeholder="Prénom">' + esc((e.joueurs || []).join('\n')) + '</textarea></label></div>';
+    }).join('') +
+    (c ? '<span class="mut xs">Renommer un joueur ne met pas à jour les compositions déjà faites.</span>' : '<span class="mut xs">Les rencontres des 3 tours de poule sont créées tout de suite. Demi-finales et finales se lancent ensuite d\'un bouton, selon le classement.</span>') +
+    '<div class="grid2" style="gap:10px"><button class="btn line" id="eqf-annuler">Annuler</button><button class="btn" id="eqf-ok">' + (c ? 'Enregistrer' : 'Créer') + '</button></div></section>';
+}
+function eqLierForm(c) {
+  $('eqf-annuler').onclick = function () { EQ.form = null; if (c) eqDessiner(); else eqListe(); };
+  $('eqf-ok').onclick = function () {
+    var eqs = [0, 1, 2, 3].map(function (i) {
+      var j = $('eqf-j' + i).value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+      return { nom: $('eqf-n' + i).value.trim() || 'Équipe ' + (i + 1), joueurs: j.filter(function (x, k) { return j.indexOf(x) === k; }) };
+    });
+    var court = eqs.filter(function (e) { return e.joueurs.length < 5; });
+    if (court.length && !confirm(court.map(function (e) { return e.nom + ' : ' + e.joueurs.length + ' joueur' + (e.joueurs.length > 1 ? 's' : ''); }).join('\n') + '\n\nIl faut 5 joueurs par équipe pour jouer D1, D2 et Simple en même temps. Continuer quand même ?')) return;
+    var v = { titre: $('eqf-titre').value.trim() || 'Rencontres par équipes', jour: $('eqf-jour').value || null, duree: Math.max(1, Math.min(60, +$('eqf-duree').value || 10)), equipes: eqs };
+    $('eqf-ok').disabled = true;
+    if (c) {
+      Object.keys(v).forEach(function (k) { c[k] = v[k]; });
+      q(sb.from('coupes_equipes').update(v).eq('id', c.id)).then(function () { toast('Équipes enregistrées'); EQ.form = null; eqEntete(); eqDessiner(); })
+        .catch(function () { toast('Enregistrement impossible'); $('eqf-ok').disabled = false; });
+    } else {
+      v.tours = eqToursInit();
+      q(sb.from('coupes_equipes').insert(v).select('id').single()).then(function (r) { EQ.form = null; toast('Rencontre créée'); go('#/equipes/' + r.id); })
+        .catch(function () { toast('Création impossible'); $('eqf-ok').disabled = false; });
+    }
+  };
+}
+
+// ----- Page d'une rencontre par équipes -----
+function pageEquipes(id) {
+  if (!S.user || !estCoach()) return '<div class="pagehead wrap"><h1>Rencontres par équipes</h1></div><main><section class="card empty">Réservé aux coachs et à la direction sportive.</section></main>';
+  var deja = EQ.c && EQ.c.id === id;
+  setTimeout(function () { eqCharger(id); });
+  return '<div class="darkhead"><div class="wrap">' + backLink('#/coach/equipes', 'Rencontres par équipes', true) + '<div class="kicker" style="margin-top:8px">FORMAT COUPE DAVIS</div><h1 id="eq-titre">' + esc(deja ? EQ.c.titre : 'Chargement…') + '</h1><div class="small" id="eq-sous" style="opacity:.85"></div></div></div><main id="eq-main"><div class="skel"></div></main>';
+}
+function eqCharger(id) {
+  q(sb.from('coupes_equipes').select('*').eq('id', id).maybeSingle()).then(function (c) {
+    if (!$('eq-main')) return;
+    if (!c) { $('eq-main').innerHTML = '<section class="card empty">Rencontre introuvable.</section>'; return; }
+    var nouveau = !EQ.c || EQ.c.id !== c.id;
+    c.tours = eqNormaliser(c.tours); c.equipes = c.equipes || []; EQ.c = c;
+    if (nouveau) { EQ.vue = String(eqTourActuel(c)); EQ.ouvert = {}; EQ.form = null; }
+    eqEntete(); eqDessiner();
+  }).catch(function () { if ($('eq-main')) $('eq-main').innerHTML = '<section class="card empty">Impossible de charger la rencontre.</section>'; });
+}
+function eqEntete() {
+  var c = EQ.c; if (!c) return;
+  if ($('eq-titre')) $('eq-titre').textContent = c.titre;
+  if ($('eq-sous')) $('eq-sous').textContent = (c.jour ? fmtJour(new Date(c.jour + 'T12:00:00')) + ' · ' : '') + c.equipes.length + ' équipes · tours de ' + (c.duree || 10) + ' min';
+}
+function eqSauver(vite) {
+  clearTimeout(EQ.save); var c = EQ.c; if (!c) return;
+  var f = function () { q(sb.from('coupes_equipes').update({ tours: c.tours }).eq('id', c.id)).catch(function () { toast('Score non enregistré : vérifie ta connexion'); }); };
+  if (vite) f(); else EQ.save = setTimeout(f, 600);
+}
+function eqDessiner() {
+  var box = $('eq-main'), c = EQ.c; if (!box || !c) return;
+  if (EQ.form === 'modifier') { box.innerHTML = eqForm(c); eqLierForm(c); return; }
+  var vues = [['0', 'Tour 1'], ['1', 'Tour 2'], ['2', 'Tour 3'], ['3', 'Demis'], ['4', 'Finales'], ['cl', 'Classement'], ['bonus', 'Bonus'], ['eq', 'Équipes']];
+  var h = '<div class="chips" style="flex-wrap:wrap">' + vues.map(function (v) { return '<button class="chip ' + (EQ.vue === v[0] ? 'on' : '') + '" data-eqv="' + v[0] + '">' + v[1] + '</button>'; }).join('') + '</div>';
+  if (/^\d$/.test(EQ.vue)) h += eqChronoHtml() + eqVueTour(c, +EQ.vue);
+  else if (EQ.vue === 'cl') h += eqVueClassement(c);
+  else if (EQ.vue === 'bonus') h += eqVueBonus(c);
+  else h += eqVueEquipes(c);
+  box.innerHTML = h; eqLier(); eqTick();
+}
+// Redessiner sans perdre la case où le coach vient de toucher, ni la position dans la page
+function eqRedessiner() {
+  setTimeout(function () {
+    var a = document.activeElement, k = a && a.dataset ? (a.dataset.eqs || a.dataset.eqk) : null, y = window.scrollY;
+    eqDessiner(); window.scrollTo(0, y);
+    if (k) { var n = document.querySelector('[data-eqs="' + k + '"],[data-eqk="' + k + '"]'); if (n) n.focus(); }
+  }, 0);
+}
+function eqVueTour(c, ti) {
+  var t = c.tours[ti], h = '<h2 class="co-titre" style="margin-bottom:0">' + EQ_TOURS[ti] + '</h2>';
+  if (ti === 3 && !t.rencontres.length) {
+    var P = eqPoule(c);
+    return h + '<section class="card stack" style="gap:10px"><span class="small">' + (P.fini ? 'La poule est terminée. Demi-finales : <b>' + esc(eqNomEq(c, P.L[0].i)) + ' – ' + esc(eqNomEq(c, P.L[3].i)) + '</b> et <b>' + esc(eqNomEq(c, P.L[1].i)) + ' – ' + esc(eqNomEq(c, P.L[2].i)) + '</b>.' : 'Les demi-finales se lancent quand les 3 tours de poule sont terminés (1er – 4e et 2e – 3e).') + '</span>' +
+      eqTableauPoule(c) + '<button class="btn' + (P.fini ? '' : ' line') + '" id="eq-demis">Lancer les demi-finales</button></section>';
+  }
+  if (ti === 4 && !t.rencontres.length) {
+    var D = c.tours[3].rencontres, ok = D.length === 2 && eqVainqueurs(D[0]) && eqVainqueurs(D[1]);
+    return h + '<section class="card stack" style="gap:10px"><span class="small">' + (ok ? 'Finale : <b>' + esc(eqNomEq(c, eqVainqueurs(D[0]).g)) + ' – ' + esc(eqNomEq(c, eqVainqueurs(D[1]).g)) + '</b>. Match pour la 3e place : <b>' + esc(eqNomEq(c, eqVainqueurs(D[0]).p)) + ' – ' + esc(eqNomEq(c, eqVainqueurs(D[1]).p)) + '</b>.' : 'La finale et le match pour la 3e place se lancent quand les deux demi-finales ont un vainqueur.') + '</span>' +
+      (ok ? '<button class="btn" id="eq-finales">Lancer les finales</button>' : '') + '</section>';
+  }
+  h += t.rencontres.map(function (r, ri) { return eqCarteRencontre(c, ti, ri); }).join('');
+  var F = ti === 4 && eqFinal(c);
+  if (F) h += eqPodium(c, F);
+  return h;
+}
+function eqPodium(c, F) {
+  return '<section class="card stack" style="gap:6px;background:var(--sun)"><span class="eyebrow">Classement final</span>' + F.map(function (i, k) { return '<span style="font-size:' + (k ? 15 : 18) + 'px">' + ['🥇', '🥈', '🥉', '4e'][k] + ' <b>' + esc(eqNomEq(c, i)) + '</b></span>'; }).join('') + '</section>';
+}
+function eqCarteRencontre(c, ti, ri) {
+  var r = c.tours[ti].rencontres[ri], o = eqRes(r), na = eqNomEq(c, r.a), nb = eqNomEq(c, r.b), cle = ti + '|' + ri;
+  var titre = ti === 3 ? (ri === 0 ? 'Demi-finale 1 · 1er – 4e' : 'Demi-finale 2 · 2e – 3e') : ti === 4 ? (ri === 0 ? 'Finale' : 'Match pour la 3e place') : 'Rencontre ' + (ri ? 'B' : 'A');
+  var complet = ['a', 'b'].every(function (s) { var cp = r.compo[s]; return cp.cap && eqJoueursDe(cp).length === 5 && !eqAlertes(c, ti, r, s).length; });
+  var ouvert = EQ.ouvert[cle] != null ? EQ.ouvert[cle] : !complet;
+  var h = '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">' + titre + '</span>' +
+    (o.v ? '<span class="badge" style="background:var(--ok);color:#fff">' + esc(o.v === 'a' ? na : nb) + ' gagne ' + Math.max(o.a, o.b) + '-' + Math.min(o.a, o.b) + '</span>' : '<span class="badge" style="background:var(--soft);color:var(--mut)">' + o.a + ' – ' + o.b + '</span>') + '</div>' +
+    '<div style="display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:17px"><span>' + esc(na) + '</span><span class="mut" style="font-weight:600">vs</span><span style="text-align:right">' + esc(nb) + '</span></div>' +
+    '<details data-eqo="' + cle + '"' + (ouvert ? ' open' : '') + '><summary style="font-weight:700;cursor:pointer;padding:6px 0">Compositions des capitaines ' + (complet ? '<span style="color:var(--ok)">✓</span>' : '<span style="color:var(--ko)">à compléter</span>') + '</summary>' +
+    '<div class="stack" style="gap:10px;margin-top:6px">' + eqCompoForm(c, ti, ri, 'a') + eqCompoForm(c, ti, ri, 'b') + '</div></details>' +
+    EQ_M.map(function (x) { return eqLigneMatch(c, ti, ri, x); }).join('') +
+    '<div class="small stack" style="gap:2px;padding-top:8px;border-top:1px solid var(--bd)">' + ['a', 'b'].map(function (s) {
+      var cp = r.compo[s]; if (!cp.cap) return '<span class="mut"><b>' + esc(eqNomEq(c, r[s])) + '</b> · capitaine pas encore choisi</span>';
+      var m = eqMatchDe(cp, cp.cap), g = m && eqGagnant(r.sc[m]);
+      return '<span><b>' + esc(eqNomEq(c, r[s])) + '</b> · capitaine ' + esc(cp.cap) + ' : ' + (!m ? '<span class="mut">pas placé</span>' : !g ? '<span class="mut">match en cours</span>' : g === s ? '<b style="color:var(--ok)">gagné, +' + EQ_BONUS + ' pts CLOC\'ARENA pour l\'équipe</b>' : '<span class="mut">perdu, pas de bonus</span>') + '</span>';
+    }).join('') + '</div></section>';
+  return h;
+}
+function eqSel(val, opts, key, lab) {
+  return '<select class="f" data-eqk="' + key + '" aria-label="' + esc(lab) + '" style="min-height:42px;padding:6px 8px;font-size:15px;flex:1;min-width:0"><option value="">—</option>' + opts.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+    (val && opts.indexOf(val) < 0 ? '<option selected>' + esc(val) + '</option>' : '') + '</select>';
+}
+function eqCompoForm(c, ti, ri, s) {
+  var r = c.tours[ti].rencontres[ri], cp = r.compo[s], J = (c.equipes[r[s]] || {}).joueurs || [], k = ti + '|' + ri + '|' + s + '|', nom = eqNomEq(c, r[s]);
+  var al = eqAlertes(c, ti, r, s), d = eqDejaFait(c, r[s], ti);
+  var resteCap = J.filter(function (n) { return d.cap[n] == null; }), resteSim = J.filter(function (n) { return d.sim[n] == null; });
+  var lig = function (lab, html) { return '<div style="display:grid;grid-template-columns:78px 1fr;gap:6px;align-items:center"><span class="small" style="font-weight:700">' + lab + '</span><div style="display:flex;gap:6px;min-width:0">' + html + '</div></div>'; };
+  return '<div class="stack" style="gap:6px;padding:10px;border:1px solid var(--bd);border-radius:12px"><b>' + esc(nom) + '</b>' +
+    lig('Capitaine', eqSel(cp.cap, J, k + 'cap', 'Capitaine ' + nom)) +
+    lig('Double 1', eqSel(cp.d1[0], J, k + 'd1|0', 'Double 1 joueur 1 ' + nom) + eqSel(cp.d1[1], J, k + 'd1|1', 'Double 1 joueur 2 ' + nom)) +
+    lig('Double 2', eqSel(cp.d2[0], J, k + 'd2|0', 'Double 2 joueur 1 ' + nom) + eqSel(cp.d2[1], J, k + 'd2|1', 'Double 2 joueur 2 ' + nom)) +
+    lig('Simple', eqSel(cp.s, J, k + 's', 'Simple ' + nom)) +
+    '<span class="mut xs">Pas encore capitaine : ' + (resteCap.length ? esc(resteCap.join(', ')) : 'tout le monde l\'a été') + '<br>Pas encore de simple : ' + (resteSim.length ? esc(resteSim.join(', ')) : 'tout le monde l\'a joué') + '</span>' +
+    (al.length ? '<div class="small" style="color:var(--ko);font-weight:600">⚠ ' + al.map(esc).join('<br>⚠ ') + '</div>' : '') + '</div>';
+}
+function eqLigneMatch(c, ti, ri, x) {
+  var r = c.tours[ti].rencontres[ri], m = r.sc[x[0]], g = eqGagnant(m), k = ti + '|' + ri + '|' + x[0] + '|';
+  var noms = function (s) {
+    var cp = r.compo[s], l = (x[0] === 's' ? [cp.s] : cp[x[0]]).filter(Boolean);
+    return l.length ? l.map(function (n) { return esc(n) + (n === cp.cap ? ' <b title="Capitaine" style="color:var(--ac)">(C)</b>' : ''); }).join(' / ') : '<span class="mut">à placer</span>';
+  };
+  var inp = function (s) { return '<input class="f" type="number" inputmode="numeric" min="0" max="99" data-eqs="' + k + s + '" value="' + esc(m[s]) + '" aria-label="Jeux ' + esc(eqNomEq(c, r[s])) + ' ' + x[1] + '" style="width:54px;min-height:44px;text-align:center;font-weight:800;font-size:20px;padding:4px' + (g === s ? ';border-color:var(--ok);background:#e5f4e4' : '') + '">'; };
+  var egal = eqVal(m.a) && eqVal(m.b) && +m.a === +m.b;
+  return '<div class="stack" style="gap:6px;padding-top:8px;border-top:1px solid var(--bd)"><span class="eyebrow">' + x[1] + '</span>' +
+    '<div style="display:grid;grid-template-columns:1fr auto auto auto 1fr;gap:6px;align-items:center"><span class="small"' + (g === 'a' ? ' style="font-weight:800"' : '') + '>' + noms('a') + '</span>' + inp('a') + '<span class="mut">–</span>' + inp('b') + '<span class="small" style="text-align:right' + (g === 'b' ? ';font-weight:800' : '') + '">' + noms('b') + '</span></div>' +
+    (egal ? '<div class="small" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:' + (m.pd ? 'var(--tx)' : 'var(--ko)') + '">Égalité, point décisif gagné par :</b>' + ['a', 'b'].map(function (s) { return '<button class="chip ' + (m.pd === s ? 'on' : '') + '" data-eqpd="' + k + s + '">' + esc(eqNomEq(c, r[s])) + '</button>'; }).join('') + '</div>' : '') + '</div>';
+}
+function eqTableauPoule(c) {
+  var P = eqPoule(c), th = 'style="text-align:right;padding:6px 4px;font-size:12px;color:var(--mut)"', td = 'style="text-align:right;padding:6px 4px"';
+  return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:15px"><thead><tr><th style="text-align:left;padding:6px 4px;font-size:12px;color:var(--mut)">Équipe</th><th ' + th + '>Matchs gagnés</th><th ' + th + '>Jeux</th><th ' + th + '>Diff.</th></tr></thead><tbody>' +
+    P.L.map(function (x, k) { var df = x.jp - x.jc; return '<tr style="border-top:1px solid var(--bd)"><td style="padding:6px 4px"><b>' + (k + 1) + '.</b> ' + esc(eqNomEq(c, x.i)) + '</td><td ' + td + '><b>' + x.mg + '</b></td><td ' + td + '>' + x.jp + '-' + x.jc + '</td><td ' + td + '>' + (df > 0 ? '+' : '') + df + '</td></tr>'; }).join('') +
+    '</tbody></table></div>' + (P.fini ? '' : '<span class="mut xs">Classement provisoire : la poule n\'est pas terminée.</span>');
+}
+function eqVueClassement(c) {
+  var h = '<section class="card stack" style="gap:8px"><span class="eyebrow">Poule · tours 1 à 3</span>' + eqTableauPoule(c) + '<span class="mut xs">Départage : matchs gagnés, puis différence de jeux, puis jeux gagnés.</span></section>';
+  var D = c.tours[3].rencontres;
+  if (D.length) h += '<section class="card stack" style="gap:6px"><span class="eyebrow">Demi-finales</span>' + D.map(function (r) { var o = eqRes(r); return '<span>' + esc(eqNomEq(c, r.a)) + ' <b>' + o.a + ' – ' + o.b + '</b> ' + esc(eqNomEq(c, r.b)) + (o.v ? '' : ' <span class="mut">(en cours)</span>') + '</span>'; }).join('') + '</section>';
+  var F = eqFinal(c); if (F) h += eqPodium(c, F);
+  return h;
+}
+function eqVueBonus(c) {
+  var tot = 0, h = '<section class="card stack" style="gap:6px"><span class="small">Quand le capitaine du tour gagne son match, <b>chaque joueur de l\'équipe</b> gagne ' + EQ_BONUS + ' points au classement CLOC\'ARENA. À reporter dans la gestion.</span></section>';
+  h += c.equipes.map(function (e, i) {
+    var l = []; eqPour(c, i, function (r, s, ti) { if (eqBonusCap(r, s)) l.push(EQ_TOURS[ti] + ' : ' + r.compo[s].cap); });
+    var pts = l.length * EQ_BONUS; tot += pts;
+    return '<section class="card stack" style="gap:6px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:17px">' + esc(eqNomEq(c, i)) + '</b><span class="badge" style="background:' + (pts ? 'var(--ok)' : 'var(--soft)') + ';color:' + (pts ? '#fff' : 'var(--mut)') + '">+' + pts + ' pts par joueur</span></div>' +
+      (l.length ? '<span class="small">Capitaines gagnants : ' + esc(l.join(' · ')) + '</span>' : '<span class="mut small">Pas encore de capitaine gagnant.</span>') +
+      '<span class="mut small">Joueurs : ' + esc((e.joueurs || []).join(', ')) + '</span></section>';
+  }).join('');
+  return h;
+}
+function eqVueEquipes(c) {
+  var h = c.equipes.map(function (e, i) {
+    var cap = {}, sim = {};
+    eqPour(c, i, function (r, s, ti) { var x = r.compo[s]; if (x.cap) (cap[x.cap] = cap[x.cap] || []).push(ti < 3 ? 'T' + (ti + 1) : ti === 3 ? 'Demi' : 'Finale'); if (x.s) (sim[x.s] = sim[x.s] || []).push(ti < 3 ? 'T' + (ti + 1) : ti === 3 ? 'Demi' : 'Finale'); });
+    return '<section class="card stack" style="gap:6px"><b style="font-size:17px">' + esc(eqNomEq(c, i)) + '</b><table style="width:100%;border-collapse:collapse;font-size:15px"><thead><tr><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Joueur</th><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Capitaine</th><th style="text-align:left;font-size:12px;color:var(--mut);padding:4px">Simple</th></tr></thead><tbody>' +
+      (e.joueurs || []).map(function (n) { return '<tr style="border-top:1px solid var(--bd)"><td style="padding:6px 4px">' + esc(n) + '</td><td style="padding:6px 4px">' + (cap[n] ? esc(cap[n].join(', ')) : '<span class="mut">—</span>') + '</td><td style="padding:6px 4px">' + (sim[n] ? esc(sim[n].join(', ')) : '<span class="mut">—</span>') + '</td></tr>'; }).join('') +
+      '</tbody></table></section>';
+  }).join('');
+  return h + '<div class="grid2" style="gap:10px"><button class="btn line" id="eq-modif">Modifier les équipes</button><button class="btn line" id="eq-arch">Archiver</button></div>';
+}
+// Chrono du tour (gardé sur le téléphone : il continue si on change de page)
+function eqChronoFin() { return +(localStorageGet('eq-chrono-' + EQ.c.id) || 0); }
+function eqChronoHtml() {
+  return '<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:8px;z-index:5"><div class="stack" style="gap:0;min-width:0"><span class="eyebrow">Chrono · ' + (EQ.c.duree || 10) + ' min</span><b id="eq-chrono" style="font-size:32px;font-variant-numeric:tabular-nums;line-height:1.1">--:--</b><span class="mut xs">Au sifflet, le jeu en cours est annulé</span></div>' +
+    '<div style="display:flex;gap:6px;flex:none"><button class="btn" id="eq-go" style="width:auto;padding:0 16px">Lancer</button><button class="btn line" id="eq-stop" style="width:auto;padding:0 14px">Stop</button></div></section>';
+}
+function eqBip() {
+  try {
+    var A = EQ.ac || (EQ.ac = new (window.AudioContext || window.webkitAudioContext)());
+    [0, 0.5, 1].forEach(function (t, i) { var o = A.createOscillator(), g = A.createGain(); o.frequency.value = 1800; o.connect(g); g.connect(A.destination); g.gain.value = 0.2; o.start(A.currentTime + t); o.stop(A.currentTime + t + (i === 2 ? 0.8 : 0.3)); });
+  } catch (e) { }
+}
+function eqTick() {
+  if (!EQ.timer) EQ.timer = setInterval(eqTick, 500); // une seule horloge pour toute l'appli, qui ne fait rien hors de la page
+  var el = $('eq-chrono'); if (!el || !EQ.c) return;
+  var fin = eqChronoFin(), mm = function (s) { return ('0' + Math.floor(s / 60)).slice(-2) + ':' + ('0' + (s % 60)).slice(-2); };
+  if (!fin) { el.textContent = mm((EQ.c.duree || 10) * 60); el.style.color = ''; return; }
+  var d = Math.ceil((fin - Date.now()) / 1000);
+  if (d > 0) { el.textContent = mm(d); el.style.color = d <= 60 ? 'var(--ko)' : ''; EQ.siffle = false; return; }
+  el.textContent = 'Coup de sifflet !'; el.style.color = 'var(--ko)';
+  if (!EQ.siffle && d > -5) { EQ.siffle = true; try { if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 800]); } catch (e) { } eqBip(); }
+}
+function eqLier() {
+  var c = EQ.c;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-eqv]'), function (b) { b.onclick = function () { EQ.vue = b.dataset.eqv; eqDessiner(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-eqo]'), function (d) { d.addEventListener('toggle', function () { EQ.ouvert[d.dataset.eqo] = d.open; }); });
+  Array.prototype.forEach.call(document.querySelectorAll('select[data-eqk]'), function (s) {
+    s.onchange = function () {
+      var x = s.dataset.eqk.split('|'), cp = c.tours[+x[0]].rencontres[+x[1]].compo[x[2]];
+      if (x[4] != null) cp[x[3]][+x[4]] = s.value; else cp[x[3]] = s.value;
+      EQ.ouvert[x[0] + '|' + x[1]] = true; eqSauver(true); eqRedessiner();
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[data-eqs]'), function (inp) {
+    var maj = function () {
+      var x = inp.dataset.eqs.split('|'), m = c.tours[+x[0]].rencontres[+x[1]].sc[x[2]], v = inp.value.replace(/\D/g, '').slice(0, 2);
+      m[x[3]] = v; if (!(eqVal(m.a) && eqVal(m.b) && +m.a === +m.b)) m.pd = '';
+    };
+    inp.oninput = function () { maj(); eqSauver(); };
+    inp.onchange = function () { maj(); eqSauver(true); eqRedessiner(); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-eqpd]'), function (b) {
+    b.onclick = function () { var x = b.dataset.eqpd.split('|'); c.tours[+x[0]].rencontres[+x[1]].sc[x[2]].pd = x[3]; eqSauver(true); eqRedessiner(); };
+  });
+  if ($('eq-demis')) $('eq-demis').onclick = function () {
+    var P = eqPoule(c); if (!P.fini && !confirm('La poule n\'est pas terminée. Lancer quand même les demi-finales avec le classement actuel ?')) return;
+    c.tours[3].rencontres = [eqRencontre(P.L[0].i, P.L[3].i), eqRencontre(P.L[1].i, P.L[2].i)]; eqSauver(true); eqDessiner();
+  };
+  if ($('eq-finales')) $('eq-finales').onclick = function () {
+    var D = c.tours[3].rencontres, a = eqVainqueurs(D[0]), b = eqVainqueurs(D[1]); if (!a || !b) return;
+    c.tours[4].rencontres = [eqRencontre(a.g, b.g), eqRencontre(a.p, b.p)]; eqSauver(true); eqDessiner();
+  };
+  if ($('eq-go')) $('eq-go').onclick = function () { localStorageSet('eq-chrono-' + c.id, String(Date.now() + (c.duree || 10) * 60000)); EQ.siffle = false; try { EQ.ac = EQ.ac || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } eqTick(); };
+  if ($('eq-stop')) $('eq-stop').onclick = function () { localStorageSet('eq-chrono-' + c.id, ''); eqTick(); };
+  if ($('eq-modif')) $('eq-modif').onclick = function () { EQ.form = 'modifier'; eqDessiner(); window.scrollTo(0, 0); };
+  if ($('eq-arch')) $('eq-arch').onclick = function () {
+    if (!confirm('Archiver cette rencontre ? Elle disparaît de la liste (rien n\'est effacé).')) return;
+    q(sb.from('coupes_equipes').update({ archive: true }).eq('id', c.id)).then(function () { toast('Rencontre archivée'); go('#/coach/equipes'); }).catch(function () { toast('Action impossible'); });
+  };
 }
 // Une séance ou un événement pour le coach : présents / absents / inscrits
 function carteEvtCoach(e) {
@@ -4788,9 +5109,11 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = enModeCoach() ? 'coach' : aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') {
     if (peutModeCoach() && !enModeCoach()) { S.mode = 'coach'; localStorageSet('cloca-mode', S.user.id); } // entrer dans l'espace coach = passer en mode coach
-    if (enModeCoach()) CO.tab = { evts: 1, groupes: 1, missions: 1 }[arg] ? arg : 'jour';
-    html = pageCoach(); actif = enModeCoach() ? 'coach' + (CO.tab === 'jour' ? '' : '/' + CO.tab) : 'gestion';
+    if (enModeCoach() || arg) CO.tab = { evts: 1, groupes: 1, missions: 1, equipes: 1 }[arg] ? arg : 'jour';
+    if (CO.tab !== 'equipes') EQ.form = null;
+    html = pageCoach(); actif = enModeCoach() ? 'coach' + (CO.tab === 'jour' ? '' : '/' + (CO.tab === 'equipes' ? 'evts' : CO.tab)) : 'gestion';
   }
+  else if (p === 'equipes') { html = pageEquipes(arg); actif = enModeCoach() ? 'coach/evts' : 'gestion'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'messages'; }
   else if (p === 'contacter') { html = pageContacter(arg, parts[2]); actif = 'messages'; }
   else if (p === 'discussions') { MSGF = 'club'; html = pageMessages(); actif = 'messages'; }
