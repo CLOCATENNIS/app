@@ -4476,6 +4476,8 @@ var VUES = { droits: vueDroits, alaune: vueALaUne, accueilapp: vueAccueilApp, me
 function router() {
   if (!A.user) return;
   fermer();
+  // Ouvrir une page de la gestion = lire les notifications de la cloche qui y mènent (demande de réservation, tombola…)
+  q(sb.rpc('notifs_lues', { p_url: '/app/gestion/' + (location.hash || '#/accueil') })).catch(function () { });
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/'), v = parts[0] || 'accueil';
   A.rub = null;
   if (v === 'r') {

@@ -3321,7 +3321,13 @@ function infosAtelier() {
 function chargerNotifs() {
   if (!S.user || S.apercu) { S.notifs = []; return Promise.resolve(); }
   return q(sb.from('notifications').select('id, titre, texte, url, nb, lu_le, created_at').order('created_at', { ascending: false }).limit(80))
-    .then(function (l) { S.notifs = l || []; majCloche(); }).catch(function () { S.notifs = S.notifs || []; });
+    .then(function (l) {
+      // Une notification déjà lue sur ce téléphone reste lue, même si l'enregistrement n'est pas encore arrivé dans la base
+      var lues = {}; (S.notifs || []).forEach(function (n) { if (n.lu_le) lues[n.id] = n.lu_le; });
+      S.notifs = (l || []).map(function (n) { if (!n.lu_le && lues[n.id]) n.lu_le = lues[n.id]; return n; });
+      majCloche();
+      notifsLuesPage(); // ouverte depuis une notification du téléphone : la page affichée lit ses notifications
+    }).catch(function () { S.notifs = S.notifs || []; });
 }
 function notifsNonLues() { return (S.notifs || []).filter(function (n) { return !n.lu_le; }); }
 function pastilleCloche(n) { return n ? '<span class="nb">' + (n > 99 ? '99+' : n) + '</span>' : ''; }
@@ -3391,10 +3397,10 @@ function lierNotifs() {
     b.onclick = function () {
       var n = (S.notifs || []).filter(function (x) { return x.id === b.dataset.notif; })[0];
       if (!n) return;
-      if (!n.lu_le) notifsLire([n.id]);
-      var u = n.url || '/app/';
-      if (u.indexOf('/app/#') === 0) go(u.slice(5));
-      else location.href = u;
+      var u = n.url || '/app/', lu = n.lu_le ? Promise.resolve() : notifsLire([n.id]);
+      if (u.indexOf('/app/#') === 0) return go(u.slice(5));
+      // Autre page (ex. espace gestion) : on attend que le « lu » soit enregistré avant de quitter l'appli (1,5 s maximum)
+      Promise.race([lu, new Promise(function (r) { setTimeout(r, 1500); })]).then(function () { location.href = u; });
     };
   });
 }
