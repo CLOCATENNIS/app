@@ -4159,11 +4159,12 @@ function eqSauver(vite, equipes) {
 function eqDessiner() {
   var box = $('eq-main'), c = EQ.c; if (!box || !c) return;
   if (EQ.form === 'modifier') { box.innerHTML = eqForm(c); eqLierForm(c); return; }
-  var vues = [['0', 'Tour 1'], ['1', 'Tour 2'], ['2', 'Tour 3'], ['3', 'Demis'], ['4', 'Finales'], ['cl', 'Classement'], ['bonus', 'Bonus'], ['eq', 'Équipes']];
+  var vues = [['0', 'Tour 1'], ['1', 'Tour 2'], ['2', 'Tour 3'], ['3', 'Demis'], ['4', 'Finales'], ['cl', 'Classement'], ['bonus', 'Bonus'], ['eq', 'Équipes'], ['tv', 'Écran TV']];
   var h = '<div class="chips" style="flex-wrap:wrap">' + vues.map(function (v) { return '<button class="chip ' + (EQ.vue === v[0] ? 'on' : '') + '" data-eqv="' + v[0] + '">' + v[1] + '</button>'; }).join('') + '</div>';
   if (/^\d$/.test(EQ.vue)) h += eqChronoHtml() + eqVueTour(c, +EQ.vue);
   else if (EQ.vue === 'cl') h += eqVueClassement(c);
   else if (EQ.vue === 'bonus') h += eqVueBonus(c);
+  else if (EQ.vue === 'tv') h += eqVueTv(c);
   else h += eqVueEquipes(c);
   box.innerHTML = h; eqLier(); eqTick();
 }
@@ -4267,6 +4268,14 @@ function eqVueBonus(c) {
   }).join('');
   return h;
 }
+// Écran TV du club : la page ecran-equipes.html affiche le tour en cours, le chrono et le classement en direct
+function eqVueTv(c) {
+  var lien = location.origin + '/tv/?c=' + (c.code || '');
+  return '<section class="card stack" style="gap:10px;text-align:center"><span class="eyebrow">Code de l\'écran TV</span><b style="font-family:var(--disp,inherit);font-size:56px;letter-spacing:.15em;line-height:1">' + esc(c.code || '------') + '</b>' +
+    '<span class="small">Sur la télé du club, ouvre le navigateur et va sur <b>clocatennis.fr/tv</b>, puis tape ce code. La télé le garde en mémoire.</span>' +
+    '<span class="mut xs">L\'écran montre le tour en cours avec les compositions et les scores, le chrono quand il est lancé, et le classement. Il se met à jour tout seul toutes les 3 secondes.</span>' +
+    '<a class="btn line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran sur cet appareil</a></section>';
+}
 function eqVueEquipes(c) {
   var h = c.equipes.map(function (e, i) {
     var cap = {}, sim = {};
@@ -4282,6 +4291,7 @@ function eqVueEquipes(c) {
 function eqMinuterie(c, fin) {
   if (!S.user) return;
   var cle = 'coupe:' + c.id, t = EQ_TOURS[+EQ.vue] || 'Tour';
+  q(sb.from('coupes_equipes').update({ chrono_fin: fin ? new Date(fin).toISOString() : null, chrono_tour: fin && /^\d$/.test(EQ.vue) ? +EQ.vue : null }).eq('id', c.id)).catch(function () { });
   q(sb.from('minuteries').update({ statut: 'annule' }).eq('cle', cle).eq('statut', 'attente')).catch(function () { }).then(function () {
     if (!fin) return;
     return q(sb.from('minuteries').insert({ fin_le: new Date(fin).toISOString(), titre: '⏱ Coup de sifflet !', texte: t + ' terminé · ' + c.titre + ' · le jeu en cours est annulé', url: '/app/#/equipes/' + c.id, cle: cle }))

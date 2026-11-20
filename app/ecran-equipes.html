@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Écran du club · Rencontres par équipes · CLOCA Tennis</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Écran TV des rencontres par équipes : lisible à 5 mètres. Toujours sombre. */
+:root{--bg:#0b1c2c;--panel:#12293f;--line:#24425e;--tx:#f2f6fa;--mut:#9fb3c6;--ac:#e0763f;--ball:#d9e021;--ok:#2f9a68;
+  --disp:'Barlow Condensed','Arial Narrow',sans-serif;--font:'Inter',system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:16px/1.35 var(--font)}
+.ecran{height:100%;min-height:100%;display:grid;grid-template-rows:auto 1fr auto;gap:1.6vh;padding:2vh 2.2vw}
+header{display:flex;justify-content:space-between;align-items:center;gap:2vw}
+h1{font-family:var(--disp);font-weight:800;font-size:min(3.4vw,6.4vh);line-height:.95;margin:0;text-transform:uppercase}
+.sous{color:var(--ball);font-family:var(--disp);font-weight:700;font-size:min(2vw,3.8vh);text-transform:uppercase;letter-spacing:.04em;margin-top:.6vh}
+.chrono{background:var(--panel);border:3px solid var(--line);border-radius:20px;padding:.6vh 1.6vw;text-align:center;min-width:20vw}
+.chrono .l{font-size:min(1vw,1.9vh);text-transform:uppercase;letter-spacing:.15em;color:var(--mut)}
+.chrono .t{font-family:var(--disp);font-weight:800;font-size:min(5.6vw,11vh);line-height:1;font-variant-numeric:tabular-nums}
+.chrono.fin{border-color:var(--ac);background:#3a1d10}
+.chrono.fin .t{color:var(--ac);font-size:min(3.6vw,7vh)}
+.chrono.court .t{color:var(--ac)}
+.corps{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1fr);gap:2vw;min-height:0}
+@media (max-width:700px) and (orientation:portrait){.ecran{height:auto}.corps{grid-template-columns:1fr}header{flex-wrap:wrap}}
+.rencs{display:flex;flex-direction:column;gap:1.6vh;min-height:0}
+.renc{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:1.2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-around;gap:.6vh;flex:1;min-height:0}
+.renc .eq{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:1.4vw;align-items:center}
+.renc .eq .n{font-family:var(--disp);font-weight:800;font-size:min(3vw,5.6vh);line-height:1;text-transform:uppercase;overflow-wrap:anywhere}
+.renc .eq .n.b{text-align:right}
+.renc .eq .n.v{color:var(--ball)}
+.renc .eq .s{font-family:var(--disp);font-weight:800;font-size:min(3.6vw,6.6vh);line-height:1;font-variant-numeric:tabular-nums;background:var(--bg);border-radius:14px;padding:.4vh 1.4vw}
+.renc .q{font-size:min(.95vw,1.8vh);text-transform:uppercase;letter-spacing:.15em;color:var(--mut)}
+.m{display:grid;grid-template-columns:minmax(4.6em,auto) minmax(0,1fr) auto minmax(0,1fr);gap:1vw;align-items:center;border-top:1px solid var(--line);padding-top:.6vh;font-size:min(1.65vw,3.1vh)}
+.m .k{font-family:var(--disp);font-weight:700;color:var(--mut);text-transform:uppercase;font-size:.85em}
+.m .j.b{text-align:right}
+.m .j.v{color:var(--ball);font-weight:700}
+.m .sc{font-family:var(--disp);font-weight:800;font-variant-numeric:tabular-nums;font-size:1.3em;min-width:3.4em;text-align:center}
+.m .pd{display:block;font-size:.55em;color:var(--ac);font-family:var(--font);font-weight:600}
+.cap{color:var(--ac);font-weight:700}
+.bonus{color:var(--ball);font-size:min(1.2vw,2.3vh);font-weight:600}
+.cote{display:flex;flex-direction:column;gap:2vh;min-height:0}
+.bloc{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:1.8vh 1.4vw}
+.bloc h2{font-family:var(--disp);font-weight:700;font-size:min(1.8vw,3.4vh);text-transform:uppercase;letter-spacing:.06em;margin:0 0 1vh;color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-size:min(1.7vw,3.2vh);font-variant-numeric:tabular-nums}
+td,th{padding:.9vh .5vw;text-align:left;border-bottom:1px solid var(--line)}
+td.r,th.r{text-align:right}
+th{color:var(--mut);font-weight:600;font-size:.6em;text-transform:uppercase;letter-spacing:.08em}
+tr.top td{color:var(--ball);font-weight:700}
+.podium{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.2vh;font-family:var(--disp);font-weight:800;font-size:clamp(22px,3vw,54px);text-transform:uppercase}
+.podium li:first-child{color:var(--ball);font-size:1.5em}
+.gros{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:3vh;flex:1;text-align:center}
+.gros .podium{font-size:clamp(30px,5vw,90px)}
+footer{display:flex;justify-content:space-between;color:var(--mut);font-size:min(1vw,1.9vh);gap:2vw}
+footer b{font-family:var(--disp);letter-spacing:.08em;color:var(--tx)}
+.vide{text-align:center;color:var(--mut);font-size:clamp(18px,2.4vw,40px);margin:auto}
+.code{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vh;min-height:100vh;text-align:center;padding:4vh 4vw}
+.code input{font:800 clamp(48px,9vw,140px) var(--disp);letter-spacing:.3em;text-align:center;width:min(90vw,9ch);background:var(--panel);color:var(--tx);border:4px solid var(--line);border-radius:22px;padding:1vh 2vw}
+.code input:focus{outline:none;border-color:var(--ball)}
+.code button{font:700 clamp(22px,2.6vw,44px) var(--disp);text-transform:uppercase;background:var(--ac);color:#fff;border:0;border-radius:999px;padding:1.4vh 4vw;cursor:pointer}
+.code button:focus{outline:4px solid var(--ball);outline-offset:4px}
+.code p{color:var(--mut);font-size:clamp(16px,1.8vw,30px);max-width:40ch;margin:0}
+.flash{animation:flash .8s ease-out}
+@keyframes flash{0%{background:rgba(217,224,33,.22)}100%{background:var(--panel)}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+</style>
+</head>
+<body>
+<form class="code" id="saisie" hidden>
+  <h1>Écran du club</h1>
+  <p>Tape le code à 6 chiffres affiché dans l'appli du coach (Rencontres par équipes › Écran TV).</p>
+  <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Code à 6 chiffres" autofocus>
+  <button type="submit">Afficher</button>
+</form>
+<div class="ecran" id="ecran" hidden>
+  <header><div><h1 id="titre">Rencontres par équipes</h1><div class="sous" id="sous">Connexion…</div></div>
+    <div class="chrono" id="chrono" hidden><div class="l" id="chl">Temps restant</div><div class="t" id="cht">--:--</div></div></header>
+  <div class="corps"><section class="rencs" id="rencs" aria-live="polite"><div class="vide">Chargement…</div></section><aside class="cote" id="cote"></aside></div>
+  <footer><span><b>VAMOS HR!</b> · CLOCA Tennis</span><span id="maj"></span></footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+'use strict';
+var sb = window.supabase.createClient('https://ccvfdsriogqerdcopuuv.supabase.co', 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM', { auth: { persistSession: false } });
+var $ = function (id) { return document.getElementById(id); };
+var P = new URLSearchParams(location.search), code = (P.get('c') || '').replace(/\D/g, '');
+try { if (!code) code = localStorage.getItem('cloca-tv-code') || ''; } catch (e) { }
+var D = null, dernier = '', ecart = 0, TOURS = ['Tour 1', 'Tour 2', 'Tour 3', 'Demi-finales', 'Finales'];
+var M = [['d1', 'Double 1'], ['d2', 'Double 2'], ['s', 'Simple']];
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function val(v) { return v !== '' && v != null; }
+function gagnant(m) { if (!m || !val(m.a) || !val(m.b)) return null; var a = +m.a, b = +m.b; return a > b ? 'a' : b > a ? 'b' : (m.pd || null); }
+function res(r) { var o = { a: 0, b: 0, ja: 0, jb: 0, fini: true, v: null }; M.forEach(function (x) { var m = r.sc[x[0]], g = gagnant(m); if (g) o[g]++; else o.fini = false; if (val(m.a)) o.ja += +m.a; if (val(m.b)) o.jb += +m.b; }); o.v = o.a >= 2 ? 'a' : o.b >= 2 ? 'b' : null; return o; }
+function nomEq(i) { var e = D.equipes[i]; return e ? (e.nom || 'Équipe ' + (i + 1)) : '?'; }
+function poule() {
+  var L = D.equipes.map(function (e, i) { return { i: i, mg: 0, jp: 0, jc: 0 }; }), fini = true;
+  D.tours.slice(0, 3).forEach(function (t) { t.rencontres.forEach(function (r) { var o = res(r), A = L[r.a], B = L[r.b]; if (!o.fini) fini = false; if (!A || !B) return; A.mg += o.a; B.mg += o.b; A.jp += o.ja; A.jc += o.jb; B.jp += o.jb; B.jc += o.ja; }); });
+  L.sort(function (x, y) { return y.mg - x.mg || (y.jp - y.jc) - (x.jp - x.jc) || y.jp - x.jp || x.i - y.i; });
+  return { L: L, fini: fini };
+}
+function vainq(r) { var o = res(r); return o.v ? { g: r[o.v], p: r[o.v === 'a' ? 'b' : 'a'] } : null; }
+function final() { var R = (D.tours[4] || { rencontres: [] }).rencontres; if (R.length < 2) return null; var f = vainq(R[0]), p = vainq(R[1]); return f && p ? [f.g, f.p, p.g, p.p] : null; }
+function tourAffiche() {
+  var ct = D.chrono_tour;
+  if (ct != null && D.tours[ct] && D.tours[ct].rencontres.length) return ct;
+  for (var i = 0; i < 5; i++) { var R = D.tours[i].rencontres; if (!R.length) return Math.max(0, i - 1); if (R.some(function (r) { return !res(r).fini; })) return i; }
+  return 4;
+}
+function noms(r, s, k) { var cp = r.compo[s], l = (k === 's' ? [cp.s] : cp[k]).filter(Boolean); return l.length ? l.map(function (n) { return esc(n) + (n === cp.cap ? ' <span class="cap">(C)</span>' : ''); }).join(' / ') : '<span style="color:var(--mut)">—</span>'; }
+function carte(r, ti, ri) {
+  var o = res(r), titre = ti === 3 ? 'Demi-finale ' + (ri + 1) : ti === 4 ? (ri === 0 ? 'Finale' : 'Match pour la 3e place') : 'Rencontre ' + (ri ? 'B' : 'A');
+  var h = '<div class="renc"><span class="q">' + titre + '</span><div class="eq"><span class="n' + (o.v === 'a' ? ' v' : '') + '">' + esc(nomEq(r.a)) + '</span><span class="s">' + o.a + ' – ' + o.b + '</span><span class="n b' + (o.v === 'b' ? ' v' : '') + '">' + esc(nomEq(r.b)) + '</span></div>';
+  h += M.map(function (x) {
+    var m = r.sc[x[0]], g = gagnant(m), egal = val(m.a) && val(m.b) && +m.a === +m.b;
+    return '<div class="m"><span class="k">' + x[1] + '</span><span class="j' + (g === 'a' ? ' v' : '') + '">' + noms(r, 'a', x[0]) + '</span><span class="sc">' + (val(m.a) ? esc(m.a) : '·') + ' – ' + (val(m.b) ? esc(m.b) : '·') + (egal && m.pd ? '<span class="pd">point décisif</span>' : '') + '</span><span class="j b' + (g === 'b' ? ' v' : '') + '">' + noms(r, 'b', x[0]) + '</span></div>';
+  }).join('');
+  var bon = ['a', 'b'].filter(function (s) { var cp = r.compo[s], k = !cp.cap ? null : cp.d1.indexOf(cp.cap) >= 0 ? 'd1' : cp.d2.indexOf(cp.cap) >= 0 ? 'd2' : cp.s === cp.cap ? 's' : null; return k && gagnant(r.sc[k]) === s; });
+  if (bon.length) h += '<span class="bonus">★ Capitaine gagnant, +5 pts CLOC\'ARENA : ' + bon.map(function (s) { return esc(nomEq(r[s])) + ' (' + esc(r.compo[s].cap) + ')'; }).join(' · ') + '</span>';
+  return h + '</div>';
+}
+function rendre() {
+  $('titre').textContent = D.titre;
+  var ti = tourAffiche(), F = final(), P = poule();
+  $('sous').textContent = F ? 'Classement final' : TOURS[ti] + (ti < 3 ? ' · Poule' : '');
+  var g = '';
+  if (F) g = '<div class="renc gros"><span class="q">Classement final</span><ol class="podium">' + F.map(function (i, k) { return '<li>' + ['1er', '2e', '3e', '4e'][k] + ' · ' + esc(nomEq(i)) + '</li>'; }).join('') + '</ol></div>';
+  else g = D.tours[ti].rencontres.map(function (r, ri) { return carte(r, ti, ri); }).join('') || '<div class="vide">Les rencontres arrivent…</div>';
+  $('rencs').innerHTML = g;
+  var c = '<div class="bloc"><h2>Classement · poule</h2><table><thead><tr><th>Équipe</th><th class="r">Matchs</th><th class="r">Diff.</th></tr></thead><tbody>' +
+    P.L.map(function (x, k) { var d = x.jp - x.jc; return '<tr' + (k === 0 && x.mg ? ' class="top"' : '') + '><td>' + (k + 1) + '. ' + esc(nomEq(x.i)) + '</td><td class="r">' + x.mg + '</td><td class="r">' + (d > 0 ? '+' : '') + d + '</td></tr>'; }).join('') + '</tbody></table>' +
+    (P.fini ? '' : '<div style="color:var(--mut);font-size:clamp(11px,1vw,16px);margin-top:.8vh">Provisoire · matchs gagnés, puis différence de jeux</div>') + '</div>';
+  var Dm = (D.tours[3] || { rencontres: [] }).rencontres;
+  if (Dm.length && ti !== 3) c += '<div class="bloc"><h2>Demi-finales</h2><table><tbody>' + Dm.map(function (r) { var o = res(r); return '<tr><td>' + esc(nomEq(r.a)) + ' – ' + esc(nomEq(r.b)) + '</td><td class="r">' + o.a + '-' + o.b + '</td></tr>'; }).join('') + '</tbody></table></div>';
+  $('cote').innerHTML = c;
+}
+function chrono() {
+  var box = $('chrono'); if (!D) return;
+  if (!D.chrono_fin) { box.hidden = true; return; }
+  var d = Math.ceil((new Date(D.chrono_fin).getTime() - (Date.now() + ecart)) / 1000);
+  if (d < -180) { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.toggle('fin', d <= 0); box.classList.toggle('court', d > 0 && d <= 60);
+  $('chl').textContent = d > 0 ? (TOURS[D.chrono_tour] || 'Tour') + ' · temps restant' : (TOURS[D.chrono_tour] || 'Tour') + ' terminé';
+  $('cht').textContent = d > 0 ? ('0' + Math.floor(d / 60)).slice(-2) + ':' + ('0' + d % 60).slice(-2) : 'Coup de sifflet !';
+}
+function charger() {
+  sb.rpc('coupe_ecran', { p_code: code }).then(function (r) {
+    $('maj').textContent = 'En direct · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' · code ' + code;
+    if (r.error || !r.data) { $('rencs').innerHTML = '<div class="vide">Aucune rencontre avec le code ' + esc(code) + ' aujourd\'hui.<br><a href="?changer=1" style="color:var(--ball)">Changer de code</a></div>'; $('cote').innerHTML = ''; return; }
+    var nv = r.data; ecart = new Date(nv.maintenant).getTime() - Date.now();
+    nv.tours = Array.isArray(nv.tours) ? nv.tours : []; while (nv.tours.length < 5) nv.tours.push({ rencontres: [] });
+    D = nv; chrono();
+    var s = JSON.stringify([nv.titre, nv.equipes, nv.tours, nv.chrono_tour]); if (s === dernier) return; dernier = s;
+    rendre(); var e = $('rencs'); e.classList.remove('flash'); void e.offsetWidth; e.classList.add('flash');
+  }).catch(function () { $('maj').textContent = 'Connexion perdue, nouvel essai…'; });
+}
+function demarrer() {
+  $('saisie').hidden = true; $('ecran').hidden = false;
+  try { localStorage.setItem('cloca-tv-code', code); } catch (e) { }
+  charger(); setInterval(charger, 3000); setInterval(chrono, 250);
+  try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () { }); } catch (e) { }
+}
+if (code.length === 6 && !P.get('changer')) demarrer();
+else {
+  $('saisie').hidden = false; $('code').focus();
+  $('saisie').onsubmit = function (e) { e.preventDefault(); var v = $('code').value.replace(/\D/g, ''); if (v.length !== 6) { $('code').focus(); return; } code = v; history.replaceState(null, '', '?c=' + v); demarrer(); };
+}
+})();
+</script>
+</body>
+</html>
