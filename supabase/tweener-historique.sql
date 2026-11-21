@@ -115,7 +115,7 @@ drop trigger if exists arena_matchs_hist on public.arena_matchs;
 create trigger arena_matchs_hist after insert or update or delete on public.arena_matchs
   for each statement execute function prive.arena_tweener_hist_declencheur();
 
--- Données d'une carte joueur (direction et coachs) : stats et rangs du jour + meilleurs rangs avec leur 1re date
+-- Données d'une carte joueur (direction et coachs) : stats et rangs du jour + meilleurs rangs avec la date la plus récente où ils ont été atteints
 create or replace function public.arena_tweener_carte(p uuid)
 returns jsonb
 language plpgsql stable security definer set search_path to ''
@@ -133,11 +133,11 @@ begin
     'rang_general', r.rang_general, 'rang_niveau', r.rang_niveau, 'rang_sexe', r.rang_sexe,
     'niveau', r.niveau, 'sexe', r.sexe,
     'meilleur_general', (select jsonb_build_object('rang', h.rang_general, 'jour', h.jour) from public.arena_tweener_hist h
-                          where h.personne_id = p order by h.rang_general, h.jour limit 1),
+                          where h.personne_id = p order by h.rang_general, h.jour desc limit 1),
     'meilleur_niveau', (select jsonb_build_object('rang', h.rang_niveau, 'jour', h.jour, 'niveau', h.niveau) from public.arena_tweener_hist h
-                          where h.personne_id = p and h.rang_niveau is not null order by h.rang_niveau, h.jour limit 1),
+                          where h.personne_id = p and h.rang_niveau is not null order by h.rang_niveau, h.jour desc limit 1),
     'meilleur_sexe', (select jsonb_build_object('rang', h.rang_sexe, 'jour', h.jour) from public.arena_tweener_hist h
-                          where h.personne_id = p and h.rang_sexe is not null order by h.rang_sexe, h.jour limit 1)
+                          where h.personne_id = p and h.rang_sexe is not null order by h.rang_sexe, h.jour desc limit 1)
   );
   return res;
 end;
