@@ -2930,7 +2930,10 @@ function cordDeposer(box) {
     (F.autre ? '' : S.pers.map(function (p) { return pick('cqui', p.id, F.qui === p.id, '<span class="dot" style="background:' + S.couleur[p.id] + ';margin-right:8px"></span>' + esc(p.prenom + ' ' + p.nom)); }).join('')) +
     (S.pers.length ? '<label class="check"><input type="checkbox" id="cf-autre"' + (F.autre ? ' checked' : '') + '><span>Je dépose la raquette pour une autre personne</span></label>' +
       (F.autre ? '<label class="f">Nom et prénom de la personne<input class="f" data-cf="autreNom" value="' + esc(F.autreNom) + '" maxlength="80" placeholder="Prénom Nom" autocomplete="off"></label><span class="mut xs">C\'est toi qui es prévenu quand la raquette est prête, et toi qui la récupères.</span>' : '') : '') +
-    (cordeur ? pick('cqui', 'ext', F.qui === 'ext', 'Autre joueur (saisi par le cordeur)') + (F.qui === 'ext' ? '<label class="f">Nom du joueur<input class="f" data-cf="nomExt" value="' + esc(F.nomExt) + '" placeholder="Prénom Nom"></label>' : '') : '') +
+    (cordeur ? pick('cqui', 'ext', F.qui === 'ext' || !!F.adh, 'Autre joueur (saisi par le cordeur)') +
+      (F.adh ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--soft);border-radius:10px;padding:10px 12px"><span style="flex:1;min-width:0">✓ <b>' + esc(F.adh.nom) + '</b><span class="mut xs" style="display:block">Adhérent : il est prévenu dans l\'appli quand sa raquette est prête</span></span><button type="button" class="chip" id="cf-adhx">Changer</button></div>'
+        : F.qui === 'ext' ? '<label class="f">Nom du joueur<input class="f" id="cf-ext" data-cf="nomExt" value="' + esc(F.nomExt) + '" placeholder="Tape le prénom ou le nom" autocomplete="off"></label><div id="cf-res" style="display:flex;flex-wrap:wrap;gap:6px"></div>' +
+          '<span class="mut xs">Dès 2 lettres, les adhérents s\'affichent : touche le bon. Personne dans la liste ? Laisse le nom tapé (joueur hors club).</span>' : '') : '') +
     '<label class="f">Raquette (facultatif)<input class="f" data-cf="raquette" value="' + esc(F.raquette) + '" placeholder="Ex. Babolat Pure Drive bleue"></label></section>' +
     (F.memo && F.memoNom && !F.autre && F.qui !== 'ext' ? '<div class="small" style="background:var(--soft);border-left:4px solid var(--ok, #2e7d32);border-radius:10px;padding:10px 12px">✓ Réglages enregistrés de ' + esc(F.memoNom) + ' remplis automatiquement. Vérifie et dépose.' + (F.memoPerdu ? ' Le cordage habituel n\'est plus proposé : choisis-en un autre.' : '') + '</div>' : '') +
     '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="eyebrow">Cordage</span><a class="small" href="#/cordage/guide" style="font-weight:600">Quel cordage choisir ? →</a></div><div class="grid2">' +
@@ -2945,18 +2948,37 @@ function cordDeposer(box) {
     '<label class="f">Un mot pour le cordeur (facultatif)<textarea class="f" data-cf="note" placeholder="Ex. garder le même grip">' + esc(F.note) + '</textarea></label></section>' +
     '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><span>Prix</span><b class="disp" style="font-size:28px">' + (prix != null ? euros(prix) : '—') + '</b></div>' +
     '<span class="mut xs">À régler au club house en récupérant la raquette.</span>' +
-    (F.qui && F.qui !== 'ext' && !F.autre ? '<label class="check"><input type="checkbox" id="cf-memo"' + (F.memo ? ' checked' : '') + '><span>Enregistrer ces réglages pour mes prochaines demandes<span class="mut xs" style="display:block">Raquette, cordage, tension et mot au cordeur seront remplis tout seuls la prochaine fois.</span></span></label>' : '') +
+    (F.qui && F.qui !== 'ext' && !F.autre && !F.adh ? '<label class="check"><input type="checkbox" id="cf-memo"' + (F.memo ? ' checked' : '') + '><span>Enregistrer ces réglages pour mes prochaines demandes<span class="mut xs" style="display:block">Raquette, cordage, tension et mot au cordeur seront remplis tout seuls la prochaine fois.</span></span></label>' : '') +
     '<button class="btn" id="cf-go">Déposer ma raquette</button></section>';
   box.innerHTML = h;
   Array.prototype.forEach.call(box.querySelectorAll('[data-cf]'), function (i) { i.oninput = function () { F[i.dataset.cf] = i.value; }; });
-  Array.prototype.forEach.call(box.querySelectorAll('[data-cqui]'), function (b) { b.onclick = function () { if (F.qui !== b.dataset.cqui) { F.qui = b.dataset.cqui; if (F.qui !== 'ext') appliquerMemoCordage(F, F.qui); else F.memo = false; } cordDeposer(box); }; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-cqui]'), function (b) { b.onclick = function () { if (F.adh && b.dataset.cqui === 'ext') return; if (F.qui !== b.dataset.cqui) { F.adh = null; F.qui = b.dataset.cqui; if (F.qui !== 'ext') appliquerMemoCordage(F, F.qui); else F.memo = false; } cordDeposer(box); }; });
+  // Cordeur : recherche d'un adhérent pendant la saisie du nom (liste à toucher)
+  if ($('cf-adhx')) $('cf-adhx').onclick = function () { F.adh = null; F.qui = 'ext'; F.nomExt = ''; cordDeposer(box); if ($('cf-ext')) $('cf-ext').focus(); };
+  if ($('cf-ext')) {
+    var cfT = null, cfQ = '';
+    var cfRes = function (l, t) {
+      var r = $('cf-res'); if (!r || t !== cfQ) return;
+      r.innerHTML = (l || []).map(function (p, i) { return '<button type="button" class="chip" data-cadh="' + i + '" style="min-height:40px">' + esc(p.prenom + ' ' + p.nom) + (p.age != null ? ' · ' + p.age + ' ans' : '') + '</button>'; }).join('') ||
+        (t.length >= 2 ? '<span class="mut xs">Aucun adhérent trouvé : le nom tapé sera gardé.</span>' : '');
+      Array.prototype.forEach.call(r.querySelectorAll('[data-cadh]'), function (b) {
+        b.onclick = function () { var p = l[+b.dataset.cadh]; F.adh = { id: p.id, nom: p.prenom + ' ' + p.nom }; F.qui = p.id; F.nomExt = ''; F.memo = false; cordDeposer(box); };
+      });
+    };
+    $('cf-ext').addEventListener('input', function () {
+      var t = this.value.trim(); cfQ = t; clearTimeout(cfT);
+      if (t.length < 2) { cfRes([], t); return; }
+      cfT = setTimeout(function () { q(sb.rpc('cordage_chercher', { p_q: t })).then(function (l) { cfRes(l, t); }).catch(function () { }); }, 250);
+    });
+    if (F.nomExt.trim().length >= 2) $('cf-ext').dispatchEvent(new Event('input'));
+  }
   if ($('cf-memo')) $('cf-memo').onchange = function () { F.memo = this.checked; };
-  if ($('cf-autre')) $('cf-autre').onchange = function () { F.autre = this.checked; if (F.autre && (!F.qui || F.qui === 'ext')) F.qui = S.pers[0].id; cordDeposer(box); };
+  if ($('cf-autre')) $('cf-autre').onchange = function () { F.autre = this.checked; if (F.autre && F.adh) { F.adh = null; F.qui = ''; } if (F.autre && (!F.qui || F.qui === 'ext')) F.qui = S.pers[0].id; cordDeposer(box); };
   Array.prototype.forEach.call(box.querySelectorAll('[data-crefaire]'), function (b) {
     b.onclick = function () {
       var d = C.dem.filter(function (x) { return x.id === b.dataset.crefaire; })[0]; if (!d) return;
       var encore = d.cordage_id && actifs.some(function (c) { return c.id === d.cordage_id; });
-      CF = { qui: d.personne_id || (cordeur ? 'ext' : ''), nomExt: d.personne_id ? '' : d.nom, raquette: d.raquette || '', fourni: d.fourni_par, cordage: encore ? d.cordage_id : '', perso: d.cordage_perso || '',
+      CF = { qui: d.personne_id || (cordeur ? 'ext' : ''), adh: d.personne_id && cordeur && !S.pers.some(function (p) { return p.id === d.personne_id; }) ? { id: d.personne_id, nom: d.nom } : null, nomExt: d.personne_id ? '' : d.nom, raquette: d.raquette || '', fourni: d.fourni_par, cordage: encore ? d.cordage_id : '', perso: d.cordage_perso || '',
         tension: d.tension || '', avant: '', note: '' };
       cordDeposer(box); window.scrollTo(0, document.querySelector('[data-cfour]').getBoundingClientRect().top + window.scrollY - 120);
       toast(d.fourni_par === 'club' && !encore ? 'Ce cordage n\'est plus proposé : choisis-en un autre' : 'Formulaire rempli comme la dernière fois');
