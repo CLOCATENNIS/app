@@ -128,7 +128,11 @@ function appliquerReglages() {
 // Le cordage via l'appli peut être mis en pause par le club (prix pas encore prêts…) ; l'équipe garde l'accès
 function cordageOuvert() { return !S.reglages || S.reglages.cordage_ouvert !== false || (S.user && (estCordeur() || S.isStaff)); }
 
+// Peut être lancé deux fois en même temps (démarrage + événement de connexion de Supabase) : seul le dernier appel
+// remplit la famille, sinon chaque enfant apparaît en double dans l'agenda (21/11)
+var GEN_UTIL = 0;
 function chargerUtilisateur() {
+  var gen = ++GEN_UTIL;
   S.compte = null; S.pers = []; S.roles = []; S.groupesDe = {}; S.couleur = {}; S.isDir = false; S.isStaff = false; S.gere = [];
   S.mode = S.user && localStorageGet('cloca-mode') === S.user.id ? 'coach' : ''; // l'appli rouvre là où le coach l'a laissée
   if (!S.user) return Promise.resolve();
@@ -152,7 +156,8 @@ function chargerUtilisateur() {
       });
     if (!S.apercu && (!cible || (!cible.foyer_id && !cible.personne_id))) return;
     return liste.then(function (pers) {
-      S.pers = pers || [];
+      if (gen !== GEN_UTIL) return; // un chargement plus récent est en cours : il remplira la famille
+      S.pers = pers || []; S.groupesDe = {}; S.couleur = {};
       S.pers.forEach(function (p, i) {
         S.couleur[p.id] = FAMILLE[i % FAMILLE.length];
         (p.groupe_membres || []).forEach(function (g) { (S.groupesDe[g.groupe_id] = S.groupesDe[g.groupe_id] || []).push(p); });
