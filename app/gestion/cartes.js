@@ -154,7 +154,9 @@ function courbe(c, x, y, w, h, serie, acc) {
 function dessinerMag(cv, k) {
   k = k || 1;
   var niv = S.niveau || 'Rouge', acc = MACC[niv] || MACC.Rouge, surAcc = sombreSur(niv) ? '#0b0f1e' : '#fff';
-  return Promise.all([img('../balles/' + niv.toLowerCase() + '.webp').catch(function () { return null; }), img('../logo.png').catch(function () { return null; }), polices()]).then(function (r) {
+  // mascottes HD (2000 px) pour l'impression, petite version de l'appli en secours
+  var bal = niv.toLowerCase();
+  return Promise.all([img('../balles/hd/' + bal + '.webp?v=1').catch(function () { return img('../balles/' + bal + '.webp').catch(function () { return null; }); }), img('../logo.png').catch(function () { return null; }), polices()]).then(function (r) {
     cv.width = Math.round(MW * k); cv.height = Math.round(MH * k);
     var c = cv.getContext('2d'), masc = r[0], logo = r[1], g;
     c.scale(k, k); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
