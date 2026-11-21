@@ -4027,7 +4027,6 @@ var EQ = { c: null, vue: '0', timer: null, save: null, ouvert: {}, siffle: false
 var EQ_M = [['d1', 'Double 1'], ['d2', 'Double 2'], ['s', 'Simple']];
 var EQ_POULE = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]];
 var EQ_TOURS = ['Tour 1', 'Tour 2', 'Tour 3', 'Demi-finales', 'Finales'];
-var EQ_BONUS = 2;
 function eqCompoVide() { return { cap: '', d1: ['', ''], d2: ['', ''], s: '' }; }
 function eqRencontre(a, b) { return { a: a, b: b, compo: { a: eqCompoVide(), b: eqCompoVide() }, sc: { d1: { a: '', b: '', pd: '' }, d2: { a: '', b: '', pd: '' }, s: { a: '', b: '', pd: '' } } }; }
 function eqToursInit() { return EQ_POULE.map(function (t) { return { rencontres: t.map(function (p) { return eqRencontre(p[0], p[1]); }) }; }).concat([{ rencontres: [] }, { rencontres: [] }]); }
@@ -4109,13 +4108,152 @@ function eqAlertes(c, ti, r, s) {
   return al;
 }
 
+// ----- Barème (paramétrable par rencontre, modèles réutilisables) et envoi au classement CLOC'ARENA Tweener -----
+var EQ_BAREME = { simple: [2, 1], double: [2, 1], participation: 1, capitaine: 2, rencontre: 1, podium: [5, 3, 2, 1] };
+function eqB(c) {
+  var b = (c && c.bareme) || {}, o = {};
+  Object.keys(EQ_BAREME).forEach(function (k) { o[k] = b[k] != null ? b[k] : EQ_BAREME[k]; });
+  return o;
+}
+function eqNomsMatch(r, s, k) { return (k === 's' ? [r.compo[s].s] : r.compo[s][k] || []).filter(Boolean); }
+// Points de chaque joueur selon le barème : matchs, participation, capitaine gagnant, rencontre gagnée, classement final
+function eqCalc(c, B) {
+  B = B || eqB(c);
+  var J = {}, manque = [], matchs = [];
+  var fiche = function (n) { return J[n] = J[n] || { tot: 0, m: 0, part: 0, cap: 0, renc: 0, pod: 0, eq: null }; };
+  var ajout = function (n, k, v) { if (!n || !v) return; var x = fiche(n); x[k] += +v; x.tot += +v; };
+  c.equipes.forEach(function (e, i) { (e.joueurs || []).forEach(function (n) { fiche(n).eq = i; ajout(n, 'part', B.participation); }); });
+  c.tours.forEach(function (t, ti) {
+    t.rencontres.forEach(function (r) {
+      var o = eqRes(r);
+      EQ_M.forEach(function (x) {
+        var m = r.sc[x[0]], g = eqGagnant(m), pv = x[0] === 's' ? B.simple : B.double, la = eqNomsMatch(r, 'a', x[0]), lb = eqNomsMatch(r, 'b', x[0]);
+        [la, lb].forEach(function (l, k) { l.forEach(function (n) { if (fiche(n).eq == null) fiche(n).eq = k ? r.b : r.a; }); });
+        if (!g) { if (eqVal(m.a) || eqVal(m.b)) manque.push(EQ_TOURS[ti] + ' · ' + eqNomEq(c, r.a) + ' – ' + eqNomEq(c, r.b) + ' · ' + x[1] + (eqVal(m.a) && eqVal(m.b) ? ' : égalité sans point décisif' : ' : score incomplet')); return; }
+        (g === 'a' ? la : lb).forEach(function (n) { ajout(n, 'm', pv[0]); });
+        (g === 'a' ? lb : la).forEach(function (n) { ajout(n, 'm', pv[1]); });
+        matchs.push({ format: x[0] === 's' ? 'FLASH MATCH' : 'DOUBLE', score: m.a + '-' + m.b + (+m.a === +m.b ? ' (point décisif)' : ''), vainqueur: g === 'a' ? 1 : 2, a: la, b: lb, pv: +pv[0], pd: +pv[1], motif: c.titre + ' · ' + EQ_TOURS[ti] + ' · ' + x[1] });
+      });
+      ['a', 'b'].forEach(function (s) { if (eqBonusCap(r, s)) (c.equipes[r[s]].joueurs || []).forEach(function (n) { ajout(n, 'cap', B.capitaine); }); });
+      if (o.v) (c.equipes[r[o.v]].joueurs || []).forEach(function (n) { ajout(n, 'renc', B.rencontre); });
+    });
+  });
+  var F = eqFinal(c);
+  if (F) F.forEach(function (i, k) { (c.equipes[i].joueurs || []).forEach(function (n) { ajout(n, 'pod', (B.podium || [])[k] || 0); }); });
+  return { J: J, manque: manque, matchs: matchs, F: F };
+}
+function eqResumeBareme(B) {
+  return 'Simple ' + B.simple[0] + '/' + B.simple[1] + ' · double ' + B.double[0] + '/' + B.double[1] + ' · participation +' + B.participation + ' · capitaine gagnant +' + B.capitaine + ' (toute l\'équipe) · rencontre gagnée +' + B.rencontre + ' · classement final ' + (B.podium || []).map(function (p) { return '+' + p; }).join(' / ');
+}
+function eqVueBareme(c) {
+  var B = eqB(c), fige = !!c.envoye_le, champ = function (id, v, lab) { return '<label class="f" style="flex:1;min-width:0">' + lab + '<input class="f" type="number" inputmode="decimal" min="0" max="50" step="0.5" id="' + id + '" value="' + esc(v) + '"' + (fige ? ' disabled' : '') + ' style="text-align:center"></label>'; };
+  var ligne = function (html) { return '<div style="display:flex;gap:8px">' + html + '</div>'; };
+  var C = eqCalc(c, B), v = Object.keys(C.J).map(function (n) { return C.J[n].tot; });
+  var moy = v.length ? Math.round(v.reduce(function (a, b) { return a + b; }, 0) / v.length * 10) / 10 : 0;
+  return '<section class="card stack" style="gap:10px"><b style="font-size:17px">Barème des points CLOC\'ARENA</b>' +
+    (fige ? '<span class="small" style="color:var(--ko);font-weight:600">Points déjà envoyés au classement : pour changer le barème, annule d\'abord l\'envoi (onglet Points).</span>' : '<span class="mut small">Modifiable jusqu\'à l\'envoi au classement. Les points sont recalculés tout de suite.</span>') +
+    '<span class="eyebrow">Simple</span>' + ligne(champ('eqb-s0', B.simple[0], 'Gagné') + champ('eqb-s1', B.simple[1], 'Perdu')) +
+    '<span class="eyebrow">Double (par joueur)</span>' + ligne(champ('eqb-d0', B.double[0], 'Gagné') + champ('eqb-d1', B.double[1], 'Perdu')) +
+    '<span class="eyebrow">Bonus (pour chaque joueur concerné)</span>' + ligne(champ('eqb-part', B.participation, 'Participation') + champ('eqb-cap', B.capitaine, 'Capitaine gagnant') + champ('eqb-renc', B.rencontre, 'Rencontre gagnée')) +
+    '<span class="eyebrow">Classement final</span>' + ligne([0, 1, 2, 3].map(function (k) { return champ('eqb-p' + k, (B.podium || [])[k] || 0, ['1er', '2e', '3e', '4e'][k]); }).join('')) +
+    '<span class="small" style="background:var(--soft);padding:8px 10px;border-radius:10px">Avec ce barème : <b>' + moy + ' pts</b> en moyenne par joueur' + (v.length ? ', de ' + Math.min.apply(null, v) + ' à ' + Math.max.apply(null, v) : '') + (C.F ? '' : ' (classement final pas encore connu)') + '.</span>' +
+    (fige ? '' : '<button class="btn" id="eqb-ok">Enregistrer le barème</button>') + '</section>' +
+    '<section class="card stack" style="gap:8px"><b>Modèles de barème</b><span class="mut small">Pour reprendre le même barème sur une autre date ou un autre format.</span><div id="eqb-modeles"><div class="skel"></div></div>' +
+    (fige ? '' : '<button class="btn line" id="eqb-save">Enregistrer ce barème comme modèle</button>') + '</section>';
+}
+function eqLireBareme() {
+  var n = function (id) { var v = parseFloat(String($(id).value).replace(',', '.')); return isNaN(v) || v < 0 ? 0 : Math.min(50, v); };
+  return { simple: [n('eqb-s0'), n('eqb-s1')], double: [n('eqb-d0'), n('eqb-d1')], participation: n('eqb-part'), capitaine: n('eqb-cap'), rencontre: n('eqb-renc'), podium: [n('eqb-p0'), n('eqb-p1'), n('eqb-p2'), n('eqb-p3')] };
+}
+function eqLierBareme(c) {
+  var box = $('eqb-modeles');
+  if (box) q(sb.from('coupes_baremes').select('id, nom, bareme').order('nom')).then(function (l) {
+    l = l || [];
+    box.innerHTML = l.length ? l.map(function (m) { return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bd)"><div class="stack" style="gap:0;min-width:0"><b class="small">' + esc(m.nom) + '</b><span class="mut xs">' + esc(eqResumeBareme(eqB({ bareme: m.bareme }))) + '</span></div>' + (c.envoye_le ? '' : '<button class="chip" data-eqmod="' + m.id + '">Appliquer</button>') + '</div>'; }).join('') : '<span class="mut small">Aucun modèle enregistré.</span>';
+    Array.prototype.forEach.call(box.querySelectorAll('[data-eqmod]'), function (b) {
+      b.onclick = function () { var m = l.filter(function (x) { return x.id === b.dataset.eqmod; })[0]; if (!m) return; c.bareme = eqB({ bareme: m.bareme }); q(sb.from('coupes_equipes').update({ bareme: c.bareme }).eq('id', c.id)).then(function () { toast('Barème « ' + m.nom + ' » appliqué'); eqDessiner(); }).catch(function () { toast('Enregistrement impossible'); }); };
+    });
+  }).catch(function () { box.innerHTML = '<span class="mut small">Modèles indisponibles.</span>'; });
+  Array.prototype.forEach.call(document.querySelectorAll('[id^="eqb-"]'), function (i) { if (i.tagName === 'INPUT') i.onchange = function () { c.bareme = eqLireBareme(); eqRedessiner(); }; });
+  if ($('eqb-ok')) $('eqb-ok').onclick = function () { c.bareme = eqLireBareme(); q(sb.from('coupes_equipes').update({ bareme: c.bareme }).eq('id', c.id)).then(function () { toast('Barème enregistré'); eqDessiner(); }).catch(function () { toast('Enregistrement impossible'); }); };
+  if ($('eqb-save')) $('eqb-save').onclick = function () {
+    var nom = prompt('Nom du modèle (ex. « Rencontres par équipes jeunes ») :'); if (!nom || !nom.trim()) return;
+    var b = eqLireBareme(); c.bareme = b;
+    q(sb.from('coupes_baremes').upsert({ nom: nom.trim(), bareme: b }, { onConflict: 'nom' })).then(function () { toast('Modèle enregistré'); eqDessiner(); }).catch(function () { toast('Enregistrement impossible'); });
+  };
+}
+// Rapprochement automatique d'un prénom (« Louis G. ») avec une fiche : seulement s'il n'y a qu'une possibilité
+function eqNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function eqCandidats(nom, pers) {
+  var t = eqNorm(nom).split(' '), pre = t[0], ini = t[1] || '';
+  return pers.filter(function (p) { return eqNorm(p.prenom).split(' ')[0] === pre && (!ini || eqNorm(p.nom).indexOf(ini) === 0); });
+}
+function eqVuePoints(c) {
+  var B = eqB(c), C = eqCalc(c, B), noms = Object.keys(C.J).sort(function (a, b) { return C.J[b].tot - C.J[a].tot || a.localeCompare(b); });
+  var h = '<section class="card stack" style="gap:6px"><b>Points CLOC\'ARENA de la rencontre</b><span class="mut small">' + esc(eqResumeBareme(B)) + '</span><button class="chip" data-eqv="bareme" style="align-self:flex-start">Modifier le barème</button></section>';
+  if (C.manque.length) h += '<section class="card stack" style="gap:4px;border-color:var(--ko)"><b style="color:var(--ko)">À compléter avant l\'envoi</b>' + C.manque.map(function (m) { return '<span class="small">⚠ ' + esc(m) + '</span>'; }).join('') + '<span class="mut xs">Ouvre le tour concerné pour saisir le score ou le point décisif.</span></section>';
+  if (!C.F) h += '<section class="card"><span class="small">Le classement final n\'est pas encore connu : les points de classement (' + (B.podium || []).join(' / ') + ') seront ajoutés après les finales.</span></section>';
+  h += '<section class="card" style="padding:8px 10px"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:15px"><thead><tr><th style="text-align:left;padding:6px 4px;font-size:12px;color:var(--mut)">Joueur</th><th style="text-align:right;padding:6px 4px;font-size:12px;color:var(--mut)">Matchs</th><th style="text-align:right;padding:6px 4px;font-size:12px;color:var(--mut)">Bonus</th><th style="text-align:right;padding:6px 4px;font-size:12px;color:var(--mut)">Total</th></tr></thead><tbody>' +
+    noms.map(function (n) {
+      var x = C.J[n], det = ['participation ' + x.part, 'capitaine ' + x.cap, 'rencontres ' + x.renc, 'classement ' + x.pod].join(' · ');
+      return '<tr style="border-top:1px solid var(--bd)"><td style="padding:6px 4px">' + esc(n) + '<div class="mut xs">' + esc(x.eq != null ? eqNomEq(c, x.eq) : '') + ' · ' + esc(det) + '</div></td><td style="text-align:right;padding:6px 4px">' + x.m + '</td><td style="text-align:right;padding:6px 4px">' + (x.part + x.cap + x.renc + x.pod) + '</td><td style="text-align:right;padding:6px 4px"><b>' + x.tot + '</b></td></tr>';
+    }).join('') + '</tbody></table></div></section>';
+  if (!S.isDir) return h + '<section class="card"><span class="mut small">Seule la direction sportive envoie les points au classement CLOC\'ARENA.</span></section>';
+  if (c.envoye_le) return h + '<section class="card stack" style="gap:8px;border-color:var(--ok)"><b style="color:var(--ok)">✓ Envoyé au classement CLOC\'ARENA Tweener</b><span class="small">Le ' + esc(fmtJour(new Date(c.envoye_le))) + '. Matchs visibles dans l\'historique et sur les fiches des joueurs.</span><button class="btn line" id="eqp-annuler">Annuler l\'envoi</button><span class="mut xs">Annuler retire tous les points et matchs envoyés ; tu pourras corriger puis renvoyer.</span></section>';
+  return h + '<section class="card stack" style="gap:8px"><b>Envoyer au classement CLOC\'ARENA Tweener</b><span class="mut small">Relie chaque joueur à sa fiche. Un joueur laissé sur « Invité » ne marque pas de points (ses adversaires gardent les leurs).</span><div id="eqp-liens" class="stack" style="gap:6px"><div class="skel"></div></div>' +
+    '<button class="btn" id="eqp-envoyer"' + (C.manque.length ? ' disabled' : '') + '>Envoyer au classement</button>' + (C.manque.length ? '<span class="mut xs">Complète d\'abord les matchs signalés plus haut.</span>' : '') + '</section>';
+}
+function eqLierPoints(c) {
+  var box = $('eqp-liens');
+  if (box) {
+    var go = function (pers) {
+      var C = eqCalc(c), noms = Object.keys(C.J).sort(), L = c.liens || (c.liens = {}), modif = false;
+      noms.forEach(function (n) { if (L[n] === undefined) { var k = eqCandidats(n, pers); if (k.length === 1) { L[n] = k[0].id; modif = true; } } });
+      if (modif) q(sb.from('coupes_equipes').update({ liens: L }).eq('id', c.id)).catch(function () { });
+      box.innerHTML = noms.map(function (n) {
+        var k = eqCandidats(n, pers), ids = k.map(function (p) { return p.id; }), lab = function (p) { return esc(p.prenom + ' ' + p.nom + (p.niveau_arena ? ' · ' + p.niveau_arena : '')); };
+        return '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center"><b class="small">' + esc(n) + (k.length > 1 && !L[n] ? ' <span style="color:var(--ko)">?</span>' : '') + '</b><select class="f" data-eqlien="' + esc(n) + '" style="min-height:42px;font-size:15px"><option value="">Invité (pas de points)</option>' +
+          (k.length ? '<optgroup label="Même prénom">' + k.map(function (p) { return '<option value="' + p.id + '"' + (L[n] === p.id ? ' selected' : '') + '>' + lab(p) + '</option>'; }).join('') + '</optgroup>' : '') +
+          '<optgroup label="Tous les joueurs CLOC\'ARENA">' + pers.filter(function (p) { return ids.indexOf(p.id) < 0; }).map(function (p) { return '<option value="' + p.id + '"' + (L[n] === p.id ? ' selected' : '') + '>' + lab(p) + '</option>'; }).join('') + '</optgroup></select></div>';
+      }).join('');
+      Array.prototype.forEach.call(box.querySelectorAll('[data-eqlien]'), function (s) { s.onchange = function () { L[s.dataset.eqlien] = s.value || null; q(sb.from('coupes_equipes').update({ liens: L }).eq('id', c.id)).catch(function () { toast('Lien non enregistré'); }); }; });
+    };
+    if (EQ.pers) go(EQ.pers);
+    else q(sb.from('personnes').select('id, prenom, nom, niveau_arena').eq('actif', true).eq('demo', false).not('arena_id', 'is', null).order('prenom').order('nom')).then(function (l) { EQ.pers = l || []; go(EQ.pers); }).catch(function () { box.innerHTML = '<span class="mut small">Liste des joueurs indisponible.</span>'; });
+  }
+  if ($('eqp-envoyer')) $('eqp-envoyer').onclick = function () {
+    var B = eqB(c), C = eqCalc(c, B), L = c.liens || {}, sans = Object.keys(C.J).filter(function (n) { return !L[n]; });
+    var pids = Object.keys(C.J).map(function (n) { return L[n]; }).filter(Boolean);
+    if (pids.filter(function (p, i) { return pids.indexOf(p) !== i; }).length) return toast('Une même fiche est reliée à deux joueurs');
+    if (!confirm('Envoyer les points au classement CLOC\'ARENA Tweener ?\n\n' + (Object.keys(C.J).length - sans.length) + ' joueurs, ' + C.matchs.length + ' matchs.' + (sans.length ? '\nSans points (invités) : ' + sans.join(', ') : '') + (C.F ? '' : '\nAttention : classement final pas encore connu, pas de points de classement.'))) return;
+    var data = { liens: L, participations: [], bonus: [], matchs: [] };
+    C.matchs.forEach(function (m) {
+      var j = []; m.a.forEach(function (n) { if (L[n]) j.push({ p: L[n], e: 1 }); }); m.b.forEach(function (n) { if (L[n]) j.push({ p: L[n], e: 2 }); });
+      if (j.length) data.matchs.push({ format: m.format, score: m.score, vainqueur: m.vainqueur, pv: m.pv, pd: m.pd, motif: m.motif, joueurs: j });
+    });
+    Object.keys(C.J).forEach(function (n) {
+      var x = C.J[n], p = L[n]; if (!p) return;
+      if (B.participation >= 1) data.participations.push(p);
+      var bon = x.cap + x.renc + x.pod + (B.participation >= 1 ? B.participation - 1 : B.participation);
+      if (bon) data.bonus.push({ p: p, points: bon, motif: 'Rencontres par équipes · ' + c.titre + ' : capitaine +' + x.cap + ', rencontres +' + x.renc + ', classement +' + x.pod });
+    });
+    var b = this; b.disabled = true;
+    q(sb.rpc('coupe_envoyer', { p_id: c.id, p_data: data })).then(function (r) { toast('Envoyé : ' + r.matchs + ' matchs, ' + r.bonus + ' bonus, ' + r.participations + ' participations'); eqCharger(c.id); })
+      .catch(function (e) { b.disabled = false; toast('Envoi impossible' + (e && e.message ? ' : ' + e.message : '')); });
+  };
+  if ($('eqp-annuler')) $('eqp-annuler').onclick = function () {
+    if (!confirm('Retirer du classement tous les points et matchs envoyés pour cette rencontre ?')) return;
+    var b = this; b.disabled = true;
+    q(sb.rpc('coupe_annuler_envoi', { p_id: c.id })).then(function () { toast('Envoi annulé'); eqCharger(c.id); }).catch(function () { b.disabled = false; toast('Action impossible'); });
+  };
+}
 // ----- Liste (onglet de l'espace coach) -----
 function eqListe() {
   var box = $('eq-liste'); if (!box) return;
   if (EQ.form === 'nouveau') { box.innerHTML = eqForm(null); eqLierForm(null); return; }
   q(sb.from('coupes_equipes').select('id, titre, jour, equipes, archive').eq('archive', false).order('jour', { ascending: false }).order('cree_le', { ascending: false })).then(function (l) {
     l = l || [];
-    box.innerHTML = '<section class="card stack" style="gap:8px"><span class="small">4 équipes, 5 tours : poule, demi-finales et finales. Double 1, Double 2 et Simple en même temps, capitaine différent à chaque tour, <b>+' + EQ_BONUS + ' pts CLOC\'ARENA</b> pour l\'équipe quand le capitaine gagne son match.</span>' +
+    box.innerHTML = '<section class="card stack" style="gap:8px"><span class="small">4 équipes, 5 tours : poule, demi-finales et finales. Double 1, Double 2 et Simple en même temps, capitaine différent à chaque tour, bonus pour l\'équipe quand le capitaine gagne son match. Barème des points CLOC\'ARENA réglable dans chaque rencontre.</span>' +
       '<button class="btn" id="eq-nouveau">' + ic('plus', 18) + 'Créer une rencontre par équipes</button></section>' +
       (l.length ? l.map(function (c) {
         return '<a class="ev" href="#/equipes/' + c.id + '"><span class="bar" style="background:var(--ac)"></span><div class="stack" style="flex:1"><b class="t">' + esc(c.titre) + '</b><span class="mut small">' + (c.jour ? esc(fmtJour(new Date(c.jour + 'T12:00:00'))) + ' · ' : '') + (c.equipes || []).length + ' équipes</span></div></a>';
@@ -4154,7 +4292,7 @@ function eqLierForm(c) {
       q(sb.from('coupes_equipes').update(v).eq('id', c.id)).then(function () { toast('Équipes enregistrées'); EQ.form = null; eqEntete(); eqDessiner(); })
         .catch(function () { toast('Enregistrement impossible'); $('eqf-ok').disabled = false; });
     } else {
-      v.tours = eqToursInit();
+      v.tours = eqToursInit(); v.bareme = eqB(null);
       q(sb.from('coupes_equipes').insert(v).select('id').single()).then(function (r) { EQ.form = null; toast('Rencontre créée'); go('#/equipes/' + r.id); })
         .catch(function () { toast('Création impossible'); $('eqf-ok').disabled = false; });
     }
@@ -4192,14 +4330,18 @@ function eqSauver(vite, equipes) {
 function eqDessiner() {
   var box = $('eq-main'), c = EQ.c; if (!box || !c) return;
   if (EQ.form === 'modifier') { box.innerHTML = eqForm(c); eqLierForm(c); return; }
-  var vues = [['0', 'Tour 1'], ['1', 'Tour 2'], ['2', 'Tour 3'], ['3', 'Demis'], ['4', 'Finales'], ['cl', 'Classement'], ['bonus', 'Bonus'], ['eq', 'Équipes'], ['tv', 'Écran TV']];
+  var vues = [['0', 'Tour 1'], ['1', 'Tour 2'], ['2', 'Tour 3'], ['3', 'Demis'], ['4', 'Finales'], ['cl', 'Classement'], ['pts', 'Points'], ['bareme', 'Barème'], ['eq', 'Équipes'], ['tv', 'Écran TV']];
   var h = '<div class="chips" style="flex-wrap:wrap">' + vues.map(function (v) { return '<button class="chip ' + (EQ.vue === v[0] ? 'on' : '') + '" data-eqv="' + v[0] + '">' + v[1] + '</button>'; }).join('') + '</div>';
   if (/^\d$/.test(EQ.vue)) h += eqChronoHtml() + eqVueTour(c, +EQ.vue);
   else if (EQ.vue === 'cl') h += eqVueClassement(c);
-  else if (EQ.vue === 'bonus') h += eqVueBonus(c);
+  else if (EQ.vue === 'pts') h += eqVuePoints(c);
+  else if (EQ.vue === 'bareme') h += eqVueBareme(c);
   else if (EQ.vue === 'tv') h += eqVueTv(c);
   else h += eqVueEquipes(c);
+  if (c.envoye_le && /^\d$/.test(EQ.vue)) h = h.replace('<h2 class="co-titre"', '<section class="card" style="border-color:var(--ok)"><span class="small"><b>Points déjà envoyés au classement.</b> Une modification ici ne change plus le classement : annule l\'envoi (onglet Points), corrige, puis renvoie.</span></section><h2 class="co-titre"');
   box.innerHTML = h; eqLier(); eqTick();
+  if (EQ.vue === 'bareme') eqLierBareme(c);
+  if (EQ.vue === 'pts') eqLierPoints(c);
 }
 // Redessiner sans perdre la case où le coach vient de toucher, ni la position dans la page
 function eqRedessiner() {
@@ -4244,7 +4386,7 @@ function eqCarteRencontre(c, ti, ri) {
     '<div class="small stack" style="gap:2px;padding-top:8px;border-top:1px solid var(--bd)">' + ['a', 'b'].map(function (s) {
       var cp = r.compo[s]; if (!cp.cap) return '<span class="mut"><b>' + esc(eqNomEq(c, r[s])) + '</b> · capitaine pas encore choisi</span>';
       var m = eqMatchDe(cp, cp.cap), g = m && eqGagnant(r.sc[m]);
-      return '<span><b>' + esc(eqNomEq(c, r[s])) + '</b> · capitaine ' + esc(cp.cap) + ' : ' + (!m ? '<span class="mut">pas placé</span>' : !g ? '<span class="mut">match en cours</span>' : g === s ? '<b style="color:var(--ok)">gagné, +' + EQ_BONUS + ' pts CLOC\'ARENA pour l\'équipe</b>' : '<span class="mut">perdu, pas de bonus</span>') + '</span>';
+      return '<span><b>' + esc(eqNomEq(c, r[s])) + '</b> · capitaine ' + esc(cp.cap) + ' : ' + (!m ? '<span class="mut">pas placé</span>' : !g ? '<span class="mut">match en cours</span>' : g === s ? '<b style="color:var(--ok)">gagné, +' + eqB(c).capitaine + ' pts CLOC\'ARENA pour chaque joueur de l\'équipe</b>' : '<span class="mut">perdu, pas de bonus</span>') + '</span>';
     }).join('') + '</div></section>';
   return h;
 }
@@ -4288,17 +4430,6 @@ function eqVueClassement(c) {
   var D = c.tours[3].rencontres;
   if (D.length) h += '<section class="card stack" style="gap:6px"><span class="eyebrow">Demi-finales</span>' + D.map(function (r) { var o = eqRes(r); return '<span>' + esc(eqNomEq(c, r.a)) + ' <b>' + o.a + ' – ' + o.b + '</b> ' + esc(eqNomEq(c, r.b)) + (o.v ? '' : ' <span class="mut">(en cours)</span>') + '</span>'; }).join('') + '</section>';
   var F = eqFinal(c); if (F) h += eqPodium(c, F);
-  return h;
-}
-function eqVueBonus(c) {
-  var tot = 0, h = '<section class="card stack" style="gap:6px"><span class="small">Quand le capitaine du tour gagne son match, <b>chaque joueur de l\'équipe</b> gagne ' + EQ_BONUS + ' points au classement CLOC\'ARENA. À reporter dans la gestion.</span></section>';
-  h += c.equipes.map(function (e, i) {
-    var l = []; eqPour(c, i, function (r, s, ti) { if (eqBonusCap(r, s)) l.push(EQ_TOURS[ti] + ' : ' + r.compo[s].cap); });
-    var pts = l.length * EQ_BONUS; tot += pts;
-    return '<section class="card stack" style="gap:6px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:17px">' + esc(eqNomEq(c, i)) + '</b><span class="badge" style="background:' + (pts ? 'var(--ok)' : 'var(--soft)') + ';color:' + (pts ? '#fff' : 'var(--mut)') + '">+' + pts + ' pts par joueur</span></div>' +
-      (l.length ? '<span class="small">Capitaines gagnants : ' + esc(l.join(' · ')) + '</span>' : '<span class="mut small">Pas encore de capitaine gagnant.</span>') +
-      '<span class="mut small">Joueurs : ' + esc((e.joueurs || []).join(', ')) + '</span></section>';
-  }).join('');
   return h;
 }
 // Écran TV du club : la page ecran-equipes.html affiche le tour en cours, le chrono et le classement en direct

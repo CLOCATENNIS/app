@@ -83,3 +83,8 @@ begin
 end $$;
 revoke all on function prive.minuteries_envoyer() from public, anon, authenticated;
 select cron.schedule('minuteries', '5 seconds', 'select prive.minuteries_envoyer()');
+
+-- Barème paramétrable et envoi au classement (21/11/2026) : voir la migration coupes_equipes_bareme_envoi
+-- (colonnes bareme, liens, envoye_le, envoye_par, envoi ; table coupes_baremes ; fonctions coupe_envoyer et coupe_annuler_envoi ;
+-- coupe_ecran renvoie bonus_cap). Envoi réservé à la direction sportive : matchs Flash / Double dans arena_matchs (points du barème),
+-- une ligne BONUS par joueur (capitaine, rencontres, classement final), une participation ANIMATION par joueur. Annulable.
