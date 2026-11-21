@@ -121,7 +121,7 @@ function carte(r, ti, ri) {
     return '<div class="m"><span class="k">' + x[1] + '</span><span class="j' + (g === 'a' ? ' v' : '') + '">' + noms(r, 'a', x[0]) + '</span><span class="sc">' + (val(m.a) ? esc(m.a) : '·') + ' – ' + (val(m.b) ? esc(m.b) : '·') + (egal && m.pd ? '<span class="pd">point décisif</span>' : '') + '</span><span class="j b' + (g === 'b' ? ' v' : '') + '">' + noms(r, 'b', x[0]) + '</span></div>';
   }).join('');
   var bon = ['a', 'b'].filter(function (s) { var cp = r.compo[s], k = !cp.cap ? null : cp.d1.indexOf(cp.cap) >= 0 ? 'd1' : cp.d2.indexOf(cp.cap) >= 0 ? 'd2' : cp.s === cp.cap ? 's' : null; return k && gagnant(r.sc[k]) === s; });
-  if (bon.length) h += '<span class="bonus">★ Capitaine gagnant, +5 pts CLOC\'ARENA : ' + bon.map(function (s) { return esc(nomEq(r[s])) + ' (' + esc(r.compo[s].cap) + ')'; }).join(' · ') + '</span>';
+  if (bon.length) h += '<span class="bonus">★ Capitaine gagnant, +2 pts CLOC\'ARENA : ' + bon.map(function (s) { return esc(nomEq(r[s])) + ' (' + esc(r.compo[s].cap) + ')'; }).join(' · ') + '</span>';
   return h + '</div>';
 }
 function rendre() {

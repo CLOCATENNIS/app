@@ -4021,13 +4021,13 @@ function pageCoach() {
 // ---------- Rencontres par équipes (format Coupe Davis) : espace coach ----------
 // 4 équipes, 5 tours : 3 tours de poule (chacun contre chacun), demi-finales 1er–4e et 2e–3e, puis finale et match pour la 3e place.
 // À chaque tour, une rencontre = Double 1, Double 2 et Simple joués en même temps. Le capitaine change à chaque tour ;
-// s'il gagne son match, toute son équipe gagne 5 points de bonus CLOC'ARENA (récap à reporter dans la gestion).
+// s'il gagne son match, toute son équipe gagne 2 points de bonus CLOC'ARENA (récap à reporter dans la gestion).
 // Au sifflet, le jeu en cours est annulé ; à égalité de jeux, un point décisif départage.
 var EQ = { c: null, vue: '0', timer: null, save: null, ouvert: {}, siffle: false, form: null };
 var EQ_M = [['d1', 'Double 1'], ['d2', 'Double 2'], ['s', 'Simple']];
 var EQ_POULE = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]];
 var EQ_TOURS = ['Tour 1', 'Tour 2', 'Tour 3', 'Demi-finales', 'Finales'];
-var EQ_BONUS = 5;
+var EQ_BONUS = 2;
 function eqCompoVide() { return { cap: '', d1: ['', ''], d2: ['', ''], s: '' }; }
 function eqRencontre(a, b) { return { a: a, b: b, compo: { a: eqCompoVide(), b: eqCompoVide() }, sc: { d1: { a: '', b: '', pd: '' }, d2: { a: '', b: '', pd: '' }, s: { a: '', b: '', pd: '' } } }; }
 function eqToursInit() { return EQ_POULE.map(function (t) { return { rencontres: t.map(function (p) { return eqRencontre(p[0], p[1]); }) }; }).concat([{ rencontres: [] }, { rencontres: [] }]); }
