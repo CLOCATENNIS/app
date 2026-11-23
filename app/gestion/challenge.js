@@ -44,6 +44,7 @@ function charger() {
 }
 
 function vue(box) {
+  CH.box = box;
   if (!M()) { box.innerHTML = '<div class="card empty">Le module Challenge n\'a pas pu se charger. Recharge la page.</div>'; return; }
   if (!CH.c) { box.innerHTML = '<div class="card empty">Aucune Challenge Week en cours.</div>'; return; }
   var ong = [['seance', 'Présents et équipes'], ['saisie', 'Saisir les résultats'], ['classements', 'Records et classements']].concat(COACH ? [] : [['reglages', 'Défis et paliers']]);
@@ -73,8 +74,6 @@ function presents(c) {
     var pres = e.presents || [];
     var liste = Object.keys(CH.pers).map(function (k) { return CH.pers[k]; }).filter(function (p) { return p.actif !== false && p.arena_id && (nivs.indexOf(p.niveau_arena) >= 0 || pres.indexOf(p.id) >= 0); })
       .sort(function (a, b) { return M().NIVEAUX.indexOf(a.niveau_arena) - M().NIVEAUX.indexOf(b.niveau_arena) || String(a.prenom).localeCompare(b.prenom, 'fr'); });
-    var dansEq = {}; (e.equipes || []).forEach(function (x) { x.joueurs.forEach(function (p) { dansEq[p] = x.k; }); });
-    var sans = pres.filter(function (p) { return !dansEq[p]; });
     var h = '<div class="two" style="align-items:start"><div class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Présents · ' + pres.length + '</b><span class="mut xs">Coche les joueurs présents</span></div>' +
       '<input class="f" id="ch-rech" placeholder="Ajouter un joueur d\'un autre niveau (prénom)…">' + '<div id="ch-rech-r" class="chips"></div>' +
       nivs.concat(liste.map(function (p) { return p.niveau_arena; }).filter(function (n, i, l) { return nivs.indexOf(n) < 0 && l.indexOf(n) === i; })).map(function (n) {
@@ -85,36 +84,11 @@ function presents(c) {
             return '<label class="c"><input type="checkbox" data-chp="' + p.id + '"' + (pres.indexOf(p.id) >= 0 ? ' checked' : '') + '> ' + esc(p.prenom + ' ' + (p.nom || '').charAt(0) + '.') + '</label>';
           }).join('') + '</div>';
       }).join('') + '</div>' +
-      '<div class="card stack"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Équipes · ' + (e.equipes || []).length + '</b><button class="btn sm" id="ch-tirer">🎲 ' + ((e.equipes || []).length ? 'Retirer toutes les équipes' : 'Tirer les équipes') + '</button></div>' +
-      '<span class="mut xs">Tirage au hasard, même niveau dans chaque équipe : binômes, et un trio si le nombre est impair. Les résultats déjà saisis ne bougent pas si tu changes les équipes.</span>';
-    var nivsEq = M().ordreNiveaux((e.equipes || []).map(function (x) { return x.niveau; }).filter(function (n, i, l) { return l.indexOf(n) === i; }));
-    nivsEq.forEach(function (n) {
-      var eqs = e.equipes.filter(function (x) { return x.niveau === n; });
-      h += '<div class="sect" style="margin:8px 0 0;display:flex;gap:8px;align-items:center">' + pill(n) + '<button class="btn sm line" data-chre="' + esc(n) + '" style="margin-left:auto">🎲 Retirer les ' + esc(n) + '</button></div>';
-      eqs.forEach(function (x, i) {
-        var seul = x.joueurs.length === 1;
-        h += '<div style="border:1px solid ' + (seul ? 'var(--warn)' : 'var(--bd)') + ';border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;gap:6px"><b class="small">Équipe ' + (i + 1) + (x.joueurs.length === 3 ? ' · trio' : '') + '</b>' + (seul ? '<span class="xs" style="color:var(--warn);font-weight:700">⚠ Joueur seul dans son niveau : à gérer avec le coach (pas de mélange de niveaux)</span>' : '') + '</div>' +
-          x.joueurs.map(function (p) { return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + esc(nom(p)) + '</span>' + depl(p, x.k, eqs) + '</div>'; }).join('') + '</div>';
-      });
-    });
-    if (sans.length) h += '<div class="sect" style="margin:8px 0 0;color:var(--warn)">Présents sans équipe</div>' + sans.map(function (p) {
-      var eqs = (e.equipes || []).filter(function (x) { return x.niveau === niv(p); });
-      return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + esc(nom(p)) + ' ' + pill(niv(p) || '?') + '</span>' + depl(p, '', eqs) + '</div>';
-    }).join('');
-    if (!(e.equipes || []).length && !sans.length) h += '<div class="empty small">Coche les présents puis tire les équipes.</div>';
+      '<div class="card stack" style="gap:8px"><b>🎲 Les équipes</b><span class="small">Elles sont tirées au sort <b>à chaque nouveau défi</b>, dans « Saisir les résultats » : même niveau dans chaque équipe, binômes, et un trio si le nombre est impair. Tu peux refaire le tirage ou déplacer un joueur à tout moment, sans toucher aux résultats déjà saisis.</span>' +
+      '<button class="btn sm" id="ch-vers-saisie" style="align-self:flex-start">Aller à la saisie →</button>';
     c.innerHTML = h + '</div></div>';
     all('[data-chp]', c).forEach(function (i) { i.onchange = function () { basculer(i.dataset.chp, i.checked); go(); }; });
-    all('[data-chdep]', c).forEach(function (s) { s.onchange = function () { deplacer(s.dataset.chdep, s.value); go(); }; });
-    all('[data-chre]', c).forEach(function (b) { b.onclick = function () {
-      var n = b.dataset.chre, p = (e.presents || []).filter(function (x) { return niv(x) === n; });
-      e.equipes = e.equipes.filter(function (x) { return x.niveau !== n; }).concat(M().tirer(p, niv, n));
-      e.equipes.sort(function (a, b) { return M().NIVEAUX.indexOf(a.niveau) - M().NIVEAUX.indexOf(b.niveau); });
-      sauverEquipes(); go(); toast('Équipes ' + n + ' retirées');
-    }; });
-    $('ch-tirer').onclick = function () {
-      if ((e.equipes || []).length && !confirm('Retirer au sort toutes les équipes de la séance ?')) return;
-      e.equipes = M().tirer(e.presents || [], niv); sauverEquipes(); go(); toast('Équipes tirées au sort');
-    };
+    $('ch-vers-saisie').onclick = function () { CH.onglet = 'saisie'; vue(CH.box); };
     var rech = $('ch-rech');
     rech.oninput = function () {
       var t = rech.value.trim().toLowerCase(); var r = $('ch-rech-r');
@@ -132,6 +106,15 @@ function presents(c) {
     });
   } else { if (e.presents == null) e.presents = []; go(); }
 }
+// Équipes du défi en cours : tirées au sort à la première ouverture de chaque défi (défi en solo : un joueur par carte)
+function parNiv(a, b) { return M().NIVEAUX.indexOf(niv(a)) - M().NIVEAUX.indexOf(niv(b)) || String(nom(a)).localeCompare(nom(b), 'fr'); }
+function EQS() {
+  var e = E(), d = defi(CH.defi), pres = e.presents || []; e.defis = e.defis || {};
+  if (!d) return [];
+  if (d.mode === 'solo') return pres.slice().sort(parNiv).map(function (p) { return { k: 'j' + p, niveau: niv(p), joueurs: [p], solo: true }; });
+  if (!e.defis[d.k] && pres.length) { e.defis[d.k] = M().tirer(pres, niv); sauverEquipes(); }
+  return e.defis[d.k] || [];
+}
 function depl(pid, k, eqs) {
   return '<select class="f" data-chdep="' + pid + '" style="width:auto;min-height:32px;padding:2px 6px;font-size:12px"><option value="">Déplacer…</option>' +
     eqs.filter(function (x) { return x.k !== k; }).map(function (x) { return '<option value="' + x.k + '">→ ' + esc(noms(x.joueurs)) + '</option>'; }).join('') +
@@ -144,18 +127,20 @@ function basculer(pid, oui) {
   if (!oui) { if (i >= 0) e.presents.splice(i, 1); retirer(pid); }
   sauverEquipes();
 }
-function retirer(pid) {
-  var e = E();
-  (e.equipes || []).forEach(function (x) { x.joueurs = x.joueurs.filter(function (p) { return p !== pid; }); });
-  e.equipes = (e.equipes || []).filter(function (x) { return x.joueurs.length; });
+function sortir(l, pid) { (l || []).forEach(function (x) { x.joueurs = x.joueurs.filter(function (p) { return p !== pid; }); }); return (l || []).filter(function (x) { return x.joueurs.length; }); }
+function retirer(pid) { // un absent sort de toutes les équipes de la séance
+  var e = E(); e.defis = e.defis || {};
+  e.equipes = sortir(e.equipes, pid);
+  Object.keys(e.defis).forEach(function (k) { e.defis[k] = sortir(e.defis[k], pid); });
 }
-function deplacer(pid, cible) {
+function deplacer(pid, cible) { // dans les équipes du défi en cours
   if (!cible) return;
-  var e = E(); retirer(pid);
-  if (cible === '+') e.equipes.push({ k: M().cle(), niveau: niv(pid), joueurs: [pid] });
-  else if (cible !== '-') e.equipes.forEach(function (x) { if (x.k === cible) x.joueurs.push(pid); });
-  e.equipes.sort(function (a, b) { return M().NIVEAUX.indexOf(a.niveau) - M().NIVEAUX.indexOf(b.niveau); });
-  sauverEquipes();
+  var e = E(), k = CH.defi; e.defis = e.defis || {};
+  var l = sortir(e.defis[k], pid);
+  if (cible === '+') l.push({ k: M().cle(), niveau: niv(pid), joueurs: [pid] });
+  else if (cible !== '-') l.forEach(function (x) { if (x.k === cible) x.joueurs.push(pid); });
+  l.sort(function (a, b) { return M().NIVEAUX.indexOf(a.niveau) - M().NIVEAUX.indexOf(b.niveau); });
+  e.defis[k] = l; sauverEquipes();
 }
 
 // ---------- Saisie des résultats ----------
@@ -168,25 +153,40 @@ function saisie(c) {
   var e = E(), d = defi(CH.defi);
   var h = '<div class="chips" style="margin-bottom:10px">' + defisActifs().map(function (x) { return '<button class="chip' + (x.k === CH.defi ? ' on' : '') + '" data-chd="' + x.k + '">' + esc(x.nom) + '</button>'; }).join('') + '</div>';
   if (!d) { c.innerHTML = h + '<div class="card empty">Aucun défi actif.</div>'; lier(c); return; }
-  var nivs = M().ordreNiveaux((e.equipes || []).map(function (x) { return x.niveau; }).filter(function (n, i, l) { return l.indexOf(n) === i; }));
+  var eqs = EQS(), solo = d.mode === 'solo';
+  var nivs = M().ordreNiveaux(eqs.map(function (x) { return x.niveau; }).filter(function (n, i, l) { return l.indexOf(n) === i; }));
   h += '<div class="card small" style="margin-bottom:10px;padding:10px 14px"><b>' + esc(d.nom) + '</b> · ' + (d.mode === 'duo' ? 'score de chaque joueur, le meilleur compte pour le duo' : d.mode === 'equipe' ? 'un score pour l\'équipe' : 'un score par joueur') + (M().chrono(d) ? ' · <b>chrono en secondes</b> (ex. 32,5)' : '') + '<div class="mut xs" style="margin-top:4px">' + esc(d.consigne || '') + '</div>' +
     nivs.filter(function (n) { return d.consignes && d.consignes[n]; }).map(function (n) { return '<div class="xs" style="margin-top:3px">' + pill(n) + ' ' + esc(d.consignes[n]) + '</div>'; }).join('') + '</div>';
-  if (!(e.equipes || []).length) h += '<div class="card empty">Pas encore d\'équipes pour cette séance : passe par « Présents et équipes ».</div>';
+  if (!(e.presents || []).length) h += '<div class="card empty">Coche d\'abord les présents dans « Présents et équipes ».</div>';
+  else if (!solo) {
+    var dans = {}; eqs.forEach(function (x) { x.joueurs.forEach(function (p) { dans[p] = 1; }); });
+    var sans = (e.presents || []).filter(function (p) { return !dans[p]; });
+    h += '<div class="card stack" style="gap:8px;margin-bottom:10px;padding:10px 14px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b class="small" style="flex:1">🎲 Équipes tirées au sort pour ce défi</b><button class="btn sm" id="ch-retirage">Nouveau tirage</button><button class="btn sm line" id="ch-modif">' + (CH.modif ? 'Fermer' : 'Modifier les équipes') + '</button></div>';
+    if (CH.modif) {
+      nivs.forEach(function (n) {
+        var l = eqs.filter(function (x) { return x.niveau === n; });
+        h += '<div class="sect" style="margin:6px 0 0;display:flex;gap:8px;align-items:center">' + pill(n) + '<button class="btn sm line" data-chre="' + esc(n) + '" style="margin-left:auto">🎲 Retirer les ' + esc(n) + '</button></div>' +
+          l.map(function (x, i) { return '<div style="border:1px solid ' + (x.joueurs.length === 1 ? 'var(--warn)' : 'var(--bd)') + ';border-radius:12px;padding:6px 10px"><b class="xs">Équipe ' + (i + 1) + (x.joueurs.length === 1 ? ' · ⚠ joueur seul dans son niveau' : '') + '</b>' + x.joueurs.map(function (p) { return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + esc(nom(p)) + '</span>' + depl(p, x.k, l) + '</div>'; }).join('') + '</div>'; }).join('');
+      });
+    }
+    if (sans.length) h += '<div class="xs" style="color:var(--warn);font-weight:700">Arrivés après le tirage :</div>' + sans.map(function (p) { return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + esc(nom(p)) + ' ' + pill(niv(p) || '?') + '</span>' + depl(p, '', eqs.filter(function (x) { return x.niveau === niv(p); })) + '</div>'; }).join('');
+    h += '</div>';
+  }
   nivs.forEach(function (n) {
     var rec = meilleur(d, n, function () { return true; });
     h += '<div class="sect" style="display:flex;gap:8px;align-items:center">' + pill(n) + (rec != null ? '<span class="xs" style="text-transform:none;letter-spacing:0">Record du niveau : <b>' + esc(M().fmt(d, rec)) + '</b></span>' : '') + '</div><div class="hub" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">';
-    e.equipes.filter(function (x) { return x.niveau === n; }).forEach(function (x, i) {
+    eqs.filter(function (x) { return x.niveau === n; }).forEach(function (x, i) {
       var cle = x.joueurs.slice().sort().join('+');
       var bEq = meilleur(d, n, function (es) { return es.joueurs.slice().sort().join('+') === cle || (d.mode === 'solo' && x.joueurs.indexOf(es.joueurs[0]) >= 0); });
-      h += '<div class="card stack" style="gap:8px;padding:12px"><div style="display:flex;justify-content:space-between;gap:6px"><b class="small">Équipe ' + (i + 1) + '</b>' + (bEq != null ? '<span class="xs mut">Meilleur : <b style="color:var(--tx)">' + esc(M().fmt(d, bEq)) + '</b> · ' + M().points(d, n, bEq) + ' pt' + (M().points(d, n, bEq) > 1 ? 's' : '') + '</span>' : '') + '</div>';
+      h += '<div class="card stack" style="gap:8px;padding:12px"><div style="display:flex;justify-content:space-between;gap:6px"><b class="small">' + (x.solo ? esc(nom(x.joueurs[0])) : 'Équipe ' + (i + 1) + (x.joueurs.length === 1 ? ' · ⚠ seul' : '')) + '</b>' + (bEq != null ? '<span class="xs mut">Meilleur : <b style="color:var(--tx)">' + esc(M().fmt(d, bEq)) + '</b> · ' + M().points(d, n, bEq) + ' pt' + (M().points(d, n, bEq) > 1 ? 's' : '') + '</span>' : '') + '</div>';
       if (d.mode === 'equipe') {
         h += '<div class="chips">' + x.joueurs.map(function (p) { return '<label class="chip on" style="cursor:pointer"><input type="checkbox" data-chact="' + x.k + '" value="' + p + '" checked style="display:none">' + esc(nom(p)) + '</label>'; }).join('') + '</div>' +
           '<div style="display:flex;gap:8px"><input class="f" data-chv="' + x.k + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 'Temps (s)' : 'Score') + '" style="font-size:18px;text-align:center"><button class="btn ok" data-chok="' + x.k + '">OK</button></div>';
       } else {
         h += x.joueurs.map(function (p) {
           var bj = d.mode === 'solo' ? meilleur(d, n, function (es) { return es.joueurs.length === 1 && es.joueurs[0] === p; }) : null;
-          return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + esc(nom(p)) + (bj != null ? ' <span class="xs mut">(' + esc(M().fmt(d, bj)) + ')</span>' : '') + '</span><input class="f" data-chv="' + x.k + '" data-pid="' + p + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 's' : '—') + '" style="width:90px;font-size:18px;text-align:center"></div>';
-        }).join('') + '<button class="btn ok" data-chok="' + x.k + '">Valider la tentative</button>';
+          return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + (x.solo ? 'Score' : esc(nom(p))) + (bj != null ? ' <span class="xs mut">(' + esc(M().fmt(d, bj)) + ')</span>' : '') + '</span><input class="f" data-chv="' + x.k + '" data-pid="' + p + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 's' : '—') + '" style="width:90px;font-size:18px;text-align:center"></div>';
+        }).join('') + '<button class="btn ok" data-chok="' + x.k + '">' + (x.solo ? 'Valider' : 'Valider la tentative') + '</button>';
       }
       h += '</div>';
     });
@@ -198,6 +198,14 @@ function saisie(c) {
     return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span class="xs mut" style="width:42px">' + new Date(x.cree_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</span><span class="small" style="flex:1"><b>' + esc(dd.nom) + '</b> · ' + esc(noms(x.joueurs)) + ' ' + pill(x.niveau) + '</span><b>' + esc(M().fmt(dd, x.resultat)) + '</b><span class="xs mut">' + M().points(dd, x.niveau, +x.resultat) + ' pts</span><button class="btn sm ko" data-chann="' + x.id + '">Annuler</button></div>';
   }).join('') : '<div class="empty small">Rien de saisi pour l\'instant.</div>') + '</div>';
   c.innerHTML = h; lier(c);
+  if ($('ch-retirage')) $('ch-retirage').onclick = function () { if (!confirm('Refaire le tirage au sort des équipes pour ce défi ?')) return; E().defis[CH.defi] = M().tirer(E().presents || [], niv); sauverEquipes(); toast('Nouvelles équipes tirées au sort'); saisie(c); };
+  if ($('ch-modif')) $('ch-modif').onclick = function () { CH.modif = !CH.modif; saisie(c); };
+  all('[data-chdep]', c).forEach(function (sl) { sl.onchange = function () { deplacer(sl.dataset.chdep, sl.value); saisie(c); }; });
+  all('[data-chre]', c).forEach(function (b) { b.onclick = function () {
+    var n = b.dataset.chre, l = E().defis[CH.defi] || [];
+    E().defis[CH.defi] = l.filter(function (x) { return x.niveau !== n; }).concat(M().tirer((E().presents || []).filter(function (p) { return niv(p) === n; }), niv, n)).sort(function (a, b2) { return M().NIVEAUX.indexOf(a.niveau) - M().NIVEAUX.indexOf(b2.niveau); });
+    sauverEquipes(); toast('Équipes ' + n + ' retirées au sort'); saisie(c);
+  }; });
   all('[data-chact]', c).forEach(function (i) { i.onchange = function () { i.parentNode.classList.toggle('on', i.checked); }; });
   all('[data-chok]', c).forEach(function (b) { b.onclick = function () { valider(c, b.dataset.chok, b); }; });
   all('[data-chv]', c).forEach(function (i) { i.onkeydown = function (ev) { if (ev.key === 'Enter') { var b = c.querySelector('[data-chok="' + i.dataset.chv + '"]'); if (b) b.click(); } }; });
@@ -206,9 +214,9 @@ function saisie(c) {
     q(sb.from('arena_challenge_essais').update({ annule: true }).eq('id', b.dataset.chann)).then(function () { CH.essais.forEach(function (x) { if (x.id === b.dataset.chann) x.annule = true; }); toast('Tentative annulée'); saisie(c); }).catch(err('Annulation impossible'));
   }; });
 }
-function lier(c) { all('[data-chd]', c).forEach(function (b) { b.onclick = function () { CH.defi = b.dataset.chd; saisie(c); }; }); }
+function lier(c) { all('[data-chd]', c).forEach(function (b) { b.onclick = function () { CH.defi = b.dataset.chd; CH.modif = false; saisie(c); }; }); }
 function valider(c, k, btn) {
-  var d = defi(CH.defi), x = E().equipes.filter(function (y) { return y.k === k; })[0]; if (!d || !x) return;
+  var d = defi(CH.defi), x = EQS().filter(function (y) { return y.k === k; })[0]; if (!d || !x) return;
   var lignes = [];
   if (d.mode === 'equipe') {
     var v = nombre((c.querySelector('[data-chv="' + k + '"]') || {}).value);
