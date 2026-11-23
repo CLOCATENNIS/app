@@ -1181,16 +1181,14 @@ function pageMasters() {
 function pageArena() {
   chargerChallenge();
   var tabs = [['classement', 'Classement'], ['programme', 'Programme'], ['resultats', 'Résultats']];
-  if (S.challenge) tabs.unshift(['challenge', '🏆 Challenge']);
-  else if (S.arenaTab === 'challenge') S.arenaTab = 'classement';
+  if (S.arenaTab === 'challenge') S.arenaTab = 'classement';
   var h = '<div class="darkhead"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">JEUNES · SAISON 2026-2027</div><h1>CLOC\'ARENA Tweener</h1>' + lienRegles('tweener') +
     '<div class="seg" style="margin-top:14px">' + tabs.map(function (t) {
       return '<button data-atab="' + t[0] + '" class="' + (S.arenaTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>';
-    }).join('') + '</div></div></div><main id="arena-main"><div class="skel"></div></main>';
+    }).join('') + '</div></div></div><main>' + carteChallenge() + '<div id="arena-main" style="display:contents"><div class="skel"></div></div></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-atab]'), function (b) { b.onclick = function () { S.arenaTab = b.dataset.atab; render(); }; });
-    if (S.arenaTab === 'challenge') arenaChallenge();
-    else if (S.arenaTab === 'classement') arenaClassement();
+    if (S.arenaTab === 'classement') arenaClassement();
     else if (S.arenaTab === 'programme') arenaProgramme();
     else arenaResultats();
   });
@@ -1205,8 +1203,8 @@ function chargerChallenge(force) {
   q(sb.rpc('challenge_public')).then(function (d) {
     var avant = !!S.challenge;
     S.challenge = d && d.id ? d : null; S.challengeEtat = 'ok';
-    if (S.challenge && !S.challengeVu && S.challenge.en_ligne) { S.challengeVu = true; S.arenaTab = 'challenge'; }
-    if (/#\/arena\/tweener/.test(location.hash) && (avant !== !!S.challenge || S.arenaTab === 'challenge')) { if (force && S.arenaTab === 'challenge') arenaChallenge(); else render(); }
+    if (/#\/arena\/challenge/.test(location.hash)) arenaChallenge();
+    else if (/#\/arena\/tweener/.test(location.hash) && avant !== !!S.challenge) render();
   }).catch(function () { S.challengeEtat = 'ok'; });
 }
 function arenaChallenge() {
@@ -1220,9 +1218,9 @@ function arenaChallenge() {
   if (nivs.indexOf(S.challengeNiv) < 0) { var m = S.pers.filter(function (p) { return nivs.indexOf(p.niveau_arena) >= 0; })[0]; S.challengeNiv = m ? m.niveau_arena : nivs[0]; }
   var n = S.challengeNiv, cl = R.classement[n] || [];
   var seanceN = (C.seances || []).filter(function (s) { return (s.niveaux || []).indexOf(n) >= 0; })[0];
-  var h = '<section class="card stack" style="gap:6px;background:linear-gradient(135deg,#5b3a86,#c62f2f);color:#fff;border:0"><span class="eyebrow" style="color:#f3d9ff">Animation de la semaine' + (C.en_ligne ? '' : ' · aperçu direction (pas encore visible des familles)') + '</span><b style="font-size:22px">🏆 ' + esc(C.titre) + '</b>' +
-    '<span class="small" style="color:#f1e6f7">Des défis en équipe pendant les rassemblements. Tentatives illimitées : seul le meilleur résultat compte, et il rapporte des points selon des paliers.</span>' +
-    '<span class="xs" style="color:#f1e6f7">' + (C.seances || []).map(function (s) { return esc(new Date(s.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })) + ' : ' + esc(M.ordreNiveaux(s.niveaux || []).join(', ')); }).join(' · ') + '</span></section>';
+  var h = '<section class="card stack" style="gap:6px">' + (C.en_ligne ? '' : '<span class="badge" style="background:var(--sun);color:#12304a;align-self:flex-start">Aperçu direction : pas encore visible des familles</span>') +
+    '<span class="small">Des défis en équipe pendant les rassemblements. Tentatives illimitées : seul le meilleur résultat compte, et il rapporte des points selon des paliers.</span>' +
+    '<span class="xs mut">' + (C.seances || []).map(function (s) { return esc(new Date(s.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })) + ' : ' + esc(M.ordreNiveaux(s.niveaux || []).join(', ')); }).join(' · ') + '</span></section>';
   h += '<div class="chips">' + nivs.map(function (x) { var st = NIV[x] && n === x ? ' style="background:' + NIV[x].bg + ';border-color:' + NIV[x].bg + ';color:' + NIV[x].fg + '"' : ''; return '<button class="chip ' + (n === x ? 'on' : '') + '" data-chniv="' + x + '"' + st + '>' + x + '</button>'; }).join('') + '</div>';
   if (!cl.length) h += '<section class="card empty">' + (seanceN ? 'Le challenge des ' + esc(n) + ' a lieu le ' + esc(new Date(seanceN.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '. Les records s\'afficheront ici en direct.' : 'Pas encore de résultat pour ce niveau.') + '</section>';
   else h += '<section class="card tight"><div class="rk h" style="grid-template-columns:34px minmax(0,1fr) 54px 54px"><span>#</span><span>Joueur</span><span class="n">Défis</span><span class="n">Points</span></div>' + cl.map(function (x) {
@@ -1241,7 +1239,22 @@ function arenaChallenge() {
   box.innerHTML = h;
   Array.prototype.forEach.call(box.querySelectorAll('[data-chniv]'), function (b) { b.onclick = function () { S.challengeNiv = b.dataset.chniv; arenaChallenge(); }; });
   clearTimeout(S.challengeTimer);
-  S.challengeTimer = setTimeout(function () { if (/#\/arena\/tweener/.test(location.hash) && S.arenaTab === 'challenge' && !document.hidden) chargerChallenge(true); }, 30000);
+  S.challengeTimer = setTimeout(function () { if (/#\/arena\/challenge/.test(location.hash) && !document.hidden) chargerChallenge(true); }, 30000);
+}
+// La case violette du Tweener, au-dessus du classement (le menu Classement / Programme / Résultats ne change pas)
+function carteChallenge() {
+  var C = S.challenge; if (!C) return '';
+  var n = (C.essais || []).length;
+  return '<a href="#/arena/challenge" class="card stack" style="gap:6px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#5b3a86,#7c3ce6);border:0">' +
+    '<span class="eyebrow" style="color:#e6d6ff">Animation de la semaine' + (C.en_ligne ? '' : ' · aperçu direction') + '</span>' +
+    '<span style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:20px">🏆 ' + esc(C.titre) + '</b><span style="font-size:22px">›</span></span>' +
+    '<span class="small" style="color:#efe6fb">Défis en équipe, records et points en direct' + (n ? ' · ' + n + ' tentative' + (n > 1 ? 's' : '') + ' saisie' + (n > 1 ? 's' : '') : '') + '</span></a>';
+}
+function pageChallengeWeek() {
+  chargerChallenge();
+  var C = S.challenge;
+  setTimeout(function () { if ($('arena-main')) arenaChallenge(); });
+  return '<div class="darkhead" style="background:linear-gradient(135deg,#5b3a86,#7c3ce6)"><div class="wrap">' + backLink('#/arena/tweener', 'CLOC\'ARENA Tweener', true) + '<div class="kicker" style="margin-top:8px">ANIMATION DE LA SEMAINE</div><h1>' + esc(C ? C.titre : 'Challenge Week') + '</h1></div></div><main id="arena-main"><div class="skel"></div></main>';
 }
 // ---------- Fiches « Comment ça marche ? » des trois circuits (#/arena/regles/tweener|masters|versus) ----------
 var REGLES_CIRCUITS = {
@@ -2663,8 +2676,8 @@ function pageProfil() {
     (S.isStaff || estCordeur() ? '<a class="btn navy" href="gestion/">' + ic('tool', 18, '#fff') + 'Espace gestion</a>' : '') +
     (estCoach() && !S.isDir ? '<a class="btn ghost" href="#/coach">Mon espace coach</a>' : '') +
 '</section>';
-  if (S.isDir) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Voir l\'appli comme une famille</span><span class="mut small">Pour tester : tu vois exactement ce que voit la famille (agenda, inscriptions, CLOC\'ARENA), sans rien pouvoir modifier.</span>' +
-    '<input class="f" id="ap-q" placeholder="Nom ou prénom d\'un adhérent" autocomplete="off"><div id="ap-r" class="stack" style="gap:6px"></div><button class="btn line" id="ap-h">Une famille au hasard</button></section>';
+  if (S.isDir && !S.apercu && window.CLOCASimu) h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Se connecter en tant que</span><span class="mut small">Pour aider ou tester : tu deviens vraiment le compte choisi (parent, jeune, coach, bureau…), avec tout ce qu\'il a sur son téléphone, et tu peux agir à sa place. Rien n\'est marqué comme lu chez la personne, et elle reste connectée. Un bandeau te permet de revenir à ton compte.</span><button class="btn navy" id="simu-go">👤 Choisir un compte</button></section>';
+  // « Voir l'appli comme une famille » remplacé par « Se connecter en tant que » (23/11/2026)
   h += carteReglagesProfil();
   h += '<section class="card stack" style="gap:10px"><span class="eyebrow">Ton avis compte</span><span class="mut small">L\'appli est en version bêta : une idée, un souci ? Ton message part directement au club.</span>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn line" id="rt-idee">💡 Boîte à idées</button><button class="btn line" id="rt-bug">🐞 Signaler un bug</button></div></section>';
@@ -2682,7 +2695,7 @@ function pageProfil() {
       };
     });
   });
-  setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); $('rt-idee').onclick = function () { ouvrirRetour('idee'); }; $('rt-bug').onclick = function () { ouvrirRetour('bug'); }; $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
+  setTimeout(function () { if ($('pr-id')) $('pr-id').onclick = function () { modale(formIdentite(true), function () { lierIdentite(function () { fermerModale(); render(); }); }); }; lierPush(); lierInstaller(); lierApercu(); if ($('simu-go')) $('simu-go').onclick = function () { window.CLOCASimu.ouvrirChoix(); }; $('rt-idee').onclick = function () { ouvrirRetour('idee'); }; $('rt-bug').onclick = function () { ouvrirRetour('bug'); }; $('logout').onclick = function () { oublierPush().then(function () { return sb.auth.signOut(); }).then(function () { S.user = null; chargerUtilisateur().then(function () { go('#/accueil'); }); }); }; });
   return h;
 }
 function apercu(foyer, nom) {
@@ -3908,7 +3921,7 @@ function lierIdentite(apres) {
 // Pousser les notifications : à chaque ouverture de l'appli (une fois par session), tant qu'elles ne sont pas actives sur l'appareil.
 // Autorisation déjà donnée mais appareil pas enregistré pour ce compte : on l'enregistre sans rien demander.
 function popupNotifs() {
-  if (S.apercu || !S.user) return false;
+  if (S.apercu || !S.user || (window.CLOCASimu && window.CLOCASimu.actif())) return false;
   var actif = pushPossible() && Notification.permission === 'granted' && localStorageGet('cloca-push') === S.user.id;
   if (actif) return false;
   if (pushPossible() && Notification.permission === 'granted') { activerPush().catch(function () { }); return false; }
@@ -5385,7 +5398,7 @@ function render() {
   if (!(p === 'profil' && arg === 'accueil')) S.monAccEd = null;
   var html, actif = p;
   if (p === 'agenda') html = pageAgenda();
-  else if (p === 'arena') actif = 'club', html = arg === 'regles' ? pageReglesArena(parts[2]) : arg === 'tweener' ? pageArena() : arg === 'masters' ? pageMasters() : arg === 'versus' ? pageVersus() : pageArenaAccueil();
+  else if (p === 'arena') actif = 'club', html = arg === 'regles' ? pageReglesArena(parts[2]) : arg === 'tweener' ? pageArena() : arg === 'challenge' ? pageChallengeWeek() : arg === 'masters' ? pageMasters() : arg === 'versus' ? pageVersus() : pageArenaAccueil();
   else if (p === 'fiche' || p === 'joueur') { html = pageJoueur(arg); actif = 'club'; }
   else if (p === 'club') html = pageClub(arg);
   else if (p === 'evenement') { html = pageEvenement(arg); actif = 'club'; }

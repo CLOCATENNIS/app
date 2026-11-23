@@ -234,8 +234,9 @@ function cadre(contenu) {
         (act && mods.length > 1 ? '<div class="subl">' + mods.map(function (id) { return '<a href="#/' + id + '" class="' + (A.view === id ? 'on' : '') + '">' + nomMod(id) + '<span class="n" data-cpt="' + id + '" hidden></span></a>'; }).join('') + '</div>' : '');
     }).join('') + '</nav>' +
     '<div class="side-foot">' + esc(moi) + '<br>' + A.roles.filter(function (r) { return !r.groupe_id; }).map(function (r) { return NOM_ROLE[r.role]; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(', ') +
-    '<br><br><a href="../">Ouvrir l\'appli</a> · <a href="#" id="logout">Se déconnecter</a></div></aside><div class="col">' + sousNav() + '<main id="main">' + contenu + '</main></div></div>';
+    '<br><br><a href="../">Ouvrir l\'appli</a> · <a href="#" id="logout">Se déconnecter</a>' + (aRole('direction') && window.CLOCASimu ? '<br><a href="#" id="simu-go">👤 Se connecter en tant que…</a>' : '') + '</div></aside><div class="col">' + sousNav() + '<main id="main">' + contenu + '</main></div></div>';
   $('logout').onclick = function (e) { e.preventDefault(); sb.auth.signOut().then(function () { location.reload(); }); };
+  if ($('simu-go')) $('simu-go').onclick = function (e) { e.preventDefault(); window.CLOCASimu.ouvrirChoix(); };
   compteurs().then(function (c) {
     A.cpt = c;
     Object.keys(c).forEach(function (k) { all('[data-cpt="' + k + '"]').forEach(function (e) { if (c[k]) { e.textContent = c[k]; e.hidden = false; } }); });
@@ -3210,7 +3211,7 @@ var JCAT = {
   club_presence: ['Présence au club', 'changement', 'changements'],
   questionnaires: ['Questionnaires', 'questionnaire', 'questionnaires'], questionnaire_reponses: ['Questionnaires', 'réponse', 'réponses', 1],
   messages: ['Messagerie', 'message', 'messages'], messages_programmes: ['Messagerie', 'message programmé', 'messages programmés'], adresses_reponse: ['Messagerie', 'adresse de réponse', 'adresses de réponse', 1],
-  equipe: ['Comptes et accès', 'membre de l\'équipe', 'membres de l\'équipe'], comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
+  equipe: ['Comptes et accès', 'membre de l\'équipe', 'membres de l\'équipe'], connexion_comme: ['Comptes et accès', 'connexion « en tant que »', 'connexions « en tant que »', 1], comptes: ['Comptes et accès', 'nouveau compte', 'nouveaux comptes'], acces_emails: ['Comptes et accès', 'adresse autorisée', 'adresses autorisées', 1], responsabilites: ['Comptes et accès', 'rôle', 'rôles']
 };
 var JACT = { ajout: ['ajouté', 'ajoutés', 'b-ok', 'ajoutée', 'ajoutées'], modif: ['modifié', 'modifiés', '', 'modifiée', 'modifiées'], suppr: ['supprimé', 'supprimés', 'b-ko', 'supprimée', 'supprimées'] };
 function jValeur(v) {
