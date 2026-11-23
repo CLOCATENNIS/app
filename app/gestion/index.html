@@ -100,6 +100,23 @@ input[type=range]{accent-color:var(--ac)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--bd);background:var(--card);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px}
 .chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.chip[hidden],.gpick details[hidden]{display:none}
+/* Choix des groupes : catégories repliables */
+.gpick{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.gpick-top{display:flex;gap:8px;align-items:center}.gpick-top .f{flex:1;min-width:0}.gpick-top .btn{white-space:nowrap}
+.gpick-sel{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:24px}
+.gmini{border:0;background:var(--navy);color:#fff;border-radius:12px;padding:3px 10px;font-size:12px;cursor:pointer;font:inherit;font-size:12px}
+.gmini:hover{background:var(--ko)}
+.gpick .chip{height:auto;min-height:32px;padding:6px 12px;text-align:left}
+#g-l summary::-webkit-details-marker{display:none}
+.gcat{border:1px solid var(--bd);border-radius:12px;background:var(--card)}
+.gcat>summary,.gsub>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none}
+.gcat>summary::-webkit-details-marker,.gsub>summary::-webkit-details-marker{display:none}
+.gcat>summary{padding:10px 12px;font-size:14px}.gcat>summary .gnb,.gsub>summary .gnb{margin-left:auto}
+.gfl{display:inline-block;width:12px;color:var(--mut);transition:transform .15s}
+details[open]>summary>.gfl{transform:rotate(90deg)}
+.gcat-c{padding:2px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.gsub{border-top:1px solid var(--line);padding-top:6px}.gsub>summary{font-size:13px;font-weight:600;padding:4px 0}.gsub>.chips{padding:6px 0 4px 20px}
 .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:9px;white-space:nowrap;background:var(--soft);color:var(--tx)}
 .b-ok{background:var(--ok);color:#fff}.b-ko{background:var(--ko);color:#fff}.b-ac{background:var(--ac);color:#fff}.b-warn{background:var(--warn);color:#fff}
 table.t{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden}

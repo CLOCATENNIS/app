@@ -170,11 +170,11 @@ function chargerGroupes(force) {
   var ORDRE = ['Blanc', 'Violet', 'Rouge', 'Orange', 'Vert', 'Jaune'];
   var JRS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
   var rang = function (g) {
-    if (g.type === 'niveau') { var i = ORDRE.indexOf(String(g.nom).replace("CLOC'ARENA ", '')); return i >= 0 ? i : 99; }
+    if (g.type === 'niveau') { var i = ORDRE.indexOf(g.cle && g.cle.indexOf('arena:') === 0 ? g.cle.slice(6) : String(g.nom).replace("CLOC'ARENA ", '')); return i >= 0 ? i : 99; }
     if (g.type === 'creneau') { var m = String(g.nom).toLowerCase().match(/^(\w+)\s+(\d+)h(\d*)/); if (m && JRS.indexOf(m[1]) >= 0) return JRS.indexOf(m[1]) * 10000 + (+m[2]) * 100 + (+m[3] || 0); }
     return 99999;
   };
-  return q(sb.from('groupes').select('id, nom, type, couleur, actif, description').order('type').order('nom')).then(function (l) {
+  return q(sb.from('groupes').select('id, nom, type, couleur, actif, description, cle, sous_categorie').order('type').order('nom')).then(function (l) {
     A.groupes = (l || []).sort(function (a, b) { return a.type === b.type ? (rang(a) - rang(b)) || a.nom.localeCompare(b.nom, 'fr') : (a.type < b.type ? -1 : 1); });
     return A.groupes;
   });
@@ -185,16 +185,74 @@ function chargerPers(force) {
     .then(function (l) { A.pers = l || []; return A.pers; });
 }
 function nomGroupe(id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g ? g.nom : '?'; }
+// Groupe « système » retrouvé par sa clé fixe (le nom affiché, lui, se modifie librement)
+// arena:Rouge = niveau CLOC'ARENA ; profil:jeunes / profil:adultes / profil:coachs ; adoc:<nom ADOC> = formule ADOC
+var CLES_NOMS = { 'profil:jeunes': 'Jeunes', 'profil:adultes': 'Adultes', 'profil:coachs': 'Coachs' };
+function groupeCle(c) {
+  return A.groupes.filter(function (g) { return g.cle === c; })[0] ||
+    A.groupes.filter(function (g) { return !g.cle && (g.nom === CLES_NOMS[c] || (c.indexOf('arena:') === 0 && g.nom === "CLOC'ARENA " + c.slice(6)) || (c.indexOf('adoc:') === 0 && g.nom === c.slice(5))); })[0];
+}
+// Sous-rubrique d'un groupe dans les listes : le jour pour les créneaux, sinon la sous-catégorie choisie dans la fiche du groupe
+function sousRubrique(g) { return g.type === 'creneau' ? (String(g.nom).split(' ')[0] || '') : (g.sous_categorie || ''); }
+// Choix de groupes : catégories repliables (petite flèche), sous-rubriques, recherche et rappel des groupes choisis
 function choixGroupes(sel, nomChamp, sansType) {
   var par = {};
-  A.groupes.filter(function (g) { return g.actif !== false && g.type !== sansType; }).forEach(function (g) { (par[g.type] = par[g.type] || []).push(g); });
-  return Object.keys(TYPES_GRP).filter(function (t) { return par[t]; }).map(function (t) {
-    return '<div class="sect" style="margin:8px 0 4px">' + TYPES_GRP[t] + '</div><div class="chips">' + par[t].map(function (g) {
-      var on = sel.indexOf(g.id) >= 0;
-      return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" name="' + nomChamp + '" value="' + g.id + '"' + (on ? ' checked' : '') + ' style="display:none">' + esc(g.nom.replace("CLOC'ARENA ", '')) + '</label>';
-    }).join('') + '</div>';
+  A.groupes.filter(function (g) { return (g.actif !== false || sel.indexOf(g.id) >= 0) && g.type !== sansType; }).forEach(function (g) { (par[g.type] = par[g.type] || []).push(g); });
+  var chip = function (g, sansJour) {
+    var on = sel.indexOf(g.id) >= 0, nom = String(g.nom).replace("CLOC'ARENA ", '');
+    if (sansJour) nom = nom.replace(/^\S+\s+/, '');
+    return '<label class="chip' + (on ? ' on' : '') + '" data-gn="' + esc(norm(g.nom + ' ' + (g.sous_categorie || ''))) + '"><input type="checkbox" name="' + nomChamp + '" value="' + g.id + '" data-glib="' + esc(String(g.nom).replace("CLOC'ARENA ", '')) + '"' + (on ? ' checked' : '') + ' style="display:none">' + esc(nom) + '</label>';
+  };
+  var nbSel = function (l) { return l.filter(function (g) { return sel.indexOf(g.id) >= 0; }).length; };
+  var pastille = function (n) { return '<span class="badge b-ac gnb"' + (n ? '' : ' hidden') + '>' + n + ' choisi' + (n > 1 ? 's' : '') + '</span>'; };
+  var cats = Object.keys(TYPES_GRP).filter(function (t) { return par[t]; }).map(function (t) {
+    var l = par[t], subs = {}, seuls = [];
+    l.forEach(function (g) { var s = sousRubrique(g); if (s) (subs[s] = subs[s] || []).push(g); else seuls.push(g); });
+    // Une sous-rubrique d'un seul groupe ne sert à rien : il reste avec les autres
+    Object.keys(subs).forEach(function (s) { if (subs[s].length < 2 && t !== 'creneau') { seuls = seuls.concat(subs[s]); delete subs[s]; } });
+    var n = nbSel(l), ouvert = n > 0 || (t === 'niveau' && !sel.length);
+    var contenu = (seuls.length ? '<div class="chips">' + seuls.map(function (g) { return chip(g); }).join('') + '</div>' : '') + Object.keys(subs).map(function (s) {
+      var k = nbSel(subs[s]);
+      return '<details class="gsub"' + (k ? ' open' : '') + '><summary><span class="gfl">▸</span>' + esc(s) + ' <span class="mut xs">' + subs[s].length + '</span>' + pastille(k) + '</summary><div class="chips">' + subs[s].map(function (g) { return chip(g, t === 'creneau'); }).join('') + '</div></details>';
+    }).join('');
+    return '<details class="gcat" data-t="' + t + '"' + (ouvert ? ' open' : '') + '><summary><span class="gfl">▸</span><b>' + TYPES_GRP[t] + '</b><span class="mut xs">' + l.length + ' groupe' + (l.length > 1 ? 's' : '') + '</span>' + pastille(n) + '</summary><div class="gcat-c">' + contenu + '</div></details>';
   }).join('');
+  var choisis = A.groupes.filter(function (g) { return sel.indexOf(g.id) >= 0; });
+  return '<div class="gpick">' +
+    '<div class="gpick-top"><input class="f gpick-q" type="search" placeholder="Chercher un groupe…"><a class="btn sm line" href="#/groupes" target="_blank" rel="noopener" title="Renommer, ranger, archiver les groupes (s\'ouvre dans un nouvel onglet)">✏️ Modifier les groupes</a></div>' +
+    '<div class="gpick-sel">' + (choisis.length ? '<span class="mut xs">Choisis :</span> ' + choisis.map(function (g) { return '<button type="button" class="gmini" data-gun="' + g.id + '" title="Retirer">' + esc(String(g.nom).replace("CLOC'ARENA ", '')) + ' ×</button>'; }).join('') : '<span class="mut xs">Aucun groupe choisi.</span>') + '</div>' +
+    cats + '<div class="mut xs gpick-vide" hidden>Aucun groupe ne correspond.</div></div>';
 }
+// Mise à jour du rappel « Choisis » et des compteurs, pour toutes les listes de groupes de l'espace gestion
+function majGpick(p) {
+  var cks = all('input[type="checkbox"]', p).filter(function (i) { return i.closest('label.chip'); });
+  cks.forEach(function (i) { i.parentNode.classList.toggle('on', i.checked); });
+  var on = cks.filter(function (i) { return i.checked; });
+  p.querySelector('.gpick-sel').innerHTML = on.length ? '<span class="mut xs">Choisis :</span> ' + on.map(function (i) { return '<button type="button" class="gmini" data-gun="' + i.value + '" title="Retirer">' + esc(i.dataset.glib) + ' ×</button>'; }).join('') : '<span class="mut xs">Aucun groupe choisi.</span>';
+  all('details', p).forEach(function (d) {
+    var k = all('input:checked', d).length, b = d.querySelector(':scope > summary .gnb');
+    if (b) { b.hidden = !k; b.textContent = k + ' choisi' + (k > 1 ? 's' : ''); }
+  });
+}
+document.addEventListener('change', function (e) { var p = e.target.closest && e.target.closest('.gpick'); if (p && e.target.type === 'checkbox') majGpick(p); });
+document.addEventListener('click', function (e) {
+  var b = e.target.closest && e.target.closest('[data-gun]'); if (!b) return;
+  var p = b.closest('.gpick'), i = p && all('input[type="checkbox"]', p).filter(function (x) { return x.value === b.dataset.gun; })[0];
+  if (i) { i.checked = false; i.dispatchEvent(new Event('change', { bubbles: true })); }
+});
+document.addEventListener('input', function (e) {
+  if (!e.target.classList || !e.target.classList.contains('gpick-q')) return;
+  var p = e.target.closest('.gpick'), t = norm(e.target.value).trim(), mots = t.split(/\s+/).filter(Boolean);
+  all('details', p).forEach(function (d) { if (d.dataset.ouv === undefined) d.dataset.ouv = d.open ? '1' : ''; });
+  all('label.chip', p).forEach(function (c) { c.hidden = mots.length && !mots.every(function (m) { return c.dataset.gn.indexOf(m) >= 0 || norm(c.textContent).indexOf(m) >= 0; }); });
+  var visibles = 0;
+  all('details', p).reverse().forEach(function (d) {
+    var n = all('label.chip', d).filter(function (c) { return !c.hidden; }).length; visibles = Math.max(visibles, n);
+    d.hidden = mots.length && !n; d.open = mots.length ? !!n : !!d.dataset.ouv;
+    if (!mots.length) delete d.dataset.ouv;
+  });
+  p.querySelector('.gpick-vide').hidden = !mots.length || visibles > 0;
+});
 function lierChips(root) {
   all('label.chip input', root).forEach(function (i) { i.onchange = function () { i.parentNode.classList.toggle('on', i.checked); }; });
 }
@@ -775,7 +833,7 @@ function vueAdherents(m, arg) {
           return q(sb.from('personnes').insert({ prenom: pr, nom: no, date_naissance: dn, sexe: $('n-s').value, profil: majeur ? 'adulte' : 'jeune', foyer_id: foyer, adoc_id: $('n-l').value.trim() || null, email: majeur && mail ? mail : null, cotisation_a_jour: true, actif: true }).select('id').single());
         }).then(function (pe) {
           pid = pe.id;
-          var g = A.groupes.filter(function (x) { return x.nom === (majeur ? 'Adultes' : 'Jeunes'); })[0];
+          var g = groupeCle(majeur ? 'profil:adultes' : 'profil:jeunes');
           return g ? q(sb.from('groupe_membres').insert({ groupe_id: g.id, personne_id: pid })) : null;
         }).then(function () {
           return mail ? q(sb.from('acces_emails').upsert({ email: mail, foyer_id: foyer, personne_id: majeur ? pid : null })) : null;
@@ -892,7 +950,7 @@ function vueAdoc(m) {
     var etape = function (t) { b.textContent = t; };
     var foyerDe = {}; foyers.forEach(function (f) { if (f.cle) foyerDe[f.cle] = f.id; });
     var jeune = function (dn) { return dn ? age(dn) < 18 : false; };
-    var gJ = A.groupes.filter(function (g) { return g.nom === 'Jeunes'; })[0], gA = A.groupes.filter(function (g) { return g.nom === 'Adultes'; })[0];
+    var gJ = groupeCle('profil:jeunes'), gA = groupeCle('profil:adultes');
     var suite = Promise.resolve(), nbErr = 0, places = 0;
     var seq = function (arr, fn) { arr.forEach(function (x) { suite = suite.then(function () { return fn(x); }).catch(function () { nbErr++; }); }); };
     // 1. Familles manquantes
@@ -920,16 +978,17 @@ function vueAdoc(m) {
       var mails = [];
       lignes.forEach(function (l) { var p = parLic[l.licence]; if (!p || !p.foyer_id) return; [l.email, l.email2].forEach(function (mm) { if (mm && !connus[mm]) { connus[mm] = 1; mails.push({ email: mm, foyer_id: p.foyer_id }); } }); });
       var formules = {}; lignes.forEach(function (l) { String(l.cours || '').split(' | ').filter(Boolean).forEach(function (c) { formules[c] = 1; }); });
-      var manquants = Object.keys(formules).filter(function (n) { return !A.groupes.some(function (g) { return g.nom === n; }); });
+      // Formules retrouvées par leur nom ADOC d'origine (clé), même si le groupe a été renommé dans l'appli
+      var manquants = Object.keys(formules).filter(function (n) { return !groupeCle('adoc:' + n); });
       return (mails.length ? q(sb.from('acces_emails').upsert(mails)) : Promise.resolve())
-        .then(function () { return manquants.length ? q(sb.from('groupes').insert(manquants.map(function (n) { return { nom: n, type: 'cours', description: 'Formule de cours ADOC' }; }))) : null; })
+        .then(function () { return manquants.length ? q(sb.from('groupes').insert(manquants.map(function (n) { return { nom: A.groupes.some(function (g) { return g.nom === n; }) ? n + ' (ADOC)' : n, cle: 'adoc:' + n, type: 'cours', description: 'Formule de cours ADOC' }; }))) : null; })
         .then(function () { return chargerGroupes(true); })
         .then(function () {
           var ajouts = [], retraits = [];
           lignes.forEach(function (l) {
             var p = parLic[l.licence]; if (!p) return;
-            var voulus = String(l.cours || '').split(' | ').filter(Boolean).map(function (n) { var g = A.groupes.filter(function (x) { return x.nom === n; })[0]; return g && g.id; }).filter(Boolean);
-            var actuels = (p.groupe_membres || []).map(function (g) { return g.groupe_id; }).filter(function (id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g && g.type === 'cours'; });
+            var voulus = String(l.cours || '').split(' | ').filter(Boolean).map(function (n) { var g = groupeCle('adoc:' + n); return g && g.id; }).filter(Boolean);
+            var actuels = (p.groupe_membres || []).map(function (g) { return g.groupe_id; }).filter(function (id) { var g = A.groupes.filter(function (x) { return x.id === id; })[0]; return g && (g.type === 'cours' || String(g.cle || '').indexOf('adoc:') === 0); });
             voulus.forEach(function (g) { if (actuels.indexOf(g) < 0) ajouts.push({ groupe_id: g, personne_id: p.id }); });
             actuels.forEach(function (g) { if (voulus.indexOf(g) < 0) retraits.push({ g: g, p: p.id }); });
           });
@@ -974,7 +1033,7 @@ function vueGroupes(m) {
         }).join('') + '</tbody></table></div>';
       };
       var replie = function (titre, sous, contenu, ouvert) {
-        return '<details class="card" style="padding:0;margin-bottom:8px"' + (ouvert ? ' open' : '') + '><summary style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;list-style-position:inside"><b>' + titre + '</b><span class="mut small">' + sous + '</span></summary><div style="padding:0 12px 12px">' + contenu + '</div></details>';
+        return '<details class="card" style="padding:0;margin-bottom:8px"' + (ouvert ? ' open' : '') + '><summary style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;list-style:none"><span class="gfl">▸</span><b style="flex:1">' + titre + '</b><span class="mut small">' + sous + '</span></summary><div style="padding:0 12px 12px">' + contenu + '</div></details>';
       };
       if (t === 'creneau') {
         var jours = {}, ext = function (g) { return /ext[ée]rieur/i.test((LIEUX[g.id] || '') + ' ' + g.nom); };
@@ -989,6 +1048,13 @@ function vueGroupes(m) {
           return replie(esc(j), jours[j].length + ' cours · ' + n + ' joueurs', table(jours[j], true), OUVERTS[j]);
         }).join('');
       }
+      // Sous-catégories choisies dans la fiche des groupes (Interclub, Yvelinoises…) : un bloc repliable chacune
+      var subs = {}, seuls = [];
+      l.forEach(function (g) { if (g.sous_categorie) (subs[g.sous_categorie] = subs[g.sous_categorie] || []).push(g); else seuls.push(g); });
+      if (Object.keys(subs).length) return '<div class="sect">' + TYPES_GRP[t] + '</div>' + Object.keys(subs).sort(function (a, b) { return a.localeCompare(b, 'fr'); }).map(function (s) {
+        var n = subs[s].reduce(function (x, g) { return x + (cpt[g.id] || 0); }, 0);
+        return replie(esc(s), subs[s].length + ' groupe' + (subs[s].length > 1 ? 's' : '') + ' · ' + n + ' membres', table(subs[s]), OUVERTS[s]);
+      }).join('') + (seuls.length ? (seuls.length > 8 ? replie('Autres', seuls.length + ' groupes', table(seuls), OUVERTS['Autres']) : table(seuls)) : '');
       if (l.length > 8) return '<div class="sect">' + TYPES_GRP[t] + '</div>' + replie(TYPES_GRP[t], l.length + ' groupes', table(l), OUVERTS[t]);
       return '<div class="sect">' + TYPES_GRP[t] + '</div>' + table(l);
     }).join('');
@@ -998,14 +1064,30 @@ function vueGroupes(m) {
   var fiche = function (g) {
     var nouveau = !g; g = g || { type: 'activite', couleur: '#1f5a85', actif: true };
     var membres = nouveau ? [] : A.pers.filter(function (p) { return (p.groupe_membres || []).some(function (x) { return x.groupe_id === g.id; }); });
-    panneau(nouveau ? 'Nouveau groupe' : g.nom, '<div class="stack"><label class="l">Nom<input class="f" id="gr-n" value="' + esc(g.nom) + '"></label>' +
-      '<div class="row3"><label class="l">Type<select class="f" id="gr-t">' + Object.keys(TYPES_GRP).map(function (t) { return '<option value="' + t + '"' + (g.type === t ? ' selected' : '') + '>' + TYPES_GRP[t] + '</option>'; }).join('') + '</select></label>' +
-      '<label class="l">Couleur<input class="f" type="color" id="gr-c" value="' + esc(g.couleur || '#1f5a85') + '"></label><label class="c" style="margin-top:18px"><input type="checkbox" id="gr-a"' + (g.actif !== false ? ' checked' : '') + '>Actif</label></div>' +
-      '<button class="btn" id="gr-ok">Enregistrer</button>' +
+    var c = String(g.cle || ''), sys = c.indexOf('arena:') === 0 || c.indexOf('profil:') === 0, adoc = c.indexOf('adoc:') === 0;
+    var sousCats = A.groupes.map(function (x) { return x.sous_categorie; }).filter(function (x, k, t) { return x && t.indexOf(x) === k; }).sort();
+    var info = c.indexOf('arena:') === 0 ? 'Relié au niveau CLOC\'ARENA <b>' + esc(c.slice(6)) + '</b> : les joueurs de ce niveau y sont placés automatiquement. Tu peux changer le nom et la couleur librement ; la catégorie reste « Niveaux CLOC\'ARENA ».'
+      : c.indexOf('profil:') === 0 ? 'Groupe rempli automatiquement à l\'ajout des adhérents. Tu peux changer le nom librement ; la catégorie reste « Profils ».'
+      : adoc ? 'Formule ADOC d\'origine : <b>' + esc(c.slice(5)) + '</b>. Tu peux la renommer et la ranger comme tu veux : la mise à jour ADOC la reconnaît toujours et y range les adhérents.' : '';
+    panneau(nouveau ? 'Nouveau groupe' : g.nom, '<div class="stack"><label class="l">Nom affiché<input class="f" id="gr-n" maxlength="120" value="' + esc(g.nom) + '"></label>' +
+      (info ? '<div class="card small" style="background:var(--soft);border:0">' + info + '</div>' : '') +
+      '<div class="row2"><label class="l">Catégorie<select class="f" id="gr-t"' + (sys ? ' disabled' : '') + '>' + Object.keys(TYPES_GRP).map(function (t) { return '<option value="' + t + '"' + (g.type === t ? ' selected' : '') + '>' + TYPES_GRP[t] + '</option>'; }).join('') + '</select></label>' +
+      '<label class="l">Sous-catégorie (facultatif)<input class="f" id="gr-s" list="gr-sl" maxlength="40" value="' + esc(g.sous_categorie) + '" placeholder="Ex. Interclub, Galaxie, Stages…"><datalist id="gr-sl">' + sousCats.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></label></div>' +
+      '<span class="mut xs" style="margin-top:-6px">Les groupes d\'une même sous-catégorie sont réunis sous une petite flèche dans les listes. Les créneaux sont déjà rangés par jour.</span>' +
+      '<label class="l">Description (facultatif)<input class="f" id="gr-d" maxlength="200" value="' + esc(g.description) + '"></label>' +
+      '<div class="row2"><label class="l">Couleur<input class="f" type="color" id="gr-c" value="' + esc(g.couleur || '#1f5a85') + '"></label><label class="c" style="margin-top:18px"><input type="checkbox" id="gr-a"' + (g.actif !== false ? ' checked' : '') + '>Actif (décoché = archivé, n\'apparaît plus dans les listes)</label></div>' +
+      '<div class="chips"><button class="btn" id="gr-ok">Enregistrer</button>' + (nouveau || sys ? '' : '<button class="btn ko" id="gr-x">Supprimer le groupe</button>') + '</div>' +
       (nouveau ? '' : '<div class="sect">Membres (' + membres.length + ')</div>' + CHERCHEUR + '<div class="card list">' + (membres.length ? membres.map(function (p) { return '<div class="it"><span>' + esc(p.prenom + ' ' + p.nom) + ' <span class="mut xs">' + age(p.date_naissance) + ' ans</span></span><button class="btn sm ko" data-grm="' + p.id + '">Retirer</button></div>'; }).join('') : '<div class="it mut">Aucun membre.</div>') + '</div>') + '</div>', function (root) {
       $('gr-ok').onclick = function () {
-        var row = { nom: $('gr-n').value.trim(), type: $('gr-t').value, couleur: $('gr-c').value, actif: $('gr-a').checked }; if (!row.nom) return toast('Il faut un nom');
-        (nouveau ? q(sb.from('groupes').insert(row)) : q(sb.from('groupes').update(row).eq('id', g.id))).then(function () { toast('Groupe enregistré'); return chargerGroupes(true); }).then(function () { fermer(); dessiner(); }).catch(function () { toast('Enregistrement impossible (nom déjà pris ?)'); });
+        var row = { nom: $('gr-n').value.trim(), couleur: $('gr-c').value, actif: $('gr-a').checked, sous_categorie: $('gr-s').value.trim() || null, description: $('gr-d').value.trim() || null }; if (!row.nom) return toast('Il faut un nom');
+        if (!sys) row.type = $('gr-t').value;
+        if (A.groupes.some(function (x) { return x.id !== g.id && x.nom.toLowerCase() === row.nom.toLowerCase(); })) return toast('Un autre groupe porte déjà ce nom');
+        (nouveau ? q(sb.from('groupes').insert(row)) : q(sb.from('groupes').update(row).eq('id', g.id))).then(function () { toast('Groupe enregistré'); return chargerGroupes(true); }).then(function () { fermer(); dessiner(); }).catch(function () { toast('Enregistrement impossible'); });
+      };
+      if ($('gr-x')) $('gr-x').onclick = function () {
+        var msg = 'Supprimer définitivement « ' + g.nom + ' » ?' + (membres.length ? '\n\n' + membres.length + ' membre' + (membres.length > 1 ? 's en sont retirés' : ' en est retiré') + ' (les fiches des joueurs ne sont pas touchées).' : '') + '\n\nIl disparaît aussi des événements, actus et séances qui le visaient.' + (adoc ? '\n\nAttention : c\'est une formule ADOC, elle sera recréée à la prochaine mise à jour ADOC si des adhérents l\'ont encore. Pour la cacher, mieux vaut décocher « Actif ».' : '');
+        if (!confirm(msg)) return;
+        q(sb.from('groupes').delete().eq('id', g.id)).then(function () { toast('Groupe supprimé'); return Promise.all([chargerGroupes(true), chargerPers(true)]); }).then(function () { fermer(); dessiner(); }).catch(function () { toast('Suppression impossible'); });
       };
       if (nouveau) return;
       var recharger = function () { return chargerPers(true).then(function () { fiche(g); dessiner(); }); };
