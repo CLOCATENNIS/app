@@ -155,7 +155,7 @@ function saisie(c) {
   if (!d) { c.innerHTML = h + '<div class="card empty">Aucun défi actif.</div>'; lier(c); return; }
   var eqs = EQS(), solo = d.mode === 'solo';
   var nivs = M().ordreNiveaux(eqs.map(function (x) { return x.niveau; }).filter(function (n, i, l) { return l.indexOf(n) === i; }));
-  h += '<div class="card small" style="margin-bottom:10px;padding:10px 14px"><b>' + esc(d.nom) + '</b> · ' + (d.mode === 'duo' ? 'score de chaque joueur, le meilleur compte pour le duo' : d.mode === 'equipe' ? 'un score pour l\'équipe' : 'un score par joueur') + (M().chrono(d) ? ' · <b>chrono en secondes</b> (ex. 32,5)' : '') + '<div class="mut xs" style="margin-top:4px">' + esc(d.consigne || '') + '</div>' +
+  h += '<div class="card small" style="margin-bottom:10px;padding:10px 14px"><b>' + esc(d.nom) + '</b> · ' + (d.mode === 'duo' ? 'tape le score du joueur évalué : <b>le record vaut pour toute l\'équipe</b>, sparring compris (le meilleur passage compte)' : d.mode === 'sparring' ? 'score du <b>joueur évalué</b> seulement (l\'autre est sparring et ne marque rien)' : d.mode === 'equipe' ? 'un score commun pour les joueurs qui jouent' + (eqs.some(function (x) { return x.joueurs.length > 2; }) ? ' (trio : décoche celui qui ne joue pas)' : '') : 'un score par joueur') + (M().chrono(d) ? ' · <b>chrono en secondes</b> (ex. 32,5)' : '') + '<div class="mut xs" style="margin-top:4px">' + esc(d.consigne || '') + '</div>' +
     nivs.filter(function (n) { return d.consignes && d.consignes[n]; }).map(function (n) { return '<div class="xs" style="margin-top:3px">' + pill(n) + ' ' + esc(d.consignes[n]) + '</div>'; }).join('') + '</div>';
   if (!(e.presents || []).length) h += '<div class="card empty">Coche d\'abord les présents dans « Présents et équipes ».</div>';
   else if (!solo) {
@@ -177,16 +177,16 @@ function saisie(c) {
     h += '<div class="sect" style="display:flex;gap:8px;align-items:center">' + pill(n) + (rec != null ? '<span class="xs" style="text-transform:none;letter-spacing:0">Record du niveau : <b>' + esc(M().fmt(d, rec)) + '</b></span>' : '') + '</div><div class="hub" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">';
     eqs.filter(function (x) { return x.niveau === n; }).forEach(function (x, i) {
       var cle = x.joueurs.slice().sort().join('+');
-      var bEq = meilleur(d, n, function (es) { return es.joueurs.slice().sort().join('+') === cle || (d.mode === 'solo' && x.joueurs.indexOf(es.joueurs[0]) >= 0); });
+      var bEq = meilleur(d, n, function (es) { return es.joueurs.slice().sort().join('+') === cle || ((d.mode === 'solo' || d.mode === 'sparring') && es.joueurs.length === 1 && x.joueurs.indexOf(es.joueurs[0]) >= 0); });
       h += '<div class="card stack" style="gap:8px;padding:12px"><div style="display:flex;justify-content:space-between;gap:6px"><b class="small">' + (x.solo ? esc(nom(x.joueurs[0])) : 'Équipe ' + (i + 1) + (x.joueurs.length === 1 ? ' · ⚠ seul' : '')) + '</b>' + (bEq != null ? '<span class="xs mut">Meilleur : <b style="color:var(--tx)">' + esc(M().fmt(d, bEq)) + '</b> · ' + M().points(d, n, bEq) + ' pt' + (M().points(d, n, bEq) > 1 ? 's' : '') + '</span>' : '') + '</div>';
       if (d.mode === 'equipe') {
-        h += '<div class="chips">' + x.joueurs.map(function (p) { return '<label class="chip on" style="cursor:pointer"><input type="checkbox" data-chact="' + x.k + '" value="' + p + '" checked style="display:none">' + esc(nom(p)) + '</label>'; }).join('') + '</div>' +
+        h += '<div class="chips">' + x.joueurs.map(function (p, j) { var on = !d.actifs || j < d.actifs; return '<label class="chip' + (on ? ' on' : '') + '" style="cursor:pointer"><input type="checkbox" data-chact="' + x.k + '" value="' + p + '"' + (on ? ' checked' : '') + ' style="display:none">' + esc(nom(p)) + '</label>'; }).join('') + '</div>' +
           '<div style="display:flex;gap:8px"><input class="f" data-chv="' + x.k + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 'Temps (s)' : 'Score') + '" style="font-size:18px;text-align:center"><button class="btn ok" data-chok="' + x.k + '">OK</button></div>';
       } else {
         h += x.joueurs.map(function (p) {
-          var bj = d.mode === 'solo' ? meilleur(d, n, function (es) { return es.joueurs.length === 1 && es.joueurs[0] === p; }) : null;
-          return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + (x.solo ? 'Score' : esc(nom(p))) + (bj != null ? ' <span class="xs mut">(' + esc(M().fmt(d, bj)) + ')</span>' : '') + '</span><input class="f" data-chv="' + x.k + '" data-pid="' + p + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 's' : '—') + '" style="width:90px;font-size:18px;text-align:center"></div>';
-        }).join('') + '<button class="btn ok" data-chok="' + x.k + '">' + (x.solo ? 'Valider' : 'Valider la tentative') + '</button>';
+          var bj = d.mode === 'solo' || d.mode === 'sparring' ? meilleur(d, n, function (es) { return es.joueurs.length === 1 && es.joueurs[0] === p; }) : null;
+          return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + (x.solo ? 'Score' : d.mode === 'sparring' ? esc(nom(p)) + ' <span class="xs mut">évalué</span>' : esc(nom(p))) + (bj != null ? ' <span class="xs mut">(' + esc(M().fmt(d, bj)) + ')</span>' : '') + '</span><input class="f" data-chv="' + x.k + '" data-pid="' + p + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 's' : '—') + '" style="width:90px;font-size:18px;text-align:center"></div>';
+        }).join('') + '<button class="btn ok" data-chok="' + x.k + '">' + (x.solo ? 'Valider' : d.mode === 'sparring' ? 'Valider (score du joueur évalué)' : 'Valider la tentative') + '</button>';
       }
       h += '</div>';
     });
@@ -223,6 +223,7 @@ function valider(c, k, btn) {
     var act = all('[data-chact="' + k + '"]', c).filter(function (i) { return i.checked; }).map(function (i) { return i.value; });
     if (v == null) return toast('Indique le score');
     if (!act.length) return toast('Coche au moins un joueur');
+    if (d.actifs && act.length > d.actifs) return toast(d.actifs + ' joueurs maximum sur ce défi : décoche celui qui ne joue pas');
     lignes.push({ joueurs: act, scores: {}, resultat: v });
   } else {
     var sc = {};
@@ -231,14 +232,14 @@ function valider(c, k, btn) {
     if (!ids.length) return toast('Indique au moins un score');
     if (d.mode === 'duo') {
       var best = null; ids.forEach(function (p) { if (best == null || M().mieux(d, sc[p], best)) best = sc[p]; });
-      lignes.push({ joueurs: ids, scores: sc, resultat: best });
-    } else ids.forEach(function (p) { var o = {}; o[p] = sc[p]; lignes.push({ joueurs: [p], scores: o, resultat: sc[p] }); });
+      lignes.push({ joueurs: x.joueurs.slice(), scores: sc, resultat: best }); // record commun à toute l'équipe, sparring compris (décision du 23/11)
+    } else ids.forEach(function (p) { var o = {}; o[p] = sc[p]; if (d.mode === 'sparring') o.sparring = x.joueurs.filter(function (j) { return j !== p; }); lignes.push({ joueurs: [p], scores: o, resultat: sc[p] }); });
   }
   var rows = lignes.map(function (l) { return { challenge_id: CH.c.id, jour: CH.jour, defi: d.k, niveau: x.niveau, joueurs: l.joueurs, scores: l.scores, resultat: l.resultat }; });
   btn.disabled = true;
   q(sb.from('arena_challenge_essais').insert(rows).select('*')).then(function (l) {
     CH.essais = (l || []).concat(CH.essais);
-    toast(rows.map(function (r) { return (d.mode === 'solo' ? nom(r.joueurs[0]) + ' : ' : '') + M().fmt(d, r.resultat) + ' → ' + M().points(d, x.niveau, r.resultat) + ' pts'; }).join(' · '));
+    toast(rows.map(function (r) { return (d.mode === 'solo' || d.mode === 'sparring' ? nom(r.joueurs[0]) + ' : ' : '') + M().fmt(d, r.resultat) + ' → ' + M().points(d, x.niveau, r.resultat) + ' pts'; }).join(' · '));
     saisie(c);
   }).catch(function (e) { btn.disabled = false; err('Pas enregistré')(e); });
 }
@@ -273,7 +274,7 @@ function reglages(c) {
     var s = (d.seuils || {})[nr], propre = !!(s && s.length), aff = propre ? s : (nr === 'tous' ? [] : ((d.seuils || {}).tous || []));
     var lignes = aff.concat([['', ''], ['', '']]).slice(0, Math.max(aff.length + 1, 5));
     h += '<div class="card stack" style="gap:8px"><div style="display:flex;gap:8px;align-items:center"><input class="f" data-chnom="' + i + '" value="' + esc(d.nom) + '" style="font-weight:700"><label class="c xs"><input type="checkbox" data-chactif="' + i + '"' + (d.actif !== false ? ' checked' : '') + '> actif</label></div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="l">Saisie<select class="f" data-chmode="' + i + '">' + [['duo', 'Binôme (meilleur des deux)'], ['equipe', 'Un score par équipe'], ['solo', 'Un score par joueur']].map(function (o) { return '<option value="' + o[0] + '"' + (d.mode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="l">Saisie<select class="f" data-chmode="' + i + '">' + [['sparring', 'Joueur évalué + sparring'], ['duo', 'Binôme (meilleur des deux)'], ['equipe', 'Score commun (joueurs actifs)'], ['solo', 'Un score par joueur']].map(function (o) { return '<option value="' + o[0] + '"' + (d.mode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
       '<label class="l">Mesure<select class="f" data-chun="' + i + '"><option value="nb"' + (d.unite !== 'sec' ? ' selected' : '') + '>Nombre (plus = mieux)</option><option value="sec"' + (d.unite === 'sec' ? ' selected' : '') + '>Chrono (moins = mieux)</option></select></label></div>' +
       '<label class="l">Consigne<textarea class="f" data-chcons="' + i + '" style="min-height:60px">' + esc(d.consigne || '') + '</textarea></label>' +
       '<div class="xs mut">' + (nr === 'tous' ? 'Paliers tous niveaux' : propre ? 'Paliers propres au niveau ' + esc(nr) : 'Le niveau ' + esc(nr) + ' utilise les paliers « Tous niveaux » (modifie une case pour lui en donner des propres)') + '</div>' +
