@@ -1179,17 +1179,69 @@ function pageMasters() {
     '<span class="mut small">Matchs entre adhérents adultes, défis et classement de la saison, sur le même principe que CLOC\'ARENA Tweener pour les jeunes. Les infos seront publiées ici et dans les actus du club.</span></section></main>';
 }
 function pageArena() {
+  chargerChallenge();
+  var tabs = [['classement', 'Classement'], ['programme', 'Programme'], ['resultats', 'Résultats']];
+  if (S.challenge) tabs.unshift(['challenge', '🏆 Challenge']);
+  else if (S.arenaTab === 'challenge') S.arenaTab = 'classement';
   var h = '<div class="darkhead"><div class="wrap">' + backLink('#/arena', 'CLOC\'ARENA', true) + '<div class="kicker" style="margin-top:8px">JEUNES · SAISON 2026-2027</div><h1>CLOC\'ARENA Tweener</h1>' + lienRegles('tweener') +
-    '<div class="seg" style="margin-top:14px">' + [['classement', 'Classement'], ['programme', 'Programme'], ['resultats', 'Résultats']].map(function (t) {
+    '<div class="seg" style="margin-top:14px">' + tabs.map(function (t) {
       return '<button data-atab="' + t[0] + '" class="' + (S.arenaTab === t[0] ? 'on' : '') + '">' + t[1] + '</button>';
     }).join('') + '</div></div></div><main id="arena-main"><div class="skel"></div></main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-atab]'), function (b) { b.onclick = function () { S.arenaTab = b.dataset.atab; render(); }; });
-    if (S.arenaTab === 'classement') arenaClassement();
+    if (S.arenaTab === 'challenge') arenaChallenge();
+    else if (S.arenaTab === 'classement') arenaClassement();
     else if (S.arenaTab === 'programme') arenaProgramme();
     else arenaResultats();
   });
   return h;
+}
+// ---------- Challenge Week (animation temporaire du Tweener : défis, records et points par paliers) ----------
+// Données : rpc challenge_public (Challenge Week en ligne, noms « Prénom N. »). Calculs : challenge-moteur.js.
+function chargerChallenge(force) {
+  if (!window.ChallengeMoteur || !S.user || !estAdherent()) return;
+  if (S.challengeEtat === 'charge' || (S.challengeEtat === 'ok' && !force)) return;
+  S.challengeEtat = 'charge';
+  q(sb.rpc('challenge_public')).then(function (d) {
+    var avant = !!S.challenge;
+    S.challenge = d && d.id ? d : null; S.challengeEtat = 'ok';
+    if (S.challenge && !S.challengeVu && S.challenge.en_ligne) { S.challengeVu = true; S.arenaTab = 'challenge'; }
+    if (/#\/arena\/tweener/.test(location.hash) && (avant !== !!S.challenge || S.arenaTab === 'challenge')) { if (force && S.arenaTab === 'challenge') arenaChallenge(); else render(); }
+  }).catch(function () { S.challengeEtat = 'ok'; });
+}
+function arenaChallenge() {
+  var box = $('arena-main'), C = S.challenge, M = window.ChallengeMoteur;
+  if (!box) return;
+  if (!C || !M) { box.innerHTML = '<section class="card empty">Pas de challenge en cours.</section>'; return; }
+  var R = M.calcul(C.defis, C.essais), J = C.joueurs || {};
+  var nomJ = function (pid) { return (J[pid] || {}).nom || '?'; };
+  var nivs = M.ordreNiveaux([].concat.apply([], (C.seances || []).map(function (s) { return s.niveaux || []; })).concat(Object.keys(R.classement)).filter(function (n, i, l) { return l.indexOf(n) === i; }));
+  var mes = S.pers.map(function (p) { return p.id; });
+  if (nivs.indexOf(S.challengeNiv) < 0) { var m = S.pers.filter(function (p) { return nivs.indexOf(p.niveau_arena) >= 0; })[0]; S.challengeNiv = m ? m.niveau_arena : nivs[0]; }
+  var n = S.challengeNiv, cl = R.classement[n] || [];
+  var seanceN = (C.seances || []).filter(function (s) { return (s.niveaux || []).indexOf(n) >= 0; })[0];
+  var h = '<section class="card stack" style="gap:6px;background:linear-gradient(135deg,#5b3a86,#c62f2f);color:#fff;border:0"><span class="eyebrow" style="color:#f3d9ff">Animation de la semaine' + (C.en_ligne ? '' : ' · aperçu direction (pas encore visible des familles)') + '</span><b style="font-size:22px">🏆 ' + esc(C.titre) + '</b>' +
+    '<span class="small" style="color:#f1e6f7">Des défis en équipe pendant les rassemblements. Tentatives illimitées : seul le meilleur résultat compte, et il rapporte des points selon des paliers.</span>' +
+    '<span class="xs" style="color:#f1e6f7">' + (C.seances || []).map(function (s) { return esc(new Date(s.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })) + ' : ' + esc(M.ordreNiveaux(s.niveaux || []).join(', ')); }).join(' · ') + '</span></section>';
+  h += '<div class="chips">' + nivs.map(function (x) { var st = NIV[x] && n === x ? ' style="background:' + NIV[x].bg + ';border-color:' + NIV[x].bg + ';color:' + NIV[x].fg + '"' : ''; return '<button class="chip ' + (n === x ? 'on' : '') + '" data-chniv="' + x + '"' + st + '>' + x + '</button>'; }).join('') + '</div>';
+  if (!cl.length) h += '<section class="card empty">' + (seanceN ? 'Le challenge des ' + esc(n) + ' a lieu le ' + esc(new Date(seanceN.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '. Les records s\'afficheront ici en direct.' : 'Pas encore de résultat pour ce niveau.') + '</section>';
+  else h += '<section class="card tight"><div class="rk h" style="grid-template-columns:34px minmax(0,1fr) 54px 54px"><span>#</span><span>Joueur</span><span class="n">Défis</span><span class="n">Points</span></div>' + cl.map(function (x) {
+      var me = mes.indexOf(x.pid) >= 0;
+      return '<div class="rk' + (me ? ' me' : '') + '"><span>' + (x.rang === 1 ? '🥇' : x.rang === 2 ? '🥈' : x.rang === 3 ? '🥉' : x.rang) + '</span><span>' + balleArena(n) + esc(nomJ(x.pid)) + (me ? ' <span class="xs" style="color:#6f43a0">· ' + (S.compte && S.compte.personne_id === x.pid ? 'toi' : 'ta famille') + '</span>' : '') + '</span><span class="n mut">' + x.defis + '</span><span class="n"><b>' + x.points + '</b></span></div>';
+    }).join('') + '</section>';
+  h += '<span class="eyebrow" style="margin:6px 2px 0">Records des défis · ' + esc(n) + '</span>';
+  (C.defis || []).forEach(function (d) {
+    var l = ((R.records[d.k] || {})[n] || []).slice(0, 5), pal = M.seuils(d, n);
+    h += '<section class="card stack" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>' + esc(d.nom) + '</b><span class="xs mut">' + (d.mode === 'duo' ? 'en binôme' : d.mode === 'equipe' ? 'en équipe' : 'en solo') + '</span></div>' +
+      (l.length ? l.map(function (r) { var me = r.joueurs.some(function (p) { return mes.indexOf(p) >= 0; }); return '<div class="small" style="display:flex;gap:8px;align-items:center' + (me ? ';font-weight:700' : '') + '"><span style="width:24px">' + (r.rang === 1 ? '🥇' : r.rang === 2 ? '🥈' : r.rang === 3 ? '🥉' : r.rang) + '</span><span style="flex:1">' + r.joueurs.map(function (p) { return esc(nomJ(p)); }).join(' / ') + '</span><b>' + esc(M.fmt(d, r.resultat)) + '</b></div>'; }).join('') : '<span class="mut small">Pas encore de record.</span>') +
+      '<details><summary class="xs mut" style="cursor:pointer">La règle et les paliers</summary><div class="xs" style="margin-top:6px">' + esc(d.consigne || '') + (d.consignes && d.consignes[n] ? ' <b>' + esc(n) + ' : ' + esc(d.consignes[n]) + '</b>' : '') + '</div>' +
+      (pal.length ? '<div class="xs mut" style="margin-top:4px">' + pal.map(function (x) { return (M.chrono(d) ? '≤ ' + M.fmt(d, x[0]) : x[0] + ' et +') + ' : ' + x[1] + ' pt' + (x[1] > 1 ? 's' : ''); }).join(' · ') + '</div>' : '') + '</details></section>';
+  });
+  h += '<p class="mut xs" style="text-align:center;margin:0 0 6px">Classement par niveau : la somme des points du meilleur résultat de chaque défi. Mis à jour en direct pendant les séances.</p>';
+  box.innerHTML = h;
+  Array.prototype.forEach.call(box.querySelectorAll('[data-chniv]'), function (b) { b.onclick = function () { S.challengeNiv = b.dataset.chniv; arenaChallenge(); }; });
+  clearTimeout(S.challengeTimer);
+  S.challengeTimer = setTimeout(function () { if (/#\/arena\/tweener/.test(location.hash) && S.arenaTab === 'challenge' && !document.hidden) chargerChallenge(true); }, 30000);
 }
 // ---------- Fiches « Comment ça marche ? » des trois circuits (#/arena/regles/tweener|masters|versus) ----------
 var REGLES_CIRCUITS = {

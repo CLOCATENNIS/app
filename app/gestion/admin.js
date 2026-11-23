@@ -1508,7 +1508,7 @@ function arLireScore(txt) {
 // Adresses : #/arena/<circuit> ou #/arena/<onglet>[/<id>] (onglets du Tweener).
 // ---------- Masters et Versus : chacun sa façon de fonctionner (notes Notion « Versus — cahier des charges V1 » et Masters) ----------
 var AR_ONGLETS = {
-  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement'], ['cartes', 'Cartes joueurs'], ['notifs', 'Notifications']],
+  tweener: [['seances', 'Séances'], ['inscriptions', 'Inscriptions'], ['challenge', 'Challenge Week'], ['saisir', 'Saisir un match'], ['historique', 'Historique des saisies'], ['niveaux', 'Niveaux des joueurs'], ['affiches', 'Affiches classement'], ['cartes', 'Cartes joueurs'], ['notifs', 'Notifications']],
   masters: [['classement', 'Classement ATP'], ['rush', 'Rush Points'], ['quetes', 'Quêtes'], ['saisir', 'Saisir un défi'], ['historique', 'Historique des défis'], ['joueurs', 'Participants'], ['finale', 'Tournoi final'], ['notifs', 'Notifications']],
   versus: [['joueurs', 'Joueurs par catégorie'], ['demandes', 'Demandes de terrain'], ['matchs', 'Matchs'], ['litiges', 'Litiges'], ['adoc', 'À saisir dans ADOC'], ['reglages', 'Réglages']]
 };
@@ -1860,6 +1860,7 @@ function vueArena(m, arg, suite) {
   if (AR.tab === 'affiches') return window.arAffiches ? window.arAffiches(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Affiches indisponibles : recharge la page.</div>'); // affiches.js
   if (AR.tab === 'cartes') return window.arCartes ? window.arCartes(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Cartes indisponibles : recharge la page.</div>'); // cartes.js
   if (AR.tab === 'notifs') return arNotifs(box, AR.circuit);
+  if (AR.tab === 'challenge') return window.arChallenge ? window.arChallenge(box, { sb: sb, q: q, chargerPers: chargerPers, esc: esc, all: all, toast: toast, $: $ }) : (box.innerHTML = '<div class="card empty">Challenge Week indisponible : recharge la page.</div>'); // challenge.js
   if (AR.circuit === 'masters' && ['classement', 'joueurs', 'rush', 'quetes', 'finale'].indexOf(AR.tab) >= 0) return arMasters(box, AR.tab);
   var prep = Promise.all([
     AR.jc[AR.circuit] ? AR.jc[AR.circuit] : AR.circuit === 'tweener' ? q(sb.from('personnes').select('id, prenom, nom, niveau_arena').not('arena_id', 'is', null).eq('actif', true).order('prenom'))
