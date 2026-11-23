@@ -6,6 +6,7 @@
 var sb, q, chargerPers, esc, all, toast, $;
 var M = function () { return window.ChallengeMoteur; };
 var PILL = { Vert: ['#18be56', '#fff'], Violet: ['#7c3ce6', '#fff'], Rouge: ['#e82c38', '#fff'], Orange: ['#f58028', '#fff'], Jaune: ['#ffdc14', '#141414'], Blanc: ['#ececee', '#19191e'] };
+var COACH = false;
 var CH = { c: null, essais: [], pers: {}, onglet: 'seance', jour: null, defi: null, nivCl: null, nivRg: 'tous', brouillon: {} };
 
 function pill(n) { var c = PILL[n] || ['#ddd', '#222']; return '<span class="badge" style="background:' + c[0] + ';color:' + c[1] + '">' + esc(n) + '</span>'; }
@@ -21,7 +22,7 @@ function nombre(v) { v = String(v == null ? '' : v).trim().replace(',', '.'); if
 function err(t) { return function (e) { toast(t + (e && e.message ? ' : ' + e.message : '')); }; }
 
 function sauverEquipes() {
-  return q(sb.from('arena_challenges').update({ equipes: CH.c.equipes }).eq('id', CH.c.id)).catch(err('Pas enregistré'));
+  return q(sb.rpc('challenge_equipes_maj', { p_id: CH.c.id, p_jour: CH.jour, p_val: E() })).catch(err('Pas enregistré'));
 }
 
 function charger() {
@@ -45,16 +46,17 @@ function charger() {
 function vue(box) {
   if (!M()) { box.innerHTML = '<div class="card empty">Le module Challenge n\'a pas pu se charger. Recharge la page.</div>'; return; }
   if (!CH.c) { box.innerHTML = '<div class="card empty">Aucune Challenge Week en cours.</div>'; return; }
-  var ong = [['seance', 'Présents et équipes'], ['saisie', 'Saisir les résultats'], ['classements', 'Records et classements'], ['reglages', 'Défis et paliers']];
+  var ong = [['seance', 'Présents et équipes'], ['saisie', 'Saisir les résultats'], ['classements', 'Records et classements']].concat(COACH ? [] : [['reglages', 'Défis et paliers']]);
+  if (COACH && CH.onglet === 'reglages') CH.onglet = 'seance';
   box.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:17px">🏆 ' + esc(CH.c.titre) + '</b>' +
     '<span class="badge" style="background:' + (CH.c.en_ligne ? 'var(--ok);color:#fff' : 'var(--sun)') + '">' + (CH.c.en_ligne ? 'Visible dans l\'appli' : 'Pas encore visible dans l\'appli') + '</span>' +
-    '<button class="btn sm ' + (CH.c.en_ligne ? 'line' : 'ok') + '" id="ch-ligne" style="margin-left:auto">' + (CH.c.en_ligne ? 'Masquer de l\'appli' : 'Afficher dans l\'appli') + '</button></div>' +
+    (COACH ? '' : '<button class="btn sm ' + (CH.c.en_ligne ? 'line' : 'ok') + '" id="ch-ligne" style="margin-left:auto">' + (CH.c.en_ligne ? 'Masquer de l\'appli' : 'Afficher dans l\'appli') + '</button>') + '</div>' +
     '<div class="chips" style="margin-bottom:10px">' + (CH.c.seances || []).map(function (s) {
       return '<button class="chip' + (s.jour === CH.jour ? ' on' : '') + '" data-chj="' + s.jour + '">' + esc(jourTxt(s.jour)) + ' · ' + esc(M().ordreNiveaux(s.niveaux || []).join(', ')) + '</button>';
     }).join('') + '</div>' +
     '<div class="chips" style="margin-bottom:14px">' + ong.map(function (o) { return '<button class="chip' + (CH.onglet === o[0] ? ' on' : '') + '" data-cho="' + o[0] + '" style="font-weight:600">' + o[1] + '</button>'; }).join('') + '</div>' +
     '<div id="ch-c"></div>';
-  $('ch-ligne').onclick = function () {
+  if ($('ch-ligne')) $('ch-ligne').onclick = function () {
     var v = !CH.c.en_ligne;
     q(sb.from('arena_challenges').update({ en_ligne: v }).eq('id', CH.c.id)).then(function () { CH.c.en_ligne = v; toast(v ? 'La Challenge Week est visible dans l\'appli (CLOC\'ARENA › Tweener › Challenge)' : 'Challenge Week masquée de l\'appli'); vue(box); }).catch(err('Action impossible'));
   };
@@ -124,8 +126,8 @@ function presents(c) {
   };
   if (e.presents == null && S.evenement_id) {
     c.innerHTML = '<div class="skel"></div>';
-    q(sb.from('participations').select('personne_id, reponse').eq('evenement_id', S.evenement_id)).catch(function () { return []; }).then(function (l) {
-      if (e.presents == null) e.presents = (l || []).filter(function (x) { return x.reponse === 'oui'; }).map(function (x) { return x.personne_id; });
+    q(sb.rpc('challenge_joueurs', { p_evenement: S.evenement_id })).catch(function () { return []; }).then(function (l) {
+      if (e.presents == null) e.presents = (l || []).filter(function (x) { return x.oui; }).map(function (x) { return x.id; });
       go();
     });
   } else { if (e.presents == null) e.presents = []; go(); }
@@ -302,8 +304,19 @@ function reglages(c) {
   };
 }
 
+var CSS_APPLI = '.chw .stack{gap:10px}.chw .chips{flex-wrap:wrap;overflow:visible}.chw .hub{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}' +
+  '.chw .two{display:grid;gap:12px}@media(min-width:900px){.chw .two{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}' +
+  '.chw .sect{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);margin:18px 0 8px}' +
+  '.chw label.c{display:flex;gap:8px;align-items:center;font-size:14px;min-height:34px}.chw label.c input{width:20px;height:20px}' +
+  '.chw .btn.sm{display:inline-flex;min-height:36px;padding:0 12px;font-size:13px;border-radius:10px}.chw .btn.ok{background:var(--ok)}' +
+  '.chw .btn.ko{background:transparent;color:var(--ko);border:1px solid var(--bd)}.chw input.f{min-height:44px}.chw select.f{min-height:34px}';
 window.arChallenge = function (box, o) {
   sb = o.sb; q = o.q; chargerPers = o.chargerPers; esc = o.esc; all = o.all; toast = o.toast; $ = o.$;
+  COACH = !!o.coach;
+  if (COACH) {
+    box.classList.add('chw');
+    if (!document.getElementById('chw-css')) { var st = document.createElement('style'); st.id = 'chw-css'; st.textContent = CSS_APPLI; document.head.appendChild(st); }
+  }
   box.innerHTML = '<div class="skel"></div>';
   charger().then(function () { vue(box); }).catch(function (e) { box.innerHTML = '<div class="card empty">Impossible de charger la Challenge Week' + (e && e.message ? ' : ' + esc(e.message) : '') + '.</div>'; });
 };

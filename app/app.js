@@ -4062,6 +4062,7 @@ function pageCoach() {
     if (ev.length) h += '<div class="dayhead">Séances et événements</div>' + ev.map(carteEvtCoach).join('');
   } else if (CO.tab === 'evts') {
     var du = debutJour(new Date()), au = new Date(du.getTime() + 35 * 864e5), l = evtsDuCoach(du, au);
+    h += '<a class="ev" href="#/coach/challenge"><span class="bar" style="background:#7c3ce6"></span><div class="stack" style="flex:1"><b class="t">🏆 Challenge Week</b><span class="mut small">Présents, équipes par niveau et saisie des défis en direct</span></div><span class="mut">›</span></a>';
     h += '<a class="ev" href="#/coach/equipes"><span class="bar" style="background:var(--ac)"></span><div class="stack" style="flex:1"><b class="t">Rencontres par équipes</b><span class="mut small">Format Coupe Davis : compositions, scores, classement, bonus capitaine</span></div><span class="mut">›</span></a>';
     h += l.length ? l.map(carteEvtCoach).join('') : '<section class="card empty">Aucune séance ni événement à encadrer dans les 5 prochaines semaines.</section>';
   } else if (CO.tab === 'missions') h += '<div id="missions"><div class="skel"></div></div>';
@@ -4082,6 +4083,17 @@ function pageCoach() {
     remplirComptesEvt();
   });
   return h + '</main>';
+}
+// ---------- Challenge Week : espace coach (présents, équipes, saisie) — même module que la gestion (gestion/challenge.js) ----------
+function pageCoachChallenge() {
+  setTimeout(function () {
+    var box = $('chw-box'); if (!box) return;
+    if (!window.arChallenge || !window.ChallengeMoteur) { box.innerHTML = '<section class="card empty">Module indisponible : recharge la page.</section>'; return; }
+    window.arChallenge(box, { coach: true, sb: sb, q: q, esc: esc, toast: toast, $: $,
+      all: function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); },
+      chargerPers: function () { return q(sb.rpc('challenge_joueurs', { p_evenement: null })); } });
+  });
+  return '<div class="darkhead" style="background:linear-gradient(135deg,#5b3a86,#7c3ce6)"><div class="wrap">' + backLink('#/coach/evts', 'Séances et événements', true) + '<div class="kicker" style="margin-top:8px">ESPACE COACH · CLOC\'ARENA TWEENER</div><h1>Challenge Week</h1></div></div><main><div id="chw-box"><div class="skel"></div></div></main>';
 }
 // ---------- Rencontres par équipes (format Coupe Davis) : espace coach ----------
 // 4 équipes, 5 tours : 3 tours de poule (chacun contre chacun), demi-finales 1er–4e et 2e–3e, puis finale et match pour la 3e place.
@@ -4613,7 +4625,7 @@ function eqLier() {
 // Une séance ou un événement pour le coach : présents / absents / inscrits
 function carteEvtCoach(e) {
   var d = new Date(e.debut);
-  return '<a class="ev" href="#/evenement/' + e.id + '"><span class="bar" style="background:' + couleurGroupes(evGroupes(e).gs) + '"></span><div class="stack" style="flex:1"><b class="t">' + esc(e.titre) + '</b>' +
+  return '<a class="ev" href="' + (/challenge/i.test(e.titre || '') && e.type === 'seance' ? '#/coach/challenge' : '#/evenement/' + e.id) + '"><span class="bar" style="background:' + couleurGroupes(evGroupes(e).gs) + '"></span><div class="stack" style="flex:1"><b class="t">' + esc(e.titre) + '</b>' +
     '<span class="mut small">' + esc(fmtCourt(d)) + ' · ' + fmtH(d) + (e.fin ? ' – ' + fmtH(new Date(e.fin)) : '') + (e.lieu ? ' · ' + esc(e.lieu) : '') + '</span>' +
     '<span class="small" data-cevt="' + e.id + '" data-insc="' + (e.inscription_ouverte ? 1 : 0) + '" style="font-weight:600;color:var(--mut)">…</span></div></a>';
 }
@@ -5416,9 +5428,12 @@ function render() {
   else if (p === 'groupe') { html = pageGroupe(arg); actif = enModeCoach() ? 'coach' : aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') {
     if (peutModeCoach() && !enModeCoach()) { S.mode = 'coach'; localStorageSet('cloca-mode', S.user.id); } // entrer dans l'espace coach = passer en mode coach
+    if (arg === 'challenge') { CO.tab = 'evts'; html = pageCoachChallenge(); actif = enModeCoach() ? 'coach/evts' : 'gestion'; }
+    else {
     if (enModeCoach() || arg) CO.tab = { evts: 1, groupes: 1, missions: 1, equipes: 1 }[arg] ? arg : 'jour';
     if (CO.tab !== 'equipes') EQ.form = null;
     html = pageCoach(); actif = enModeCoach() ? 'coach' + (CO.tab === 'jour' ? '' : '/' + (CO.tab === 'equipes' ? 'evts' : CO.tab)) : 'gestion';
+    }
   }
   else if (p === 'equipes') { html = pageEquipes(arg); actif = enModeCoach() ? 'coach/evts' : 'gestion'; }
   else if (p === 'messages') { html = pageMessages(); actif = 'messages'; }
