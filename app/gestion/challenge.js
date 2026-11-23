@@ -149,6 +149,18 @@ function meilleur(d, n, filtre) {
   CH.essais.forEach(function (x) { if (!x.annule && x.defi === d.k && x.niveau === n && filtre(x) && (b == null || M().mieux(d, +x.resultat, b))) b = +x.resultat; });
   return b;
 }
+function recordJoueur(d, pid) {
+  var b = null;
+  CH.essais.forEach(function (x) { if (!x.annule && x.defi === d.k && (x.joueurs || []).indexOf(pid) >= 0 && (b == null || M().mieux(d, +x.resultat, b))) b = +x.resultat; });
+  return b;
+}
+function nouvelleManche() { // nouveaux partenaires : on évite les associations déjà jouées sur ce défi
+  var e = E(), k = CH.defi; e.defis = e.defis || {}; e.manches = e.manches || {};
+  var deja = M().paires(CH.essais.filter(function (x) { return !x.annule && x.defi === k && x.jour === CH.jour; }).map(function (x) { return x.joueurs; }).concat((e.defis[k] || []).map(function (x) { return x.joueurs; })));
+  e.defis[k] = M().tirerNouveaux(e.presents || [], niv, deja);
+  e.manches[k] = (e.manches[k] || 1) + 1;
+  sauverEquipes();
+}
 function saisie(c) {
   var e = E(), d = defi(CH.defi);
   var h = '<div class="chips" style="margin-bottom:10px">' + defisActifs().map(function (x) { return '<button class="chip' + (x.k === CH.defi ? ' on' : '') + '" data-chd="' + x.k + '">' + esc(x.nom) + '</button>'; }).join('') + '</div>';
@@ -161,7 +173,8 @@ function saisie(c) {
   else if (!solo) {
     var dans = {}; eqs.forEach(function (x) { x.joueurs.forEach(function (p) { dans[p] = 1; }); });
     var sans = (e.presents || []).filter(function (p) { return !dans[p]; });
-    h += '<div class="card stack" style="gap:8px;margin-bottom:10px;padding:10px 14px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b class="small" style="flex:1">🎲 Équipes tirées au sort pour ce défi</b><button class="btn sm" id="ch-retirage">Nouveau tirage</button><button class="btn sm line" id="ch-modif">' + (CH.modif ? 'Fermer' : 'Modifier les équipes') + '</button></div>';
+    h += '<div class="card stack" style="gap:8px;margin-bottom:10px;padding:10px 14px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b class="small" style="flex:1">🎲 Manche ' + ((e.manches || {})[d.k] || 1) + ' · équipes tirées au sort</b><button class="btn sm line" id="ch-modif">' + (CH.modif ? 'Fermer' : 'Modifier à la main') + '</button></div>' +
+      '<button class="btn" id="ch-retirage">🔄 Nouvelle manche : nouveaux partenaires</button><span class="xs mut">Tentatives illimitées : refais le défi autant que tu veux. Chaque joueur garde son meilleur record, quel que soit son partenaire. Les résultats déjà saisis ne bougent jamais.</span>';
     if (CH.modif) {
       nivs.forEach(function (n) {
         var l = eqs.filter(function (x) { return x.niveau === n; });
@@ -180,12 +193,12 @@ function saisie(c) {
       var bEq = meilleur(d, n, function (es) { return es.joueurs.slice().sort().join('+') === cle || ((d.mode === 'solo' || d.mode === 'sparring') && es.joueurs.length === 1 && x.joueurs.indexOf(es.joueurs[0]) >= 0); });
       h += '<div class="card stack" style="gap:8px;padding:12px"><div style="display:flex;justify-content:space-between;gap:6px"><b class="small">' + (x.solo ? esc(nom(x.joueurs[0])) : 'Équipe ' + (i + 1) + (x.joueurs.length === 1 ? ' · ⚠ seul' : '')) + '</b>' + (bEq != null ? '<span class="xs mut">Meilleur : <b style="color:var(--tx)">' + esc(M().fmt(d, bEq)) + '</b> · ' + M().points(d, n, bEq) + ' pt' + (M().points(d, n, bEq) > 1 ? 's' : '') + '</span>' : '') + '</div>';
       if (d.mode === 'equipe') {
-        h += '<div class="chips">' + x.joueurs.map(function (p, j) { var on = !d.actifs || j < d.actifs; return '<label class="chip' + (on ? ' on' : '') + '" style="cursor:pointer"><input type="checkbox" data-chact="' + x.k + '" value="' + p + '"' + (on ? ' checked' : '') + ' style="display:none">' + esc(nom(p)) + '</label>'; }).join('') + '</div>' +
+        h += '<div class="chips">' + x.joueurs.map(function (p, j) { var on = !d.actifs || j < d.actifs, rj = recordJoueur(d, p); return '<label class="chip' + (on ? ' on' : '') + '" style="cursor:pointer"><input type="checkbox" data-chact="' + x.k + '" value="' + p + '"' + (on ? ' checked' : '') + ' style="display:none">' + esc(nom(p)) + (rj != null ? ' · ' + esc(M().fmt(d, rj)) : '') + '</label>'; }).join('') + '</div>' +
           '<div style="display:flex;gap:8px"><input class="f" data-chv="' + x.k + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 'Temps (s)' : 'Score') + '" style="font-size:18px;text-align:center"><button class="btn ok" data-chok="' + x.k + '">OK</button></div>';
       } else {
         h += x.joueurs.map(function (p) {
-          var bj = d.mode === 'solo' || d.mode === 'sparring' ? meilleur(d, n, function (es) { return es.joueurs.length === 1 && es.joueurs[0] === p; }) : null;
-          return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + (x.solo ? 'Score' : d.mode === 'sparring' ? esc(nom(p)) + ' <span class="xs mut">évalué</span>' : esc(nom(p))) + (bj != null ? ' <span class="xs mut">(' + esc(M().fmt(d, bj)) + ')</span>' : '') + '</span><input class="f" data-chv="' + x.k + '" data-pid="' + p + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 's' : '—') + '" style="width:90px;font-size:18px;text-align:center"></div>';
+          var bj = recordJoueur(d, p);
+          return '<div style="display:flex;gap:8px;align-items:center"><span class="small" style="flex:1">' + (x.solo ? 'Score' : d.mode === 'sparring' ? esc(nom(p)) + ' <span class="xs mut">évalué</span>' : esc(nom(p))) + (bj != null ? ' <span class="xs mut">· record ' + esc(M().fmt(d, bj)) + '</span>' : '') + '</span><input class="f" data-chv="' + x.k + '" data-pid="' + p + '" inputmode="' + (M().chrono(d) ? 'decimal' : 'numeric') + '" placeholder="' + (M().chrono(d) ? 's' : '—') + '" style="width:90px;font-size:18px;text-align:center"></div>';
         }).join('') + '<button class="btn ok" data-chok="' + x.k + '">' + (x.solo ? 'Valider' : d.mode === 'sparring' ? 'Valider (score du joueur évalué)' : 'Valider la tentative') + '</button>';
       }
       h += '</div>';
@@ -198,7 +211,7 @@ function saisie(c) {
     return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span class="xs mut" style="width:42px">' + new Date(x.cree_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</span><span class="small" style="flex:1"><b>' + esc(dd.nom) + '</b> · ' + esc(noms(x.joueurs)) + ' ' + pill(x.niveau) + '</span><b>' + esc(M().fmt(dd, x.resultat)) + '</b><span class="xs mut">' + M().points(dd, x.niveau, +x.resultat) + ' pts</span><button class="btn sm ko" data-chann="' + x.id + '">Annuler</button></div>';
   }).join('') : '<div class="empty small">Rien de saisi pour l\'instant.</div>') + '</div>';
   c.innerHTML = h; lier(c);
-  if ($('ch-retirage')) $('ch-retirage').onclick = function () { if (!confirm('Refaire le tirage au sort des équipes pour ce défi ?')) return; E().defis[CH.defi] = M().tirer(E().presents || [], niv); sauverEquipes(); toast('Nouvelles équipes tirées au sort'); saisie(c); };
+  if ($('ch-retirage')) $('ch-retirage').onclick = function () { nouvelleManche(); toast('Nouvelle manche : nouveaux partenaires tirés au sort'); CH.modif = false; saisie(c); window.scrollTo(0, 0); };
   if ($('ch-modif')) $('ch-modif').onclick = function () { CH.modif = !CH.modif; saisie(c); };
   all('[data-chdep]', c).forEach(function (sl) { sl.onchange = function () { deplacer(sl.dataset.chdep, sl.value); saisie(c); }; });
   all('[data-chre]', c).forEach(function (b) { b.onclick = function () {

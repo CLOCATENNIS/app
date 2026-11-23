@@ -86,7 +86,25 @@ function tirer(presents, niveauDe, seulement) {
   });
   return out;
 }
+// Nouvelle manche : nouveau tirage qui évite au maximum de remettre ensemble des joueurs déjà associés sur ce défi
+function cleP(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
+function tirerNouveaux(presents, niveauDe, deja) {
+  deja = deja || {};
+  var par = {}, out = [];
+  presents.forEach(function (pid) { var n = niveauDe(pid) || '?'; (par[n] = par[n] || []).push(pid); });
+  ordreNiveaux(Object.keys(par)).forEach(function (n) {
+    var best = null, bestScore = 1e9;
+    for (var essai = 0; essai < 80 && bestScore > 0; essai++) {
+      var eq = tirerNiveau(n, par[n]), sc = 0;
+      eq.forEach(function (e) { for (var i = 0; i < e.joueurs.length; i++) for (var j = i + 1; j < e.joueurs.length; j++) if (deja[cleP(e.joueurs[i], e.joueurs[j])]) sc++; });
+      if (sc < bestScore) { bestScore = sc; best = eq; }
+    }
+    best.forEach(function (e) { e.k = cle(); out.push(e); });
+  });
+  return out;
+}
+function paires(listes) { var d = {}; (listes || []).forEach(function (l) { for (var i = 0; i < l.length; i++) for (var j = i + 1; j < l.length; j++) d[cleP(l[i], l[j])] = 1; }); return d; }
 function ordreNiveaux(l) { return l.slice().sort(function (a, b) { var x = NIVEAUX.indexOf(a), y = NIVEAUX.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); }); }
 
-window.ChallengeMoteur = { NIVEAUX: NIVEAUX, chrono: chrono, mieux: mieux, seuils: seuils, points: points, fmt: fmt, unite: unite, calcul: calcul, tirer: tirer, tirerNiveau: tirerNiveau, cle: cle, ordreNiveaux: ordreNiveaux };
+window.ChallengeMoteur = { NIVEAUX: NIVEAUX, chrono: chrono, mieux: mieux, seuils: seuils, points: points, fmt: fmt, unite: unite, calcul: calcul, tirer: tirer, tirerNiveau: tirerNiveau, tirerNouveaux: tirerNouveaux, paires: paires, cle: cle, ordreNiveaux: ordreNiveaux };
 })();
