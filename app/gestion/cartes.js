@@ -14,8 +14,13 @@ var Z = { // zones mesurées sur les trames
   ligne2: { y: 990, h: 128, x0: 66, w: 300.67, gap: 14, part: 0.36 },
   date: [640, 1366, 812, 1418], logo: [838, 1246, 987, 1402]
 };
-var C = { joueur: null, d: null, par: null, photo: null, zoom: 1, dx: 0, dy: 0, planche: [], img: {}, mode: 'carte', pz: {} };
+var C = { joueur: null, d: null, par: null, photo: null, zoom: 1, dx: 0, dy: 0, planche: [], img: {}, mode: 'carte', pz: {}, fond: '', teinte: true, fonds: {} };
 var S = {}, M = {};
+// Fonds derrière le joueur détouré (cartes et affiche MAG). Images néons blanc / bleu, teintées à la couleur du niveau.
+// Pour en ajouter un : déposer l'image dans cartes/fonds/ (format 4:5) et l'ajouter ici.
+var FONDS = [
+  { id: 'arene', nom: 'Arène', src: 'cartes/fonds/arene.jpg?v=1' }
+];
 
 function img(src) {
   if (C.img[src]) return C.img[src];
@@ -56,23 +61,54 @@ function rang(c, n, cx, cy, taille, maxw) {
   c.font = 'italic 900 ' + Math.round(taille * 0.46) + 'px Inter'; c.fillText(suf, x + wb + 4, cy - taille * 0.24);
   c.restore();
 }
+// Fond choisi, teinté à la couleur du niveau (mis en cache) ; null si « Aucun »
+function fondPret() {
+  var f = FONDS.filter(function (x) { return x.id === C.fond; })[0];
+  if (!f) return Promise.resolve(null);
+  var niv = S.niveau || 'Rouge', cle = f.id + '|' + (C.teinte ? niv : '-');
+  if (C.fonds[cle]) return Promise.resolve(C.fonds[cle]);
+  return img(f.src).then(function (i) {
+    var t = document.createElement('canvas'); t.width = i.width; t.height = i.height;
+    var c = t.getContext('2d'); c.drawImage(i, 0, 0);
+    if (C.teinte) {
+      // « hue » garde la lumière des néons et prend la couleur du niveau ; Blanc : néons argentés
+      c.globalCompositeOperation = niv === 'Blanc' ? 'saturation' : 'hue';
+      c.fillStyle = niv === 'Blanc' ? '#808080' : (MACC[niv] || MACC.Rouge); c.fillRect(0, 0, t.width, t.height);
+      if (niv === 'Blanc') { c.globalCompositeOperation = 'soft-light'; c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(0, 0, t.width, t.height); }
+      c.globalCompositeOperation = 'source-over';
+    }
+    C.fonds[cle] = t; return t;
+  }).catch(function () { return null; });
+}
+// Image « cover » dans une zone ; py = position verticale du recadrage (0 haut, 1 bas)
+function couvrir(c, im, x, y, w, h, py) {
+  var sc = Math.max(w / im.width, h / im.height), iw = im.width * sc, ih = im.height * sc;
+  c.drawImage(im, x + (w - iw) / 2, y + (h - ih) * (py === undefined ? 0.5 : py), iw, ih);
+}
 function cadrePhoto() { return cadre(Z.photo); }
 function cadre(z) {
   var bw = z[2] - z[0], bh = z[3] - z[1], p = C.photo;
   if (!p) return null;
   var base = Math.max(bw / p.width, bh / p.height), sc = base * C.zoom, w = p.width * sc, h = p.height * sc;
   var maxX = Math.max(0, (w - bw) / 2), maxY = Math.max(0, (h - bh) / 2);
+  // avec un fond, le joueur détouré peut être réduit et placé librement (pieds sur le sol)
+  if (C.fond) { maxX = Math.max(maxX, (bw + w) * 0.4); maxY = Math.max(maxY, (bh + h) * 0.4); }
   C.dx = Math.max(-maxX, Math.min(maxX, C.dx)); C.dy = Math.max(-maxY, Math.min(maxY, C.dy));
   return { x: z[0] + (bw - w) / 2 + C.dx, y: z[1] + (bh - h) / 2 + C.dy, w: w, h: h };
 }
 function dessiner(cv) {
-  return Promise.all([img(trame()), img('../logo.png').catch(function () { return null; }), polices()]).then(function (r) {
+  return Promise.all([img(trame()), img('../logo.png').catch(function () { return null; }), polices(), fondPret()]).then(function (r) {
     cv.width = W; cv.height = H;
     var c = cv.getContext('2d'); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
     c.drawImage(r[0], 0, 0, W, H);
-    // photo
+    // fond puis photo
     var f = cadrePhoto(), z = Z.photo;
-    if (f) { c.save(); rond(c, z[0], z[1], z[2] - z[0], z[3] - z[1], z[4]); c.clip(); c.drawImage(C.photo, f.x, f.y, f.w, f.h); c.restore(); }
+    if (f || r[3]) {
+      c.save(); rond(c, z[0], z[1], z[2] - z[0], z[3] - z[1], z[4]); c.clip();
+      if (r[3]) couvrir(c, r[3], z[0], z[1], z[2] - z[0], z[3] - z[1], 0.55);
+      if (f) c.drawImage(C.photo, f.x, f.y, f.w, f.h);
+      c.restore();
+    }
     // meilleur classement et sa date
     var m = Z.meilleur, md = Z.meilleurDate;
     if (S.meilleur) rang(c, S.meilleur, (m[0] + m[2]) / 2, (m[1] + m[3]) / 2 + 4, 120, m[2] - m[0] - 24);
@@ -156,14 +192,17 @@ function dessinerMag(cv, k) {
   var niv = S.niveau || 'Rouge', acc = MACC[niv] || MACC.Rouge, surAcc = sombreSur(niv) ? '#0b0f1e' : '#fff';
   // mascottes HD (2000 px) pour l'impression, petite version de l'appli en secours
   var bal = niv.toLowerCase();
-  return Promise.all([img('../balles/hd/' + bal + '.webp?v=1').catch(function () { return img('../balles/' + bal + '.webp').catch(function () { return null; }); }), img('../logo.png').catch(function () { return null; }), polices()]).then(function (r) {
+  return Promise.all([img('../balles/hd/' + bal + '.webp?v=1').catch(function () { return img('../balles/' + bal + '.webp').catch(function () { return null; }); }), img('../logo.png').catch(function () { return null; }), polices(), fondPret()]).then(function (r) {
     cv.width = Math.round(MW * k); cv.height = Math.round(MH * k);
     var c = cv.getContext('2d'), masc = r[0], logo = r[1], g;
     c.scale(k, k); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-    // fond
+    // fond : image choisie (pleine page) ou dégradés d'origine
     c.fillStyle = '#060a18'; c.fillRect(0, 0, MW, MH);
-    g = c.createRadialGradient(MW * 0.72, MH * 0.42, 60, MW * 0.72, MH * 0.42, MW * 0.9); g.addColorStop(0, affRgba(acc, 0.55)); g.addColorStop(1, 'rgba(6,10,24,0)'); c.fillStyle = g; c.fillRect(0, 0, MW, MH);
-    g = c.createRadialGradient(0, MH, 60, 0, MH, MW); g.addColorStop(0, 'rgba(40,70,160,.45)'); g.addColorStop(1, 'rgba(6,10,24,0)'); c.fillStyle = g; c.fillRect(0, 0, MW, MH);
+    if (r[3]) couvrir(c, r[3], 0, 0, MW, MH, 0.5);
+    else {
+      g = c.createRadialGradient(MW * 0.72, MH * 0.42, 60, MW * 0.72, MH * 0.42, MW * 0.9); g.addColorStop(0, affRgba(acc, 0.55)); g.addColorStop(1, 'rgba(6,10,24,0)'); c.fillStyle = g; c.fillRect(0, 0, MW, MH);
+      g = c.createRadialGradient(0, MH, 60, 0, MH, MW); g.addColorStop(0, 'rgba(40,70,160,.45)'); g.addColorStop(1, 'rgba(6,10,24,0)'); c.fillStyle = g; c.fillRect(0, 0, MW, MH);
+    }
     var avecPhoto = C.photo && M.photoOn !== false, pleine = avecPhoto && M.style === 'photo', polaroid = avecPhoto && !pleine;
     var f = pleine ? cadre([0, 0, MW, MH]) : null;
     if (f) c.drawImage(C.photo, f.x, f.y, f.w, f.h);
@@ -222,7 +261,7 @@ function dessinerMag(cv, k) {
       c.save(); c.translate(2015, 1790); c.rotate(0.07);
       ombre(c, true, 50); c.fillStyle = '#fbfaf6'; c.fillRect(-pw / 2, -ph / 2, pw, ph); ombre(c, false);
       var fp = cadre([0, 0, zp, zp]);
-      c.save(); c.beginPath(); c.rect(-pw / 2 + ins, -ph / 2 + ins, zp, zp); c.clip(); c.drawImage(C.photo, -pw / 2 + ins + fp.x, -ph / 2 + ins + fp.y, fp.w, fp.h); c.restore();
+      c.save(); c.beginPath(); c.rect(-pw / 2 + ins, -ph / 2 + ins, zp, zp); c.clip(); if (r[3]) couvrir(c, r[3], -pw / 2 + ins, -ph / 2 + ins, zp, zp, 0.55); c.drawImage(C.photo, -pw / 2 + ins + fp.x, -ph / 2 + ins + fp.y, fp.w, fp.h); c.restore();
       var lg = String(M.legende || '').trim();
       if (lg) { c.font = police(800, ajuste(c, lg, 800, 50, zp - 10)); c.fillStyle = '#0b0f1e'; c.textAlign = 'center'; c.textBaseline = 'alphabetic'; c.fillText(lg, 0, ph / 2 - 40); }
       c.save(); c.translate(0, -ph / 2 + 6); c.rotate(-0.09); c.fillStyle = 'rgba(255,212,0,.78)'; c.fillRect(-120, -34, 240, 68); c.restore();
@@ -326,6 +365,10 @@ function arCartesPage(box) {
       '<div class="sect">Photo</div>' +
       '<div class="toolbar" style="margin:0;flex-wrap:wrap"><button class="btn sm ghost" id="ca-pp" style="display:none">Photo du profil</button><label class="btn sm ghost" style="cursor:pointer">Prendre ou choisir une photo<input id="ca-f" type="file" accept="image/*" style="display:none"></label><button class="btn sm ghost" id="ca-px" style="display:none">Retirer</button></div>' +
       '<label class="l" id="ca-zl" style="display:none">Zoom<input id="ca-zoom" type="range" min="1" max="3" step="0.01" value="1"></label>' +
+      '<div class="sect">Fond derrière le joueur</div>' +
+      '<div class="chips" id="ca-fonds" style="margin:0"><button class="chip on" data-cafond="">Aucun</button>' + FONDS.map(function (f) { return '<button class="chip" data-cafond="' + f.id + '">' + esc(f.nom) + '</button>'; }).join('') + '</div>' +
+      '<label class="c" id="ca-tl" style="display:none"><input type="checkbox" id="ca-teinte" checked> Néons à la couleur du niveau</label>' +
+      '<span class="mut xs">Pour une photo détourée (sans fond). Avec un fond, tu peux dézoomer et descendre le joueur pour poser ses pieds sur le sol.</span>' +
       '<div class="sect">Joueur</div>' +
       '<div class="row3">' + champ('ca-prenom', 'Prénom') + champ('ca-nom', 'Nom') +
       '<label class="l">Niveau<select id="ca-niveau">' + NIV.map(function (n) { return '<option>' + n + '</option>'; }).join('') + '</select></label>' +
@@ -451,6 +494,16 @@ function arCartesPage(box) {
     $('ca-f').onchange = function () { var f = this.files && this.files[0]; if (f) chargerPhoto(URL.createObjectURL(f)).catch(function () { toast('Image illisible'); }); this.value = ''; };
     $('ca-px').onclick = function () { C.photo = null; majPhoto(); rendu(); };
     $('ca-zoom').oninput = function () { C.zoom = +this.value; rendu(); };
+    // fond derrière le joueur
+    var majFond = function () {
+      all('[data-cafond]', box).forEach(function (b) { b.classList.toggle('on', b.dataset.cafond === C.fond); });
+      $('ca-tl').style.display = C.fond ? '' : 'none';
+      $('ca-zoom').min = C.fond ? '0.4' : '1';
+      if (!C.fond && C.zoom < 1) { C.zoom = 1; $('ca-zoom').value = 1; }
+    };
+    all('[data-cafond]', box).forEach(function (b) { b.onclick = function () { C.fond = b.dataset.cafond; majFond(); rendu(); }; });
+    $('ca-teinte').onchange = function () { C.teinte = this.checked; rendu(); };
+    majFond();
     var glisse = null;
     cv.onpointerdown = function (e) { if (!C.photo) return; glisse = { x: e.clientX, y: e.clientY, dx: C.dx, dy: C.dy }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; };
     cv.onpointermove = function (e) { if (!glisse) return; var k = (C.mode === 'mag' ? MW : W) / cv.getBoundingClientRect().width; C.dx = glisse.dx + (e.clientX - glisse.x) * k; C.dy = glisse.dy + (e.clientY - glisse.y) * k; rendu(); };
