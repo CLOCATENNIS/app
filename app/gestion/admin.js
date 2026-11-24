@@ -4753,9 +4753,10 @@ function vueTerrains(m) {
       carte('Fichier importé', imp, 'Onglet Import : si un export du tableau de réservation est disponible.') +
       carte('Saisie du club', { statut: LOC.length ? 'ok' : 'jamais', message: LOC.length + ' occupation' + (LOC.length > 1 ? 's' : '') + ' ou fermeture' + (LOC.length > 1 ? 's' : '') + ' saisie' + (LOC.length > 1 ? 's' : '') + ' (à venir ou récentes)' }, 'Toujours affichée comme « Info du club, non confirmée par ADOC ».') + '</div>' +
       '<div class="toolbar" style="margin-top:12px"><button class="btn" id="tg-sync">Actualiser maintenant</button><span class="small mut">Relance la synchronisation (quand elle existera) et recharge le planning.</span></div>' +
-      '<div class="card stack" style="gap:10px;margin-top:6px"><b>Réglages</b><div class="row3">' +
+      '<div class="card stack" style="gap:10px;margin-top:6px"><b>Réglages</b><div class="row2">' +
       '<label class="l">Synchronisation automatique<select class="f" id="tg-freq">' + [[15, 'Toutes les 15 min'], [30, 'Toutes les 30 min'], [60, 'Toutes les heures'], [180, 'Toutes les 3 h']].map(function (x) { return '<option value="' + x[0] + '"' + (+c.frequence_min === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><span class="xs mut" style="font-weight:400">Utilisée dès que la synchronisation officielle existera.</span></label>' +
       '<label class="l">Données « plus à jour » après<select class="f" id="tg-seuil">' + [[60, '1 heure'], [120, '2 heures'], [240, '4 heures'], [720, '12 heures'], [1440, '24 heures']].map(function (x) { return '<option value="' + x[0] + '"' + (+c.seuil_min === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><span class="xs mut" style="font-weight:400">Passé ce délai, les créneaux libres deviennent « à vérifier » et un avertissement s\'affiche.</span></label>' +
+      '<label class="l">Un export ADOC importé reste valable<select class="f" id="tg-seuili">' + [[240, '4 heures'], [480, '8 heures'], [720, '12 heures'], [1440, '24 heures'], [2880, '48 heures']].map(function (x) { return '<option value="' + x[0] + '"' + (+(c.seuil_import_min || 720) === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><span class="xs mut" style="font-weight:400">Après ce délai, les terrains sans réservation repassent « à vérifier » jusqu\'au prochain import.</span></label>' +
       '<label class="l">Lien du bouton « Réserver sur Ten\'Up »<input class="f" id="tg-url" value="' + esc(c.tenup_url) + '"></label></div><button class="btn sm" id="tg-cfg" style="align-self:flex-start">Enregistrer les réglages</button></div>';
     $('tg-sync').onclick = function () {
       var b = this; b.disabled = true;
@@ -4768,7 +4769,7 @@ function vueTerrains(m) {
     $('tg-cfg').onclick = function () {
       var u = $('tg-url').value.trim();
       if (!/^https:\/\//.test(u)) return toast('Le lien doit commencer par https://');
-      enregistrerCfg({ frequence_min: +$('tg-freq').value, seuil_min: +$('tg-seuil').value, tenup_url: u });
+      enregistrerCfg({ frequence_min: +$('tg-freq').value, seuil_min: +$('tg-seuil').value, seuil_import_min: +$('tg-seuili').value, tenup_url: u });
     };
   };
 
@@ -4822,27 +4823,36 @@ function vueTerrains(m) {
 
   // ----- Import d'un fichier -----
   var ongImport = function () {
-    C().innerHTML = '<div class="card stack" style="gap:10px"><b>Importer un fichier de réservations</b>' +
-      '<span class="small">À utiliser seulement si un export autorisé du tableau de réservation est disponible (ADOC ou autre). Fichier CSV (Excel : « Enregistrer sous » → CSV), une ligne par occupation, avec ces titres en première ligne :</span>' +
-      '<code class="small" style="background:var(--soft);padding:8px 10px;border-radius:8px">date ; début ; fin ; terrain ; type ; libellé</code>' +
-      '<span class="xs mut">Exemple : 25/11/2026 ; 18h30 ; 19h30 ; Couvert 1 ; Cours ; Groupe ados. Le type est reconnu par mots-clés (cours, animation, tournoi, fermé, réservation…). Les noms de joueurs ne sont jamais repris pour les réservations d\'adhérents.</span>' +
-      '<input class="f" type="file" id="ti-f" accept=".csv,.txt,text/csv"><div id="ti-r"></div></div>';
+    C().innerHTML = '<div class="card stack" style="gap:10px"><b>Importer les réservations depuis ADOC</b>' +
+      '<ol class="small" style="margin:0;padding-left:18px;line-height:1.6"><li>Dans ADOC : <b>Réservation › Suivi des réservations</b>, choisis la période (ex. aujourd\'hui → dans 7 jours).</li><li>Clique sur le bouton <b>Excel</b> pour télécharger la liste.</li><li>Dépose le fichier ici, vérifie l\'aperçu, puis Importer.</li></ol>' +
+      '<span class="xs mut">Excel (.xls, .xlsx) ou CSV. Colonnes reconnues par leur titre : date, heure ou créneau, fin, terrain ou court, type. Les noms des joueurs ne sont jamais repris. Un nouvel import sur les mêmes jours remplace le précédent.</span>' +
+      '<input class="f" type="file" id="ti-f" accept=".xls,.xlsx,.csv,.txt"><div id="ti-r"></div></div>';
     $('ti-f').onchange = function () {
       var f = this.files && this.files[0]; if (!f) return;
-      var lec = new FileReader();
-      lec.onload = function () {
-        var res = T.lireFichier(String(lec.result || ''), tous()), r = $('ti-r');
+      var r0 = $('ti-r'); r0.innerHTML = '<div class="skel" style="height:60px"></div>';
+      var lireTexte = function (txt) {
+        var res = T.lireFichier(String(txt || ''), tous()), r = $('ti-r');
         var parJour = {}; res.lignes.forEach(function (l) { var j = quand(l.debut).jour; parJour[j] = (parJour[j] || 0) + 1; });
         r.innerHTML = (res.lignes.length ? '<p class="small"><b>' + res.lignes.length + ' occupation' + (res.lignes.length > 1 ? 's' : '') + '</b> lue' + (res.lignes.length > 1 ? 's' : '') + (res.du ? ', du ' + esc(fmtD(res.du)) + ' au ' + esc(fmtD(res.au)) : '') + ' : ' + Object.keys(parJour).sort().map(function (j) { return esc(fmtD(j)) + ' (' + parJour[j] + ')'; }).join(', ') + '</p>' : '') +
           (res.erreurs.length ? '<div class="card" style="border-color:var(--ko)"><b class="small">' + res.erreurs.length + ' ligne' + (res.erreurs.length > 1 ? 's' : '') + ' ignorée' + (res.erreurs.length > 1 ? 's' : '') + '</b><div class="xs">' + res.erreurs.slice(0, 12).map(esc).join('<br>') + (res.erreurs.length > 12 ? '<br>…' : '') + '</div></div>' : '') +
-          (res.lignes.length ? '<label class="c"><input type="checkbox" id="ti-complet"> Ce fichier contient <b>toutes</b> les réservations de ces jours (les créneaux absents seront affichés libres, tant que les données restent à jour)</label><button class="btn" id="ti-ok">Importer</button><p class="xs mut">Un nouvel import sur les mêmes jours remplace le précédent : pas de doublons.</p>' : '');
+          (res.lignes.length ? '<label class="c"><input type="checkbox" id="ti-complet" checked> C\'est l\'export complet de ces jours : les terrains absents du fichier sont libres (affichés « Libre » jusqu\'au délai réglé dans Synchronisation)</label><button class="btn" id="ti-ok">Importer</button>' : '');
         if ($('ti-ok')) $('ti-ok').onclick = function () {
           if (TG.demo) return demoMsg();
           var b = this; b.disabled = true;
           q(sb.rpc('terrains_importer', { p_lignes: res.lignes, p_du: res.du, p_au: res.au, p_complet: $('ti-complet').checked })).then(function (x) { toast((x && x.importees) + ' occupations importées'); recharger(); }).catch(function (e) { toast('Import impossible' + (e && e.message ? ' : ' + e.message : '')); b.disabled = false; });
         };
       };
-      lec.readAsText(f, 'utf-8');
+      if (/\.xlsx?$/i.test(f.name)) {
+        chargerXlsx().then(function (X) {
+          return f.arrayBuffer().then(function (buf) {
+            var wb = X.read(buf, { type: 'array', cellDates: false, raw: false });
+            // On prend la feuille qui ressemble à une liste de réservations (date + court/terrain), sinon la première
+            var csv = function (n) { return X.utils.sheet_to_csv(wb.Sheets[n], { FS: ';', blankrows: false }); };
+            var nom = wb.SheetNames.filter(function (n) { var t = csv(n).slice(0, 3000); return /date/i.test(t) && /(court|terrain)/i.test(t); })[0] || wb.SheetNames[0];
+            lireTexte(csv(nom));
+          });
+        }).catch(function () { r0.innerHTML = '<div class="card" style="border-color:var(--ko)">Impossible de lire ce fichier Excel.</div>'; });
+      } else { var lec = new FileReader(); lec.onload = function () { lireTexte(lec.result); }; lec.readAsText(f, 'utf-8'); }
     };
   };
 

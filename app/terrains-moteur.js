@@ -27,7 +27,7 @@ var PRIO = { ferme: 6, competition: 5, animation: 4, cours: 3, adherents: 2, occ
 var PRIO_SRC = { adoc: 3, app: 2, import: 2, local: 1, demo: 2 };
 var SOURCES = { adoc: 'Réservation ADOC', app: 'Demande faite dans l\'appli du club', import: 'Fichier importé', local: 'Info du club (non confirmée par ADOC)', demo: 'Donnée fictive (démonstration)' };
 var HORAIRES_DEF = [{ terrain_id: null, jours: [1, 2, 3, 4, 5, 6, 7], ouverture: '08:30', fermeture: '22:30' }];
-var MODULE_DEF = { actif: false, tenup_url: 'https://tenup.fft.fr/club/57780019/reservations', frequence_min: 30, seuil_min: 120 };
+var MODULE_DEF = { actif: false, tenup_url: 'https://tenup.fft.fr/club/57780019/reservations', frequence_min: 30, seuil_min: 120, seuil_import_min: 720 };
 
 // ---------- Outils ----------
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -70,12 +70,12 @@ function horairesDu(jour, terrainId, regles) {
 // ---------- Fraîcheur des données ----------
 // Le planning d'un jour est « connu » seulement si une source donne l'état complet de ce jour et qu'elle est à jour.
 function couverture(D, jour, maintenant) {
-  var now = maintenant ? new Date(maintenant) : new Date(), seuil = +((D.module || {}).seuil_min || MODULE_DEF.seuil_min);
+  var now = maintenant ? new Date(maintenant) : new Date(), mod = D.module || {};
   var l = (D.synchro || []).filter(function (s) { return s.actif && s.statut === 'ok' && s.couverture_debut && s.couverture_fin; });
   var dernier = (D.synchro || []).map(function (s) { return s.derniere_reussite ? new Date(s.derniere_reussite) : null; }).filter(Boolean).sort(function (a, b) { return b - a; })[0] || null;
   var c = l.filter(function (s) { return s.couverture_debut <= jour && s.couverture_fin >= jour; })[0];
   if (!c) return { connu: false, raison: l.length ? 'hors_periode' : 'aucune_source', dernier: dernier };
-  var age = (now - new Date(c.derniere_reussite)) / 60000;
+  var age = (now - new Date(c.derniere_reussite)) / 60000, seuil = c.source === 'import' ? +(mod.seuil_import_min || MODULE_DEF.seuil_import_min) : +(mod.seuil_min || MODULE_DEF.seuil_min);
   if (age > seuil) return { connu: false, raison: 'obsolete', dernier: new Date(c.derniere_reussite), source: c.source };
   return { connu: true, dernier: new Date(c.derniere_reussite), source: c.source };
 }
@@ -314,10 +314,15 @@ function lireFichier(texte, terrains) {
   if (lignes.length < 2) return { lignes: [], erreurs: ['Le fichier est vide ou n\'a pas de ligne de titres.'] };
   var sep = [';', '\t', ','].sort(function (a, b) { return lignes[0].split(b).length - lignes[0].split(a).length; })[0];
   var cut = function (l) { var out = [], cur = '', q = false; for (var i = 0; i < l.length; i++) { var ch = l[i]; if (ch === '"') { if (q && l[i + 1] === '"') { cur += '"'; i++; } else q = !q; } else if (ch === sep && !q) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map(function (x) { return x.trim(); }); };
-  var tete = cut(lignes[0]).map(norm), col = function (noms) { for (var i = 0; i < tete.length; i++) if (noms.some(function (n) { return tete[i].indexOf(n) === 0; })) return i; return -1; };
-  var C = { date: col(['date', 'jour']), d: col(['debut', 'heuredebut', 'de', 'start']), f: col(['fin', 'heurefin', 'a', 'end']), t: col(['terrain', 'court', 'equipement']), ty: col(['type', 'categorie', 'nature']), lib: col(['libelle', 'intitule', 'objet', 'commentaire']), ref: col(['ref', 'id', 'numero']) };
-  var manque = ['date', 'd', 'f', 't'].filter(function (k) { return C[k] < 0; });
-  if (manque.length) return { lignes: [], erreurs: ['Colonnes introuvables : ' + manque.map(function (k) { return { date: 'date', d: 'début', f: 'fin', t: 'terrain' }[k]; }).join(', ') + '. Titres attendus : date ; début ; fin ; terrain ; type ; libellé.'] };
+  // La ligne de titres n'est pas forcément la première (exports avec un titre au-dessus) : on cherche celle qui a « date » et « court/terrain »
+  var ti = 0; for (var z = 0; z < Math.min(lignes.length, 15); z++) { var tz = cut(lignes[z]).map(norm); if (tz.some(function (x) { return /^(date|jour)/.test(x); }) && tz.some(function (x) { return /^(terrain|court|equipement)/.test(x); })) { ti = z; break; } }
+  lignes = lignes.slice(ti);
+  var tete = cut(lignes[0]).map(norm), col = function (noms) { for (var k = 0; k < noms.length; k++) for (var i = 0; i < tete.length; i++) if (tete[i] === noms[k] || (noms[k].length > 3 && tete[i].indexOf(noms[k]) === 0)) return i; return -1; };
+  var C = { date: col(['date', 'jour', 'datedelareservation', 'datereservation']), d: col(['debut', 'heuredebut', 'heurededebut', 'heure', 'de', 'start']), f: col(['fin', 'heurefin', 'heuredefin', 'a', 'end']), cr: col(['creneau', 'horaire', 'plage']),
+    t: col(['terrain', 'court', 'equipement']), ty: col(['type', 'typedereservation', 'categorie', 'nature', 'motif']), lib: col(['libelle', 'intitule', 'objet', 'commentaire']), ref: col(['ref', 'reference', 'id', 'numero', 'nreservation']) };
+  if (C.cr >= 0 && C.d < 0) C.d = C.cr;
+  var manque = ['date', 'd', 't'].filter(function (k) { return C[k] < 0; });
+  if (manque.length) return { lignes: [], erreurs: ['Colonnes introuvables : ' + manque.map(function (k) { return { date: 'date', d: 'heure de début', t: 'terrain (ou court)' }[k]; }).join(', ') + '. Titres reconnus : date ; début (ou heure, créneau) ; fin ; terrain (ou court) ; type ; libellé.'] };
   var parNom = {}; terrains.forEach(function (t) { parNom[norm(t.nom)] = t.id; parNom[norm(t.id)] = t.id; });
   var out = [], err = [], du = null, au = null;
   lignes.slice(1).forEach(function (l, i) {
@@ -325,9 +330,12 @@ function lireFichier(texte, terrains) {
     var dt = c[C.date] || '', m = dt.match(/^(\d{4})-(\d{2})-(\d{2})/) || dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
     if (!m) return err.push('Ligne ' + n + ' : date illisible (« ' + dt + ' »)');
     var jour = m[0].indexOf('/') > 0 ? (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad(m[2]) + '-' + pad(m[1]) : m[1] + '-' + m[2] + '-' + m[3];
-    var a = min(c[C.d]), b = min(c[C.f]);
+    // Heures : colonnes début / fin, ou une seule cellule « 18h30 - 19h30 », ou l'heure collée à la date ; sans fin : créneau d'1 h
+    var hs = String(c[C.d] || '').match(/(\d{1,2})[:h](\d{2})?/g) || [], hd = hs.length ? hs : (String(dt).match(/\d{1,2}[:h]\d{2}/g) || []);
+    var a = min(hd[0]), b = C.f >= 0 && c[C.f] ? min(c[C.f]) : hd[1] ? min(hd[1]) : a != null ? a + 60 : null;
     if (a == null || b == null || b <= a) return err.push('Ligne ' + n + ' : heures illisibles');
     var tid = parNom[norm(c[C.t])];
+    if (!tid) { var nums = String(c[C.t] || '').match(/\d+/); if (nums) { var cand = terrains.filter(function (t) { return (t.nom.match(/\d+/) || [])[0] === nums[0]; }); if (cand.length === 1) tid = cand[0].id; } }
     if (!tid) return err.push('Ligne ' + n + ' : terrain inconnu (« ' + c[C.t] + ' »)');
     var lib = C.lib >= 0 ? c[C.lib] : '', ty = C.ty >= 0 ? c[C.ty] : '';
     out.push({ terrain_id: tid, debut: horodatage(jour, hhmm(a)), fin: horodatage(jour, hhmm(b)), categorie: categorieDe(ty || lib), libelle: /adher|reserv|locat|membre/.test(norm(ty)) ? '' : lib.slice(0, 60), ref: C.ref >= 0 && c[C.ref] ? 'f-' + c[C.ref] : 'f-' + jour + '-' + tid + '-' + hhmm(a) });
