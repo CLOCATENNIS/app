@@ -2430,7 +2430,7 @@ function reservationsDouble() {
         (actions ? '<div class="chips" style="margin-top:8px">' + actions + '</div>' : '') + '</div>';
     };
     box.innerHTML = '<div class="sect">Réservations à faire (' + att.length + ')</div>' + (att.length ? att.map(function (x) {
-      return ligne(x, '<button class="btn sm ok" data-rsok="' + x.id + '">Réservé ✓</button><button class="btn sm line" data-rsmod="' + x.id + '">Changer le terrain</button><button class="btn sm ko" data-rsko="' + x.id + '">Impossible</button>');
+      return ligne(x, '<button class="btn sm ok" data-rsok="' + x.id + '">Réservé ✓</button><button class="btn sm line" data-rsmod="' + x.id + '">Changer le terrain</button><button class="btn sm ko" data-rspris="' + x.id + '" title="Refuse la demande et marque ce créneau « Réservé » dans le planning des terrains">Déjà pris sur ADOC</button><button class="btn sm ko" data-rsko="' + x.id + '">Impossible</button>');
     }).join('') : '<div class="card empty">Aucune demande en attente.</div>') +
       (conf.length ? '<details style="margin:6px 0 14px"><summary class="small"><b>Terrains réservés à venir (' + conf.length + ')</b></summary>' + conf.map(function (x) { return ligne(x, '<button class="btn sm ghost" data-rsan="' + x.id + '">Annuler la réservation</button>'); }).join('') + '</details>' : '') +
       '<details style="margin:0 0 16px"><summary class="small">Terrains proposés aux joueurs</summary><div class="card" style="margin-top:8px"><label class="l">Un terrain par ligne<textarea class="f" id="rs-terr" rows="4">' + esc(terrains.join('\n')) + '</textarea></label><button class="btn sm" id="rs-terr-ok" style="margin-top:8px">Enregistrer</button></div></details>';
@@ -2443,6 +2443,20 @@ function reservationsDouble() {
     };
     all('[data-rsok]', box).forEach(function (b) { b.onclick = function () { maj(b.dataset.rsok, { statut: 'confirmee' }, 'Réservation confirmée : les joueurs sont prévenus'); }; });
     all('[data-rsko]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Pourquoi ? (ex. terrain déjà pris, proposez 18h30)'); if (m === null) return; maj(b.dataset.rsko, { statut: 'refusee', motif: m.trim().slice(0, 300) || null }, 'Demande refusée : les joueurs sont prévenus'); }; });
+    // Terrain déjà réservé sur ADOC : on refuse ET on note le créneau « Réservé » dans le planning des terrains,
+    // pour que les suivants le voient avant de demander (si la base du module terrains est installée).
+    all('[data-rspris]', box).forEach(function (b) {
+      b.onclick = function () {
+        var x = L.filter(function (r) { return r.id === b.dataset.rspris; })[0], T = window.CLOCATerrains; if (!x) return;
+        if (!confirm('Refuser : « ' + x.terrain + ' déjà réservé sur ADOC à cette heure » ?\nLe créneau sera aussi marqué « Réservé » dans le planning des terrains.')) return;
+        var t = T && T.TERRAINS_DEF.concat([]).filter(function (y) { return y.nom.toLowerCase().replace(/\s/g, '') === String(x.terrain).toLowerCase().replace(/\s/g, ''); })[0];
+        if (t) {
+          var h = T.outils.min(x.heure);
+          sb.from('terrains_occupations').insert({ terrain_id: t.id, debut: T.outils.horodatage(x.jour, T.outils.hhmm(h)), fin: T.outils.horodatage(x.jour, T.outils.hhmm(h + 120)), categorie: 'adherents', source: 'local', libelle: 'Réservé', note: 'Noté depuis une demande du double interne refusée' }).then(function () { }, function () { });
+        }
+        maj(x.id, { statut: 'refusee', motif: x.terrain + ' est déjà réservé sur ADOC à cette heure : proposez un autre créneau' }, 'Demande refusée : les joueurs sont prévenus');
+      };
+    });
     all('[data-rsan]', box).forEach(function (b) { b.onclick = function () { var m = prompt('Annuler cette réservation ? Motif pour les joueurs :'); if (m === null) return; maj(b.dataset.rsan, { statut: 'refusee', motif: (m.trim() || 'Réservation annulée par le club').slice(0, 300) }, 'Réservation annulée : les joueurs sont prévenus'); }; });
     all('[data-rsmod]', box).forEach(function (b) {
       b.onclick = function () {

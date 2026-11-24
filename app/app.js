@@ -2175,15 +2175,18 @@ function formResa(a, b, box) {
     '<label class="f">Jour<input class="f" type="date" id="rs-j" min="' + iso + '"></label>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="f">Début<select class="f" id="rs-h">' + heures.map(function (h) { return '<option' + (h === '10:30' ? ' selected' : '') + '>' + h + '</option>'; }).join('') + '</select></label><label class="f">Fin<input class="f" id="rs-f" disabled></label></div>' +
     '<label class="f">Terrain<select class="f" id="rs-t">' + terrains.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('') + '</select></label>' +
+    '<div id="rs-dispo" hidden></div>' +
     '<label class="f">Je suis<select class="f" id="rs-m"><option value="">Choisir…</option>' + joueurs.map(function (x) { var v = x[0] + '|' + x[1]; return '<option value="' + esc(v) + '"' + (x[0] === moiEq && String(x[1]) === moiJ ? ' selected' : '') + '>' + esc(x[2]) + '</option>'; }).join('') + '</select></label>' +
     '<label class="f">Un mot pour le club (facultatif)<input class="f" id="rs-n" maxlength="300" placeholder="Ex. sinon 11h30 possible"></label>' +
     '<label style="display:flex;gap:10px;align-items:flex-start" class="small"><input type="checkbox" id="rs-ok" style="width:20px;height:20px;flex:none;margin-top:1px"> Les 4 joueurs sont d\'accord sur ce jour, cette heure et ce terrain.</label>' +
     '<button class="btn" id="rs-go">Envoyer la demande</button></div>', function () {
     var fin = function () { var h = $('rs-h').value.split(':'); $('rs-f').value = (+h[0] + 2) + ':' + h[1]; };
-    $('rs-h').onchange = fin; fin();
+    $('rs-h').onchange = function () { fin(); dispoResa(terrains); }; fin();
+    $('rs-j').onchange = $('rs-t').onchange = function () { dispoResa(terrains); };
     $('rs-go').onclick = function () {
       var j = $('rs-j').value, me = $('rs-m').value;
       if (!j) return toast('Choisis le jour');
+      if ($('rs-dispo') && $('rs-dispo').dataset.pris === '1') return toast('Ce terrain est déjà pris à cette heure : choisis-en un autre');
       if (j < isoJour(new Date())) return toast('Ce jour est déjà passé');
       if (!me) return toast('Indique qui tu es');
       if (!$('rs-ok').checked) return toast('Mettez-vous d\'accord à 4 avant d\'envoyer');
@@ -2197,6 +2200,42 @@ function formResa(a, b, box) {
       }).catch(function () { toast('Envoi impossible, réessaie'); $('rs-go').disabled = false; $('rs-go').textContent = 'Envoyer la demande'; });
     };
   });
+}
+// Encart « Terrains à cette heure » dans la demande de réservation : libre / réservé / à vérifier (consultation seule).
+// N'apparaît que si le planning des terrains est ouvert (ou pour l'équipe, en démonstration).
+var DISPO_CACHE = {};
+function dispoResa(terrains) {
+  var T = window.CLOCATerrains, box = $('rs-dispo'); if (!T || !box) return;
+  var j = $('rs-j').value, h = T.outils.min($('rs-h').value);
+  box.dataset.pris = '';
+  if (!terrainsVisible()) { box.hidden = true; return; }
+  if (!j || h == null) { box.hidden = true; return; }
+  var dessiner = function (D) {
+    if ($('rs-j').value !== j || !$('rs-dispo')) return;
+    if (!D || D.ferme || D.interdit || (D.demo && !terrainsEquipe())) { box.hidden = true; return; }
+    if (D.demo && DB2) D = Object.assign({}, D, { occupations: (D.occupations || []).concat(T.depuisDemandesDouble(DB2.resa, D.terrains)) });
+    T.poserStyles();
+    var R = T.calculer(D, j, new Date()), sel = $('rs-t').value, f = h + 120;
+    var choisi = R.terrains.filter(function (c) { return c.t.nom.toLowerCase().replace(/\s/g, '') === sel.toLowerCase().replace(/\s/g, ''); })[0];
+    var e = choisi ? T.etatCreneau(R, choisi.t.id, h, f) : null, pris = e && e.cat !== 'libre' && e.cat !== 'inconnu' && e.cat !== 'passe';
+    box.dataset.pris = pris ? '1' : '';
+    var msg = !e ? '' : pris ? '<span class="tp-msg ko">' + ic('alert', 16) + ' ' + esc(sel) + ' est déjà pris à cette heure' + (e.libelle && e.libelle !== 'Réservé' ? ' (' + esc(e.libelle) + ')' : '') + ' : choisis un autre terrain ou un autre horaire.</span>'
+      : e.cat === 'libre' ? '<span class="tp-msg ok">' + esc(sel) + ' est libre à cette heure. Le club confirme la réservation sur Ten\'Up.</span>'
+      : '<span class="tp-msg">Aucune réservation connue sur ' + esc(sel) + ', mais le club ne reçoit pas encore toutes les réservations Ten\'Up : il vérifiera.</span>';
+    box.innerHTML = '<div class="stack" style="gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b class="small">Terrains de ' + esc(T.outils.hh(h)) + ' à ' + esc(T.outils.hh(f)) + '</b><a class="xs" href="#/terrains" id="rs-plan">Planning du jour</a></div>' +
+      (D.demo ? '<span class="xs" style="color:#6f4592;font-weight:700">DÉMO · données fictives</span>' : '') + T.htmlDispo(R, h, f, sel, terrains) + msg + '</div>';
+    box.hidden = false;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-tpd]'), function (b) {
+      b.onclick = function () {
+        var t = $('rs-t'), opt = Array.prototype.filter.call(t.options, function (o) { return o.value.toLowerCase().replace(/\s/g, '') === b.dataset.nom.toLowerCase().replace(/\s/g, ''); })[0];
+        if (opt) { t.value = opt.value; dispoResa(terrains); }
+      };
+    });
+    if ($('rs-plan')) $('rs-plan').onclick = function (ev) { ev.preventDefault(); TR.jour = j; TR.D = null; TR.charge = null; fermerModale(); go('#/terrains'); };
+  };
+  if (DISPO_CACHE[j] && Date.now() - DISPO_CACHE[j].le < 120000) return dessiner(DISPO_CACHE[j].D);
+  box.hidden = false; box.innerHTML = '<div class="skel" style="height:110px"></div>';
+  T.charger(sb, j).then(function (D) { DISPO_CACHE[j] = { le: Date.now(), D: D }; dessiner(D); }).catch(function () { box.hidden = true; });
 }
 function nomEq(e) { return e ? e.joueur1 + (e.joueur2 ? ' / ' + e.joueur2 : '') : '?'; }
 function lireSets(score) { return String(score || '').trim().split(/\s+/).filter(Boolean).map(function (s) { var m = s.split('-'); return [+m[0], +m[1]]; }); }

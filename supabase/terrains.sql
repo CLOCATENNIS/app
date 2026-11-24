@@ -154,7 +154,16 @@ begin
                           'libelle', case when o.source = 'adoc' and o.categorie in ('adherents', 'occupe') then null else o.libelle end) order by o.debut)
                           from public.terrains_occupations o
                           where not o.annule and o.fin > (p_du::timestamp at time zone 'Europe/Paris')
-                            and o.debut < ((au + 1)::timestamp at time zone 'Europe/Paris')), '[]'::jsonb),
+                            and o.debut < ((au + 1)::timestamp at time zone 'Europe/Paris')), '[]'::jsonb)
+      -- Demandes de terrain du double interne faites dans l'appli (créneau de 2 h) : « Double interne » une fois confirmées,
+      -- « Demande en cours » avant. Évite que deux équipes demandent le même terrain à la même heure. Jamais de nom.
+      || coalesce((select jsonb_agg(jsonb_build_object('id', 'dbl-' || r.id, 'terrain_id', t.id,
+                          'debut', (r.jour + r.heure) at time zone 'Europe/Paris', 'fin', (r.jour + r.heure + interval '2 hours') at time zone 'Europe/Paris',
+                          'categorie', case when r.statut = 'confirmee' then 'competition' else 'occupe' end, 'source', 'app',
+                          'libelle', case when r.statut = 'confirmee' then 'Double interne' else 'Demande en cours' end))
+                          from public.double_reservations r
+                          join public.terrains t on lower(replace(t.nom, ' ', '')) = lower(replace(r.terrain, ' ', ''))
+                          where r.statut in ('demande', 'confirmee') and r.jour between p_du and au), '[]'::jsonb),
     'synchro', coalesce((select jsonb_agg(jsonb_build_object('source', s.source, 'actif', s.actif, 'statut', s.statut, 'message', s.message,
                           'dernier_essai', s.dernier_essai, 'derniere_reussite', s.derniere_reussite,
                           'couverture_debut', s.couverture_debut, 'couverture_fin', s.couverture_fin)) from public.terrains_synchro s), '[]'::jsonb),

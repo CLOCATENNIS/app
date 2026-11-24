@@ -24,8 +24,8 @@ var CATS = {
   passe: { nom: 'Créneau passé', court: '', bg: '#f1f1ef', bd: '#e2e2de', fg: '#9aa1a6' }
 };
 var PRIO = { ferme: 6, competition: 5, animation: 4, cours: 3, adherents: 2, occupe: 1 };
-var PRIO_SRC = { adoc: 3, import: 2, local: 1, demo: 2 };
-var SOURCES = { adoc: 'Réservation ADOC', import: 'Fichier importé', local: 'Info du club (non confirmée par ADOC)', demo: 'Donnée fictive (démonstration)' };
+var PRIO_SRC = { adoc: 3, app: 2, import: 2, local: 1, demo: 2 };
+var SOURCES = { adoc: 'Réservation ADOC', app: 'Demande faite dans l\'appli du club', import: 'Fichier importé', local: 'Info du club (non confirmée par ADOC)', demo: 'Donnée fictive (démonstration)' };
 var HORAIRES_DEF = [{ terrain_id: null, jours: [1, 2, 3, 4, 5, 6, 7], ouverture: '08:30', fermeture: '22:30' }];
 var MODULE_DEF = { actif: false, tenup_url: 'https://tenup.fft.fr/club/57780019/reservations', frequence_min: 30, seuil_min: 120 };
 
@@ -197,6 +197,36 @@ function detailBloc(R, ref) {
     reserver: b.cat === 'libre' || b.cat === 'inconnu' };
 }
 
+// ---------- Un créneau précis sur tous les terrains (encart « terrains à cette heure ») ----------
+// État d'un terrain entre d et f (minutes) : une occupation connue l'emporte, puis « à vérifier », puis « libre ».
+function etatCreneau(R, terrainId, d, f) {
+  var c = R.terrains.filter(function (x) { return x.t.id === terrainId; })[0];
+  if (!c || c.o == null || d < c.o || f > c.f) return { cat: 'ferme', libelle: c && c.o != null ? 'Hors horaires' : 'Fermé' };
+  var l = c.blocs.filter(function (b) { return b.d < f && b.f > d && !b.hors; }), occ = null;
+  l.forEach(function (b) { if (b.occ && (!occ || (PRIO[b.cat] || 0) > (PRIO[occ.cat] || 0))) occ = b; });
+  if (occ) return { cat: occ.cat, libelle: occ.libelle || CATS[occ.cat].court, source: occ.source, occ: occ.occ };
+  if (l.some(function (b) { return b.cat === 'passe'; })) return { cat: 'passe', libelle: 'Passé' };
+  if (l.some(function (b) { return b.cat === 'inconnu'; }) || !l.length) return { cat: 'inconnu', libelle: 'À vérifier' };
+  return { cat: 'libre', libelle: 'Libre' };
+}
+// Petite grille des terrains pour un créneau ; sel = terrain choisi (mis en avant), filtre = noms ou ids proposés
+function htmlDispo(R, d, f, sel, filtre) {
+  var l = R.terrains.filter(function (c) { return !filtre || filtre.some(function (x) { return norm(x) === norm(c.t.nom) || x === c.t.id; }); });
+  return '<div class="tp-dispo">' + l.map(function (c) {
+    var e = etatCreneau(R, c.t.id, d, f), lib = { libre: 'Libre', inconnu: 'À vérifier', passe: 'Passé', ferme: 'Fermé', cours: 'Cours' }[e.cat] || (e.occ && e.occ.source === 'app' && e.cat === 'occupe' ? 'Demandé' : 'Réservé'); // simple : libre, réservé, à vérifier
+    return '<button type="button" class="tp-d c-' + e.cat + (e.source === 'local' ? ' local' : '') + (sel && (sel === c.t.id || norm(sel) === norm(c.t.nom)) ? ' sel' : '') + '" data-tpd="' + esc(c.t.id) + '" data-nom="' + esc(c.t.nom) + '" data-cat="' + e.cat + '"><b>' + esc(c.t.nom) + '</b><span>' + esc(lib) + '</span></button>';
+  }).join('') + '</div>';
+}
+// Demandes de terrain du double interne → occupations (utilisé en démonstration ; en vrai, la base les renvoie déjà)
+function depuisDemandesDouble(liste, terrains) {
+  terrains = terrains && terrains.length ? terrains : TERRAINS_DEF;
+  var parNom = {}; terrains.forEach(function (t) { parNom[norm(t.nom)] = t.id; });
+  return (liste || []).filter(function (r) { return (r.statut === 'demande' || r.statut === 'confirmee') && r.jour && r.heure && parNom[norm(r.terrain)]; }).map(function (r) {
+    var h = min(r.heure); return { id: 'dbl-' + r.id, terrain_id: parNom[norm(r.terrain)], debut: horodatage(r.jour, hhmm(h)), fin: horodatage(r.jour, hhmm(h + 120)),
+      categorie: r.statut === 'confirmee' ? 'competition' : 'occupe', source: 'app', libelle: r.statut === 'confirmee' ? 'Double interne' : 'Demande en cours' };
+  });
+}
+
 // ---------- Démonstration (données fictives, clairement signalées) ----------
 var DEMO_LOCAL = []; // occupations ajoutées pendant la démo dans la gestion (gardées en mémoire, jamais enregistrées)
 var DEMO_HOR = null, DEMO_MOD = null, DEMO_TER = null;
@@ -217,7 +247,7 @@ function demoJour(jour) {
   TERRAINS_DEF.forEach(function (t) {
     for (var m = 8 * 60 + 30; m < 22 * 60 + 30; m += 60) {
       var pris = l.some(function (o) { if (o.terrain_id !== t.id) return false; var a = parisDe(o.debut).m, b = parisDe(o.fin).m; return a < m + 60 && b > m; });
-      var p = js >= 6 ? 0.5 : m >= 18 * 60 ? 0.65 : m >= 12 * 60 && m < 14 * 60 ? 0.45 : 0.2;
+      var p = js >= 6 ? 0.45 : m >= 18 * 60 ? 0.4 : m >= 12 * 60 && m < 14 * 60 ? 0.35 : 0.15;
       if (!pris && r() < p) ajout(t.id, hhmm(m), hhmm(m + 60), 'adherents', null);
     }
   });
@@ -338,6 +368,11 @@ var CSS = [
   '.tp-ligne .tp-lh{display:flex;flex-direction:column;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;min-width:48px}.tp-ligne .tp-lh small{font-weight:500;font-size:12px;opacity:.75}',
   '.tp-ligne .tp-lt{display:flex;flex-direction:column;gap:1px}.tp-ligne .tp-lt span{font-size:13px}.tp-ligne .tp-lt em{font-style:normal;font-size:11px;font-weight:600;opacity:.8}',
   '.tp-passes{font-size:12px;color:var(--mut,#5d6b78);padding:0 2px 2px}',
+  '.tp-dispo{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:6px}',
+  '.tp-d{display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:1px solid;border-left-width:4px;border-radius:10px;padding:6px 8px;font:inherit;text-align:left;cursor:pointer;min-height:48px}',
+  '.tp-d b{font-size:13px}.tp-d span{font-size:12px;font-weight:600}.tp-d.local{border-style:dashed}',
+  '.tp-d.c-inconnu{background:repeating-linear-gradient(135deg,#fff 0 7px,#f2f4f5 7px 14px);border-left-width:1px;border-style:dashed}',
+  '.tp-d.sel{outline:3px solid var(--navy,#0B3547);outline-offset:1px}',
   '.tp-vide{padding:28px 12px;text-align:center;color:var(--mut,#5d6b78)}',
   '@media (max-width:767px){.tp-grille{--tp-col:calc((100vw - 32px - 56px) / 2.35)}}',
   '@media (prefers-reduced-motion:reduce){.tp-scroll{scroll-behavior:auto}}'
@@ -346,7 +381,7 @@ function poserStyles() { if (typeof document === 'undefined' || document.getElem
 
 G.CLOCATerrains = {
   TERRAINS_DEF: TERRAINS_DEF, SURFACES: SURFACES, CATS: CATS, SOURCES: SOURCES, MODULE_DEF: MODULE_DEF, HORAIRES_DEF: HORAIRES_DEF,
-  charger: charger, calculer: calculer, couverture: couverture, horairesDu: horairesDu, demo: demo, demoStore: demoStore,
+  charger: charger, calculer: calculer, etatCreneau: etatCreneau, htmlDispo: htmlDispo, depuisDemandesDouble: depuisDemandesDouble, couverture: couverture, horairesDu: horairesDu, demo: demo, demoStore: demoStore,
   htmlGrille: htmlGrille, htmlTerrain: htmlTerrain, htmlLegende: htmlLegende, detailBloc: detailBloc, poserStyles: poserStyles,
   garder: garder, reprendre: reprendre, lireFichier: lireFichier, categorieDe: categorieDe,
   outils: { isoJour: isoJour, decaler: decaler, jourSemaine: jourSemaine, horodatage: horodatage, parisDe: parisDe, hh: hh, hhmm: hhmm, min: min, dateDe: dateDe }
