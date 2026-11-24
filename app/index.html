@@ -492,6 +492,27 @@ button.javatar{cursor:pointer}
 .hero.coach-mode .hello{color:var(--balle);font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-size:12px}
 .co-titre{font-family:var(--disp);font-size:26px;margin:0 0 2px}
 .ms-duo{display:grid;gap:12px}.ms-duo>section:not(.on){display:none}.ms-seg{margin:2px 0 -4px}@media(min-width:900px){.ms-duo{grid-template-columns:1fr 1fr;align-items:start}.ms-duo>section:not(.on){display:flex}.ms-seg{display:none!important}}
+/* Réservation des terrains (la grille elle-même est stylée par terrains-moteur.js) */
+.tp-nav{display:flex;gap:8px;align-items:center;margin-top:14px}
+.tp-rond{width:46px;height:46px;flex:none;border-radius:50%;border:0;background:var(--navy2);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.tp-date{position:relative;flex:1;min-width:0;height:46px;border-radius:14px;border:0;background:var(--navy2);color:#fff;font-weight:600;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;padding:0 10px}
+.tp-date span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-date input{position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;border:0}
+.tp-rond:focus-visible,.tp-date:focus-visible{outline:3px solid var(--balle);outline-offset:2px}
+.darkhead .chip.tp-auj{margin-top:10px;background:transparent;border-color:#2c4e6b;color:#fff}
+.darkhead .chip.tp-tenup{background:var(--balle);border-color:var(--balle);color:var(--navy);font-weight:700;text-decoration:none}
+.tp-band{border-radius:14px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.4}
+.tp-band svg{flex:none;margin-top:1px}
+.tp-band.demo{background:repeating-linear-gradient(135deg,#7b4fa0 0 14px,#6f4592 14px 28px);color:#fff;flex-direction:column;gap:2px}
+.tp-band.demo b{letter-spacing:1px}
+.tp-band.warn{background:#fdf0d5;color:#6b4300;border:1px solid #f1d39a}
+.tp-band.info{background:var(--soft);color:var(--tx)}
+.tp-barre{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:-2px 2px}
+.tp-chips{margin:-2px 0}
+a.chip{text-decoration:none}
+.tp-pill{align-self:flex-start;border:1px solid;border-left-width:4px;border-radius:10px;padding:4px 10px;font-weight:700;font-size:14px}
+.tp-pill.local{border-style:dashed}
+@media (min-width:768px){body[data-page="terrains"] main{max-width:1240px}}
 </style>
 </head>
 <body>
@@ -501,6 +522,7 @@ button.javatar{cursor:pointer}
 <script src="simu.js?v=202611231530"></script>
 <script src="challenge-moteur.js?v=202611231635"></script>
 <script src="gestion/challenge.js?v=202611231635"></script>
-<script src="app.js?v=202611231620"></script>
+<script src="terrains-moteur.js?v=202611241700"></script>
+<script src="app.js?v=202611241700"></script>
 </body>
 </html>

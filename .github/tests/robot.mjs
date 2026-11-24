@@ -15,7 +15,7 @@ const resultats = []; // { zone, page, ok, detail }
 const note = (zone, page, ok, detail = '') => { resultats.push({ zone, page, ok, detail }); console.log(`${ok ? '✅' : '❌'} ${zone} · ${page}${detail ? ' — ' + detail : ''}`); };
 
 // ---------- 1. Le code se lit sans erreur ----------
-const FICHIERS_JS = ['app/app.js', 'app/gestion/admin.js', 'app/sw.js'];
+const FICHIERS_JS = ['app/app.js', 'app/gestion/admin.js', 'app/sw.js', 'app/terrains-moteur.js'];
 for (const f of FICHIERS_JS) {
   try { new Function(readFileSync(join(RACINE, f), 'utf8')); note('Code', f, true); }
   catch (e) { note('Code', f, false, e.message); }
@@ -115,7 +115,7 @@ async function brancherFaux(ctx, mock) {
 // ---------- 3. L'appli des familles, avec les vraies données (sans compte) ----------
 const PAGES_FAMILLES = [
   ['accueil', { contient: 'CLOCA' }], ['agenda'], ['arena'], ['club/actus'], ['club/evenements'], ['club/annonces'], ['club/infos'],
-  ['inscriptions'], ['double'], ['cordage'], ['aide', { contient: 'guide' }], ['profil'], ['noel']
+  ['inscriptions'], ['double'], ['terrains'], ['cordage'], ['aide', { contient: 'guide' }], ['profil'], ['noel']
 ];
 for (const [ecran, taille] of [['téléphone', { width: 390, height: 844 }], ['ordinateur', { width: 1280, height: 900 }]]) {
   const ctx = await navigateur.newContext({ viewport: taille, serviceWorkers: 'block' });

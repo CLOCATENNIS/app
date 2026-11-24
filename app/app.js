@@ -82,6 +82,7 @@ var IC = {
   // discussion éphémère : cercle en pointillés avec une aiguille
   eph: '<path d="M12 3a9 9 0 1 1-9 9"/><path d="M3.6 8.5h.01M5.6 5.6h.01M8.5 3.6h.01" stroke-width="2.6"/><path d="M12 7.5V12l3 2"/>',
   chev: '<path d="M9 6l6 6-6 6"/>',
+  court: '<rect x="4" y="2.5" width="16" height="19" rx="1.5"/><path d="M2.5 12h19M7.5 2.5v19M16.5 2.5v19M7.5 7.5h9M7.5 16.5h9M12 7.5v9"/>',
   sortie: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'
 };
 function ic(n, size, color) {
@@ -363,7 +364,7 @@ var ACC_BLOCS = [['presence', 'Présence au club'], ['une', 'Annonces à la une'
 var ACC_TUILES = {
   double: ['Double interne', 'trophy', '#/double'], inscriptions: ['Inscriptions', 'check', '#/inscriptions'], reserver: ['Réserver un court', 'cal', ''],
   cordage: ['Cordage', 'racket', '#/cordage'], arena: ['CLOC\'ARENA', 'trophy', '#/arena'], agenda: ['Mon agenda', 'cal', '#/agenda'],
-  annonces: ['Petites annonces', 'chat', '#/club/annonces'], club: ['Infos du club', 'club', '#/club/infos'], fete: ['Fête de Noël', 'people', '#/noel'], aide: ['Aide', 'user', '#/aide']
+  annonces: ['Petites annonces', 'chat', '#/club/annonces'], terrains: ['Réservation des terrains', 'court', '#/terrains'], club: ['Infos du club', 'club', '#/club/infos'], fete: ['Fête de Noël', 'people', '#/noel'], aide: ['Aide', 'user', '#/aide']
 };
 var ACC_DEF = {
   mot: { actif: false, titre: '', texte: '', lien: '', lien_txt: '', couleur: 'ac', fin: '' },
@@ -389,12 +390,12 @@ function accueilCfg() {
 // Accueil personnalisé : chaque compte choisit ses raccourcis, directement sur l'accueil (crayon ✏️) ou dans Profil → Mon accueil.
 // Les deux écrans lisent et écrivent la même ligne compte_accueil (une par compte, protégée par la base).
 // Blocs fixes (club house, prochain RDV, fête, dernière actu, réseaux, partenaires) : jamais réglables par l'adhérent.
-var ACC_PERSO = ['double', 'inscriptions', 'reserver', 'cordage', 'arena', 'annonces'];
+var ACC_PERSO = ['double', 'inscriptions', 'reserver', 'terrains', 'cordage', 'arena', 'annonces'];
 var ACC_BLOCS_PERSO = []; // aucun bloc masquable par l'adhérent (Mon CLOC'ARENA s'affiche tout seul pour les familles qui participent)
 function cleTuile(x) { return x.type === 'lien' ? 'lien:' + x.titre : x.type; }
 // Raccourcis proposés : les 6 du club + ceux ajoutés par le club dans la gestion (sauf la fête, qui a son propre bloc)
 function catalogueTuiles(club) {
-  var l = ACC_PERSO.map(function (k) { return { type: k }; });
+  var l = ACC_PERSO.filter(function (k) { return k !== 'terrains' || terrainsVisible(); }).map(function (k) { return { type: k }; });
   club.tuiles.forEach(function (t) { if (t.type !== 'fete' && !l.some(function (x) { return cleTuile(x) === cleTuile(t); })) l.push(t); });
   return l;
 }
@@ -402,6 +403,7 @@ function participeArena() { return !!(S.user && S.pers.some(function (p) { retur
 function tuilesParDefaut(club) {
   var l = club.tuiles.slice();
   if (participeArena() && !l.some(function (t) { return t.type === 'arena'; })) l.push({ type: 'arena' });
+  if (terrainsVisible() && !l.some(function (t) { return t.type === 'terrains'; })) l.push({ type: 'terrains' }); // planning des terrains : proposé d'office dès qu'il est ouvert
   return l;
 }
 function accueilPerso(cfg) {
@@ -434,7 +436,7 @@ function infoTuile(t) {
   if (t.type === 'lien') return { titre: t.titre, icone: IC[t.icone] ? t.icone : 'pin', aide: t.sous || 'Lien du club' };
   var d = ACC_TUILES[t.type]; return { titre: t.titre || d[0], icone: d[1], aide: ACC_AIDE[t.type] || '' };
 }
-var ACC_AIDE = { double: 'Poules, dispos, scores', inscriptions: 'Stages et événements', reserver: 'Ten\'Up', cordage: 'Déposer une raquette', arena: 'Tweener, Masters, Versus', agenda: 'Mon planning', annonces: 'Vendre, chercher un partenaire', club: 'Horaires, adresse', fete: 'Fête du club', aide: 'Installer, se connecter' };
+var ACC_AIDE = { double: 'Poules, dispos, scores', inscriptions: 'Stages et événements', reserver: 'Ten\'Up', terrains: 'Planning et disponibilités', cordage: 'Déposer une raquette', arena: 'Tweener, Masters, Versus', agenda: 'Mon planning', annonces: 'Vendre, chercher un partenaire', club: 'Horaires, adresse', fete: 'Fête du club', aide: 'Installer, se connecter' };
 function pageMonAccueil() {
   var club = accueilCfg(), cat = catalogueTuiles(club);
   var E = S.monAccEd || (S.monAccEd = monAccueilBrouillon());
@@ -466,7 +468,7 @@ function dynRaccourcis() {
     }).filter(Boolean);
     if (rangs.length) arenaTxt = rangs.join(' · ');
   }
-  return { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' };
+  return { double: 'Poules, dispos, scores', inscriptions: ouverts ? ouverts + ' ouverte' + (ouverts > 1 ? 's' : '') : 'Stages et événements', reserver: 'Sur Ten\'Up', terrains: 'Planning des 7 terrains', cordage: resumeCordage(), arena: arenaTxt, agenda: 'Mon planning de la semaine', annonces: 'Vendre, acheter, échanger', club: 'Horaires, adresse, contacts', fete: 'Toutes les infos', aide: 'Installer, se connecter' };
 }
 // Zone « Mes raccourcis » de l'accueil : affichage normal, ou mode modification (crayon) pour déplacer, retirer, réajouter
 function zoneRaccourcis(cfg, dyn) {
@@ -648,6 +650,7 @@ function tuilesAccueil(cfg, dyn) {
   return '<div class="grid2">' + l.map(function (t) {
     if (t.type === 'lien') { var u = lienSur(t.lien); if (!u) return ''; return '<a class="tile" href="' + esc(u) + '"' + lienExterne(u) + '>' + ic(IC[t.icone] ? t.icone : 'pin', 24) + '<b>' + esc(t.titre) + '</b><span class="mut small">' + esc(t.sous || '') + '</span></a>'; }
     if (t.type === 'fete' && !feteConcerne(feteActive())) return '';
+    if (t.type === 'terrains' && !terrainsVisible()) return '';
     var d = ACC_TUILES[t.type], href = t.type === 'reserver' ? ADOC_URL : d[2];
     var sous = t.sous || dyn[t.type] || '';
     return '<a class="tile" href="' + href + '"' + lienExterne(href) + '>' + ic(d[1], 24) + '<b>' + esc(t.titre || d[0]) + '</b><span class="mut small">' + sous + '</span></a>';
@@ -5402,6 +5405,129 @@ document.addEventListener('visibilitychange', function () {
   if (d) discMarquerLu(d); else chargerDiscussions().then(function () { if (document.body.getAttribute('data-page') === 'accueil' || document.body.getAttribute('data-page') === 'discussions') render(); });
 });
 
+// ---------- Réservation des terrains (consultation seule, moteur : terrains-moteur.js) ----------
+// ADOC / Ten'Up restent l'outil officiel. Un créneau dont l'état n'est pas connu n'est jamais présenté comme libre.
+// Tant que le module n'est pas activé dans la gestion, seule l'équipe du club le voit (en démonstration si la base n'est pas prête).
+var TR = { jour: null, filtre: 'tous', D: null, charge: null, horsLigne: null, erreur: false, auto: null };
+function terrainsCfg() { var c = S.reglages && S.reglages.terrains_module; return c && typeof c === 'object' ? c : {}; }
+function terrainsEquipe() { return !S.apercu && (S.isStaff || S.isDir || aAcces('terrains')); }
+function terrainsVisible() { return !!window.CLOCATerrains && (terrainsCfg().actif === true || terrainsEquipe()); }
+function tenupUrl() { var u = terrainsCfg().tenup_url; return /^https:\/\//.test(u || '') ? u : ADOC_URL; }
+function chargerTerrains(force) {
+  var T = window.CLOCATerrains, jour = TR.jour;
+  if (!T || !S.user) return Promise.resolve();
+  if (!force && TR.charge === jour) return Promise.resolve();
+  TR.charge = jour; TR.erreur = false;
+  return T.charger(sb, jour).then(function (D) {
+    if (TR.jour !== jour) return;
+    TR.D = D; TR.horsLigne = null; TR.lu = new Date();
+    if (D && !D.demo && D.terrains) T.garder(jour, D);
+  }).catch(function () {
+    if (TR.jour !== jour) return;
+    var c = T.reprendre(jour);
+    if (c) { TR.D = c.D; TR.horsLigne = new Date(c.le); } else { TR.D = null; TR.erreur = true; }
+  });
+}
+function quandMaj(d) {
+  if (!d) return '';
+  var m = Math.round((Date.now() - d) / 60000);
+  if (m < 1) return 'à l\'instant'; if (m < 60) return 'il y a ' + m + ' min';
+  return (isoJour(d) === isoJour(new Date()) ? 'aujourd\'hui' : 'le ' + fmtCourt(d)) + ' à ' + fmtH(d);
+}
+function pageTerrains(terrainId) {
+  var T = window.CLOCATerrains, o = T && T.outils;
+  var auj = o ? o.parisDe(new Date()).jour : isoJour(new Date());
+  if (!TR.jour) { TR.jour = auj; TR.filtre = localStorageGet('cloca-terrains-filtre') || 'tous'; }
+  var d = o ? o.dateDe(TR.jour) : new Date();
+  var tete = '<div class="darkhead"><div class="wrap">' + backLink(terrainId ? '#/terrains' : '#/accueil', terrainId ? 'Tous les terrains' : 'Accueil', true) +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap"><div><div class="kicker" style="margin-top:4px">TERRAINS · CONSULTATION</div><h1>Réservation des terrains</h1></div>' +
+    '<a class="chip tp-tenup" href="' + esc(tenupUrl()) + '" target="_blank" rel="noopener">' + ic('cal', 16) + 'Réserver sur Ten\'Up ↗</a></div>';
+  var bas = '<section class="card stack" style="gap:10px"><b>Pour réserver, passe par Ten\'Up</b><span class="small mut">Ce planning sert à voir les terrains. Les réservations se font uniquement sur Ten\'Up (ou ADOC), l\'outil officiel du club : rien n\'est réservé depuis l\'appli.</span>' +
+    '<a class="btn" href="' + esc(tenupUrl()) + '" target="_blank" rel="noopener">Réserver sur Ten\'Up ↗</a></section></main>';
+  if (!T) return tete + '</div></div><main><section class="card empty">Le planning ne s\'est pas chargé. Recharge la page.</section>' + bas;
+  if (!S.user) return tete + '</div></div><main><section class="card stack" style="gap:10px;text-align:center"><b style="font-size:18px">Réservé aux adhérents</b><span class="small mut">Connecte-toi pour voir le planning des 7 terrains du club.</span><a class="btn" href="#/profil">Me connecter</a></section>' + bas;
+  var D = TR.D;
+  // Module pas encore ouvert aux adhérents (ou démonstration réservée à l'équipe)
+  if (D && (D.ferme || D.interdit || (D.demo && !terrainsEquipe()))) {
+    return tete + '</div></div><main><section class="card stack" style="gap:10px;text-align:center"><span style="font-size:40px">🎾</span><b style="font-size:19px">Bientôt disponible</b><span class="small">Tu pourras bientôt voir ici les disponibilités des 7 terrains du club, jour par jour.</span><span class="mut small">En attendant, consulte et réserve les terrains sur Ten\'Up.</span></section>' + bas;
+  }
+  var lib = fmtJour(d), estAuj = TR.jour === auj;
+  tete += '<div class="tp-nav"><button class="tp-rond" id="tp-prec" aria-label="Jour précédent">' + ic('back', 22) + '</button>' +
+    '<button class="tp-date" id="tp-date" aria-label="Choisir une date">' + ic('cal', 18) + '<span>' + esc(estAuj ? 'Aujourd\'hui · ' + lib.replace(/^\S+\s/, '') : lib) + '</span><input type="date" id="tp-input" value="' + TR.jour + '" tabindex="-1" aria-hidden="true"></button>' +
+    '<button class="tp-rond" id="tp-suiv" aria-label="Jour suivant">' + ic('next', 22) + '</button></div>' +
+    (estAuj ? '' : '<button class="chip tp-auj" id="tp-auj">Revenir à aujourd\'hui</button>') + '</div></div><main>';
+  setTimeout(lierTerrains);
+  if (TR.charge !== TR.jour || (!D && !TR.erreur)) {
+    chargerTerrains().then(function () { if (document.body.getAttribute('data-page') === 'terrains') render(); });
+    return tete + '<div class="skel" style="height:420px"></div></main>';
+  }
+  if (!D) return tete + '<section class="card stack" style="gap:10px;text-align:center"><b>Planning indisponible</b><span class="small mut">Impossible de joindre le club pour le moment. Vérifie ta connexion.</span><button class="btn line" id="tp-maj">Réessayer</button></section>' + bas;
+  T.poserStyles();
+  var R = T.calculer(D, TR.jour, new Date()); TR.R = R;
+  var h = tete, couv = R.couv;
+  // Bandeaux : démonstration, hors connexion, fraîcheur des données
+  if (D.demo) h += '<div class="tp-band demo"><b>DÉMONSTRATION</b><span>Données fictives : rien de ce planning n\'est réel. Visible seulement par l\'équipe du club tant que le module n\'est pas activé.</span></div>';
+  if (TR.horsLigne) h += '<div class="tp-band warn">' + ic('alert', 18) + '<span><b>Hors connexion.</b> Planning enregistré ' + esc(quandMaj(TR.horsLigne)) + ', peut-être dépassé.</span></div>';
+  var adoc = (D.synchro || []).filter(function (s) { return s.source === 'adoc'; })[0];
+  if (!couv.connu) {
+    var txt = couv.raison === 'obsolete' ? '<b>Données plus à jour</b> (dernière mise à jour ' + esc(quandMaj(couv.dernier)) + ') : les créneaux sans réservation connue sont affichés « à vérifier ».'
+      : couv.raison === 'hors_periode' ? '<b>Ce jour n\'est pas encore couvert</b> par les données reçues : les créneaux sans réservation connue sont « à vérifier » sur Ten\'Up.'
+      : '<b>Le club ne reçoit pas encore les réservations ADOC.</b> Seuls les cours, animations et fermetures indiqués par le club apparaissent : les autres créneaux sont « à vérifier » sur Ten\'Up.';
+    h += '<div class="tp-band warn">' + ic('alert', 18) + '<span>' + txt + '</span></div>';
+  }
+  h += '<div class="tp-barre"><span class="small mut">' + (couv.dernier ? 'Mis à jour ' + esc(quandMaj(couv.dernier)) : adoc && adoc.statut === 'non_configure' ? 'Synchronisation ADOC pas encore disponible' : 'Pas encore de données reçues') + '</span><button class="chip" id="tp-maj">' + ic('dl', 15) + 'Actualiser</button></div>';
+  if (R.horairesDefaut && terrainsEquipe()) h += '<div class="tp-band info"><span>Horaires par défaut (8h30 – 22h30) : à confirmer dans Gestion → Terrains.</span></div>';
+  var surf = [['tous', 'Tous'], ['couvert', 'Couverts'], ['terre', 'Terre battue'], ['quick', 'Quick']].filter(function (s) { return s[0] === 'tous' || R.terrains.some(function (c) { return c.t.surface === s[0]; }); });
+  if (terrainId) {
+    var col = R.terrains.filter(function (c) { return c.t.id === terrainId; })[0];
+    h += '<div class="chips tp-chips">' + R.terrains.map(function (c) { return '<a class="chip' + (c.t.id === terrainId ? ' on' : '') + '" href="#/terrains/' + esc(c.t.id) + '">' + esc(c.t.nom) + '</a>'; }).join('') + '</div>';
+    h += '<section class="card stack" style="gap:10px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-size:18px">' + esc(col ? col.t.nom : 'Terrain') + '</b>' + (col && col.o != null ? '<span class="small mut">Ouvert ' + o.hh(col.o) + ' – ' + o.hh(col.f) + '</span>' : '') + '</div>' + T.htmlTerrain(R, terrainId) + '</section>';
+  } else {
+    var ids = TR.filtre === 'tous' ? null : R.terrains.filter(function (c) { return c.t.surface === TR.filtre; }).map(function (c) { return c.t.id; });
+    h += '<div class="chips tp-chips" role="group" aria-label="Filtrer par surface">' + surf.map(function (s) { return '<button class="chip' + (TR.filtre === s[0] ? ' on' : '') + '" data-tpf="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>';
+    h += T.htmlGrille(R, { filtre: ids, h: MQ_LARGE && MQ_LARGE.matches ? 56 : 52 });
+    if (!(MQ_LARGE && MQ_LARGE.matches) && (!ids || ids.length > 2)) h += '<span class="xs mut" style="text-align:center;margin-top:-4px">Fais glisser le planning pour voir les autres terrains → · Touche un nom pour voir ce terrain seul</span>';
+  }
+  h += T.htmlLegende(R) + bas;
+  return h;
+}
+function lierTerrains() {
+  var T = window.CLOCATerrains; if (!T) return;
+  var aller = function (j) { TR.jour = j; TR.D = null; TR.charge = null; TR.defile = false; render(); };
+  if ($('tp-prec')) $('tp-prec').onclick = function () { aller(T.outils.decaler(TR.jour, -1)); };
+  if ($('tp-suiv')) $('tp-suiv').onclick = function () { aller(T.outils.decaler(TR.jour, 1)); };
+  if ($('tp-auj')) $('tp-auj').onclick = function () { aller(T.outils.parisDe(new Date()).jour); };
+  var inp = $('tp-input');
+  if ($('tp-date') && inp) {
+    $('tp-date').onclick = function (e) { if (e.target === inp) return; try { if (inp.showPicker) return inp.showPicker(); } catch (x) { } inp.focus(); inp.click(); };
+    inp.onchange = function () { if (/^\d{4}-\d{2}-\d{2}$/.test(inp.value)) aller(inp.value); };
+  }
+  if ($('tp-maj')) $('tp-maj').onclick = function () { var b = this; b.disabled = true; chargerTerrains(true).then(function () { render(); toast(TR.horsLigne || TR.erreur ? 'Pas de connexion : dernières données affichées' : 'Planning actualisé'); }); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tpf]'), function (b) { b.onclick = function () { TR.filtre = b.dataset.tpf; localStorageSet('cloca-terrains-filtre', TR.filtre); render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tpt]'), function (b) { b.onclick = function () { go('#/terrains/' + b.dataset.tpt); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tpb]'), function (b) {
+    b.onclick = function () {
+      var x = TR.R && T.detailBloc(TR.R, b.dataset.tpb); if (!x || x.bloc.hors || x.bloc.cat === 'passe') return;
+      modale('<div class="stack" style="gap:12px"><span class="eyebrow">' + esc(fmtJour(T.outils.dateDe(TR.jour))) + '</span><b style="font-size:20px;font-family:var(--disp)">' + esc(x.titre) + '</b>' +
+        '<span class="tp-pill c-' + x.bloc.cat + (x.bloc.source === 'local' ? ' local' : '') + '">' + esc(x.statut) + '</span>' + (x.libelle ? '<span>' + esc(x.libelle) + '</span>' : '') +
+        (x.source ? '<span class="small mut">' + esc(x.source) + '</span>' : '') +
+        (x.bloc.cat === 'libre' ? '<span class="small mut">Le créneau peut avoir été réservé entre-temps : la réservation n\'est confirmée que sur Ten\'Up.</span>' : '') +
+        (x.reserver ? '<a class="btn" href="' + esc(tenupUrl()) + '" target="_blank" rel="noopener">Réserver sur Ten\'Up ↗</a>' : '') +
+        '<button class="btn line" id="tp-fermer">Fermer</button></div>', function () { $('tp-fermer').onclick = fermerModale; });
+    };
+  });
+  // Mise à jour toute seule toutes les 5 minutes tant que la page est ouverte et visible
+  if (!TR.auto) TR.auto = setInterval(function () {
+    if (document.body.getAttribute('data-page') !== 'terrains' || document.visibilityState !== 'visible' || $('modale')) return;
+    var y = window.scrollY, sc = document.querySelector('.tp-scroll'), sx = sc ? sc.scrollLeft : 0;
+    chargerTerrains(true).then(function () { render(); window.scrollTo(0, y); var s2 = document.querySelector('.tp-scroll'); if (s2) s2.scrollLeft = sx; });
+  }, 300000);
+  // Aujourd'hui : on fait défiler le planning jusqu'à l'heure actuelle
+  var chipOn = document.querySelector('.tp-chips a.chip.on'); if (chipOn && chipOn.scrollIntoView) chipOn.scrollIntoView({ block: 'nearest', inline: 'center' });
+  var sc = document.querySelector('.tp-scroll'), now = sc && sc.querySelector('.tp-now');
+  if (sc && now && !TR.defile) { TR.defile = true; sc.scrollTop = Math.max(0, now.offsetTop - 90); }
+}
+
 function render() {
   var parts = (location.hash || '#/accueil').replace(/^#\/?/, '').split('/');
   if (parts[0] !== 'discussion') discFermerCanal();
@@ -5425,6 +5551,7 @@ function render() {
   else if (p === 'saisie' || p === 'cordeur' || p === 'bureau') { location.replace('gestion/#/' + ({ saisie: 'arena', cordeur: 'cordage', bureau: 'accueil' })[p]); return; }
   else if (p === 'cordage') { html = arg === 'guide' ? pageGuideCordage() : pageCordage(arg); actif = 'accueil'; }
   else if (p === 'double') { html = pageDouble(); actif = 'accueil'; }
+  else if (p === 'terrains') { if (!arg) TR.defile = TR.defile && document.body.getAttribute('data-page') === 'terrains'; html = pageTerrains(arg); actif = 'accueil'; }
   else if (p === 'groupe') { html = pageGroupe(arg); actif = enModeCoach() ? 'coach' : aDesEspaces() ? 'gestion' : 'agenda'; }
   else if (p === 'coach') {
     if (peutModeCoach() && !enModeCoach()) { S.mode = 'coach'; localStorageSet('cloca-mode', S.user.id); } // entrer dans l'espace coach = passer en mode coach

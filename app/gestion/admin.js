@@ -33,6 +33,7 @@ var MODULES = [
   ['double', 'Double interne', ['direction']],
   ['reseaux', 'Réseaux sociaux', ['direction', 'bureau', 'accueil']],
   ['presence', 'Présence au club', ['direction', 'bureau', 'accueil', 'cordeur']],
+  ['terrains', 'Terrains', ['direction']],
   ['equipe', 'Équipe du club', ['direction']],
   ['acces', 'Accès particuliers', ['direction']],
   ['droits', 'Rôles et accès', ['direction']],
@@ -48,10 +49,11 @@ var RUBRIQUES = [
   ['Adhérents', ['adherents', 'niveaux', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, niveaux des joueurs, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA (Tweener, Masters, Versus : séances, inscriptions, résultats) et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
-  ['Services du club', ['cordage', 'boutique', 'annonces', 'presence'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise, petites annonces, présence au club.'],
+  ['Services du club', ['terrains', 'cordage', 'boutique', 'annonces', 'presence'], 'services', 'bag', 'Planning des terrains, atelier cordage, boutique, stock et ardoise, petites annonces, présence au club.'],
   ['Administration', ['reglages', 'equipe', 'droits', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), rôles et accès, accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
+  terrains: 'Planning des 7 terrains (consultation), occupations du club, fermetures, synchronisation ADOC, horaires et import.',
   niveaux: 'Niveau club et classement FFT de chaque joueur, demandes de changement de niveau envoyées par les familles.',
   accueil: 'Ce qui demande ton attention aujourd\'hui.', alaune: 'Les cartes mises en avant sur l\'accueil de l\'appli : ordre, visibles ou non, pour qui, dates.', discussions: 'Les fils de groupe de l\'appli (annonces, CLOC\'ARENA, poules, équipes…) qui remplacent les groupes WhatsApp.', questionnaires: 'Formulaires maison : engagements, tailles de vêtements, disponibilités… les réponses arrivent ici.', messages: 'Écrire aux familles, à des groupes, aux inscrits d\'une séance ou aux coachs.', actus: 'Publier les actus du club dans l\'appli et sur le site.',
   reseaux: 'Mettre en avant des publications Instagram et Facebook.', accueilapp: 'Mot du club, ordre des blocs, raccourcis, partenaires et questions fréquentes de l\'appli.', annonces: 'Valider, créer et retrouver les petites annonces.', evenements: 'Organiser les séances CLOC\'ARENA : dates, groupes, places.',
@@ -3275,6 +3277,7 @@ function vueMessages(m) {
 var HIF = { periode: 7, cat: '', txt: '' };
 var JCAT = {
   double_reservations: ['Double interne', 'réservation de terrain', 'réservations de terrain'],
+  terrains_occupations: ['Terrains', 'occupation de terrain', 'occupations de terrain'], terrains_horaires: ['Terrains', 'horaire de terrain', 'horaires de terrain'], terrains: ['Terrains', 'terrain', 'terrains'],
   retours: ['Idées et bugs', 'retour d\'adhérent', 'retours d\'adhérents'],
   niveau_demandes: ['Adhérents', 'demande de niveau', 'demandes de niveau'],
   inscriptions: ['Inscriptions', 'inscription', 'inscriptions', 1], participations: ['Inscriptions', 'réponse présent/absent', 'réponses présent/absent', 1],
@@ -4557,7 +4560,282 @@ function vueAccueilApp(m, arg, O) {
   }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les réglages de l\'accueil.</div>'; });
 }
 
-var VUES = { droits: vueDroits, alaune: vueALaUne, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
+// ---------- Terrains : planning des 7 terrains (consultation), occupations locales, fermetures, synchronisation, horaires ----------
+// ADOC / Ten'Up restent l'outil officiel : rien ici ne crée ni n'annule une réservation ADOC.
+// Les occupations saisies ici sont des « infos du club » : l'appli ne les présente jamais comme des réservations ADOC confirmées.
+// Tant que la base du module (supabase/terrains.sql) n'est pas installée : démonstration, rien n'est enregistré.
+var TG = { onglet: 'planning', jour: null, demo: false };
+var CAT_SAISIE = [['cours', 'Cours collectif'], ['animation', 'Animation ou CLOC\'ARENA'], ['competition', 'Compétition ou tournoi'], ['adherents', 'Réservé (adhérents)'], ['occupe', 'Occupé (autre)'], ['ferme', 'Fermé ou indisponible']];
+function vueTerrains(m) {
+  var T = window.CLOCATerrains, o = T && T.outils;
+  if (!T) { m.innerHTML = entete('Terrains') + '<div class="card">Le module des terrains ne s\'est pas chargé. Recharge la page.</div>'; return; }
+  T.poserStyles();
+  if (!TG.jour) TG.jour = o.parisDe(new Date()).jour;
+  var ONG = [['planning', 'Planning'], ['occupations', 'Occupations et fermetures'], ['synchro', 'Synchronisation'], ['terrains', 'Terrains et horaires'], ['import', 'Import']];
+  var D = null, LOC = [];
+  var cfg = function () { return Object.assign({}, T.MODULE_DEF, (D && D.module) || {}); };
+  var demoMsg = function () { toast('Démo : rien n\'est enregistré (base du module pas encore installée)'); };
+  var tous = function () { return (D && D.terrains && D.terrains.length ? D.terrains : T.TERRAINS_DEF); };
+  var nomT = function (id) { if (!id) return 'Tous les terrains'; var t = tous().filter(function (x) { return x.id === id; })[0]; return t ? t.nom : id; };
+  var quand = function (ts) { var p = o.parisDe(ts); return { jour: p.jour, h: o.hh(p.m) }; };
+  var fmtD = function (jour) { return o.dateDe(jour).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); };
+  var C = function () { return $('tg-c'); };
+
+  var dessiner = function () {
+    var c = cfg();
+    m.innerHTML = entete('Terrains', 'Planning des 7 terrains en consultation. Les réservations restent sur ADOC / Ten\'Up.',
+      '<label class="chip" title="Montrer le raccourci et le planning aux adhérents"><input type="checkbox" id="tg-actif"' + (c.actif && !TG.demo ? ' checked' : '') + (TG.demo ? ' disabled' : '') + '> Visible des adhérents</label><a class="btn line" href="../#/terrains" target="_blank" rel="noopener">Voir comme un adhérent ↗</a>') +
+      (TG.demo ? '<div class="card" style="background:repeating-linear-gradient(135deg,#7b4fa0 0 14px,#6f4592 14px 28px);color:#fff;border:0;margin-bottom:12px"><b style="letter-spacing:1px">DÉMONSTRATION · DONNÉES FICTIVES</b><br><span class="small">La base du module n\'est pas encore installée : le planning est inventé et rien de ce que tu fais ici n\'est enregistré. Les adhérents ne voient rien.</span></div>' : '') +
+      '<div class="toolbar"><div class="chips">' + ONG.map(function (x) { return '<button class="chip' + (TG.onglet === x[0] ? ' on' : '') + '" data-tgo="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div><div id="tg-c"><div class="skel"></div></div>';
+    all('[data-tgo]', m).forEach(function (b) { b.onclick = function () { TG.onglet = b.dataset.tgo; dessiner(); }; });
+    $('tg-actif').onchange = function () { var v = this.checked; enregistrerCfg({ actif: v }, v ? 'Planning visible des adhérents' : 'Planning masqué aux adhérents'); };
+    ({ planning: ongPlanning, occupations: ongOccupations, synchro: ongSynchro, terrains: ongTerrains, import: ongImport })[TG.onglet]();
+  };
+  var enregistrerCfg = function (chg, msg) {
+    var c = Object.assign(cfg(), chg);
+    if (TG.demo) { T.demoStore.module(c); D.module = c; return demoMsg(); }
+    q(sb.from('reglages_publics').upsert({ cle: 'terrains_module', valeur: c, maj_le: new Date().toISOString() })).then(function () { D.module = c; toast(msg || 'Réglage enregistré'); }).catch(function () { toast('Enregistrement impossible'); });
+  };
+  var charger = function () {
+    return T.charger(sb, TG.jour).then(function (d) {
+      if (d.ferme || d.interdit) d = T.demo(TG.jour); // ne devrait pas arriver pour l'équipe
+      D = d; TG.demo = !!d.demo;
+      if (TG.demo) { LOC = T.demoStore.locales(); return; }
+      return q(sb.from('terrains_occupations').select('*').eq('source', 'local').gte('fin', new Date(Date.now() - 864e5).toISOString()).order('debut').limit(300)).then(function (l) { LOC = l || []; });
+    }).catch(function () { D = null; });
+  };
+  var recharger = function () { return charger().then(dessiner); };
+
+  // ----- Planning -----
+  var ongPlanning = function () {
+    if (!D) { C().innerHTML = '<div class="card">Impossible de charger le planning.</div>'; return; }
+    var R = T.calculer(D, TG.jour, new Date()), couv = R.couv;
+    var etat = couv.connu ? '<span class="badge b-ok">À jour</span> <span class="small mut">Mis à jour ' + esc(fmtJ(couv.dernier)) + ' à ' + esc(fmtH(couv.dernier)) + '</span>'
+      : '<span class="badge b-warn">Créneaux libres non connus</span> <span class="small mut">' + esc(couv.raison === 'obsolete' ? 'Données plus à jour' : couv.raison === 'hors_periode' ? 'Jour non couvert par les données reçues' : 'Aucune synchronisation ADOC : seuls les cours, animations et fermetures saisis ici apparaissent') + '</span>';
+    C().innerHTML = '<div class="toolbar"><button class="btn sm line" id="tg-p">‹</button><input class="f" type="date" id="tg-j" value="' + TG.jour + '" style="max-width:170px"><button class="btn sm line" id="tg-n">›</button><button class="btn sm ghost" id="tg-a">Aujourd\'hui</button><b style="margin-left:6px">' + esc(fmtD(TG.jour)) + '</b><span class="grow"></span><button class="btn sm" id="tg-add">Ajouter une occupation</button></div>' +
+      '<div class="small" style="margin:-4px 0 10px">' + etat + '</div>' + T.htmlGrille(R, { h: 50 }) + '<div style="margin-top:10px">' + T.htmlLegende(R) + '</div>' +
+      (R.horairesDefaut ? '<p class="small mut">Horaires par défaut (8h30 – 22h30) : à confirmer dans l\'onglet Terrains et horaires.</p>' : '');
+    var aller = function (j) { TG.jour = j; C().innerHTML = '<div class="skel"></div>'; recharger(); };
+    $('tg-p').onclick = function () { aller(o.decaler(TG.jour, -1)); };
+    $('tg-n').onclick = function () { aller(o.decaler(TG.jour, 1)); };
+    $('tg-a').onclick = function () { aller(o.parisDe(new Date()).jour); };
+    $('tg-j').onchange = function () { if (this.value) aller(this.value); };
+    $('tg-add').onclick = function () { formOccupation({ jour: TG.jour }); };
+    all('[data-tpt]', C()).forEach(function (b) { b.onclick = function () { formOccupation({ jour: TG.jour, terrains: [b.dataset.tpt] }); }; });
+    all('[data-tpb]', C()).forEach(function (b) {
+      b.onclick = function () {
+        var x = T.detailBloc(R, b.dataset.tpb); if (!x || x.bloc.hors) return;
+        var bl = x.bloc, occ = bl.occ, local = occ && occ.source === 'local';
+        panneau(x.titre, '<div class="stack" style="gap:10px"><span class="tp-pill c-' + bl.cat + (local ? ' local' : '') + '" style="align-self:flex-start;border:1px solid;border-left-width:4px;border-radius:10px;padding:4px 10px;font-weight:700">' + esc(x.statut) + '</span>' +
+          (x.libelle ? '<span>Visible des adhérents : <b>' + esc(x.libelle) + '</b></span>' : '') + (x.source ? '<span class="small mut">' + esc(x.source) + '</span>' : '') +
+          (local ? '<span class="small">Info du club : affichée aux adhérents comme « non confirmée par ADOC ».</span>' : '') +
+          (occ && occ.source === 'adoc' && !TG.demo ? '<span class="small">Réservation ADOC : elle se modifie uniquement dans ADOC.</span>' : '') +
+          (local ? '<div class="row2"><button class="btn line" id="tg-mod">Modifier</button><button class="btn ko" id="tg-sup">Supprimer</button></div>' : '') +
+          (bl.cat === 'libre' || bl.cat === 'inconnu' ? '<button class="btn" id="tg-ici">Ajouter une occupation sur ce créneau</button>' : '') + '</div>', function () {
+          if ($('tg-ici')) $('tg-ici').onclick = function () { formOccupation({ jour: TG.jour, terrains: [x.terrain.id], d: o.hhmm(bl.d), f: o.hhmm(bl.f) }); };
+          if ($('tg-sup')) $('tg-sup').onclick = function () { supprimerOcc(occ); };
+          if ($('tg-mod')) $('tg-mod').onclick = function () { formOccupation(occFormDe(occ)); };
+        });
+      };
+    });
+  };
+  var occFormDe = function (occ) { var a = quand(occ.debut), b = quand(occ.fin); return { id: occ.id, jour: a.jour, terrains: occ.terrain_id ? [occ.terrain_id] : [], d: a.h.replace('h', ':'), f: b.h.replace('h', ':'), categorie: occ.categorie, libelle: occ.libelle || '', note: occ.note || '' }; };
+  var supprimerOcc = function (occ) {
+    if (!confirm('Supprimer cette occupation ?')) return;
+    if (TG.demo) { T.demoStore.retirer(occ.id); fermer(); demoMsg(); return recharger(); }
+    q(sb.from('terrains_occupations').delete().eq('id', occ.id)).then(function () { toast('Occupation supprimée'); fermer(); recharger(); }).catch(function () { toast('Suppression impossible'); });
+  };
+
+  // ----- Formulaire : occupation locale ou fermeture -----
+  var choixTerrains = function (sel, avecTous) {
+    return '<div class="chips">' + (avecTous ? '<label class="chip' + (!sel.length ? ' on' : '') + '"><input type="checkbox" name="tg-t" value="" style="display:none"' + (!sel.length ? ' checked' : '') + '>Tous les terrains</label>' : '') +
+      tous().map(function (t) { var on = sel.indexOf(t.id) >= 0; return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" name="tg-t" value="' + t.id + '" style="display:none"' + (on ? ' checked' : '') + '>' + esc(t.nom) + '</label>'; }).join('') + '</div>';
+  };
+  var formOccupation = function (v) {
+    var fermeture = v.categorie === 'ferme' && !v.id && v.fermeture;
+    panneau(v.id ? 'Modifier l\'occupation' : fermeture ? 'Signaler une fermeture' : 'Ajouter une occupation', '<div class="stack" style="gap:10px">' +
+      '<span class="small mut">Info du club : elle s\'affiche dans le planning des adhérents, marquée « non confirmée par ADOC ». Elle ne réserve rien dans ADOC.</span>' +
+      '<div class="l">Terrain' + (v.id ? '' : 's') + choixTerrains(v.terrains || [], true) + '</div>' +
+      (fermeture ? '<div class="row2"><label class="l">Du<input class="f" type="date" id="tg-du" value="' + v.jour + '"></label><label class="l">Au (inclus)<input class="f" type="date" id="tg-au" value="' + v.jour + '"></label></div>' +
+        '<label class="c"><input type="checkbox" id="tg-jt" checked> Toute la journée</label>'
+        : '<label class="l">Jour<input class="f" type="date" id="tg-du" value="' + v.jour + '"></label>') +
+      '<div class="row2" id="tg-heures"' + (fermeture ? ' hidden' : '') + '><label class="l">Début<input class="f" type="time" step="1800" id="tg-hd" value="' + (v.d || '17:30') + '"></label><label class="l">Fin<input class="f" type="time" step="1800" id="tg-hf" value="' + (v.f || '18:30') + '"></label></div>' +
+      (fermeture ? '' : '<label class="l">Type<select class="f" id="tg-cat">' + CAT_SAISIE.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === (v.categorie || 'cours') ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>') +
+      '<label class="l">' + (fermeture ? 'Motif visible des adhérents' : 'Texte visible des adhérents') + '<input class="f" id="tg-lib" maxlength="60" value="' + esc(v.libelle || '') + '" placeholder="' + (fermeture ? 'Ex. Terrain gelé, travaux, tournoi' : 'Ex. Cours collectif, Tournoi interne') + '"><span class="xs mut" style="font-weight:400">Jamais de nom d\'adhérent : ce texte est vu par tout le club.</span></label>' +
+      '<label class="l">Note interne (équipe seulement)<input class="f" id="tg-note" maxlength="200" value="' + esc(v.note || '') + '"></label>' +
+      (v.id || fermeture ? '' : '<label class="l">Répéter chaque semaine jusqu\'au (facultatif)<input class="f" type="date" id="tg-rep"></label>') +
+      '<button class="btn" id="tg-ok">' + (v.id ? 'Enregistrer' : fermeture ? 'Signaler la fermeture' : 'Ajouter') + '</button></div>', function (box) {
+      all('input[name="tg-t"]', box).forEach(function (i) {
+        i.onchange = function () {
+          if (i.value === '' && i.checked) all('input[name="tg-t"]', box).forEach(function (x) { if (x.value) x.checked = false; });
+          if (i.value && i.checked) all('input[name="tg-t"]', box).forEach(function (x) { if (!x.value) x.checked = false; });
+          if (v.id && i.value && i.checked) all('input[name="tg-t"]', box).forEach(function (x) { if (x !== i) x.checked = false; }); // une occupation = un terrain
+          all('input[name="tg-t"]', box).forEach(function (x) { x.parentNode.classList.toggle('on', x.checked); });
+        };
+      });
+      if ($('tg-jt')) $('tg-jt').onchange = function () { $('tg-heures').hidden = this.checked; };
+      $('tg-ok').onclick = function () {
+        var ts = lus(box, 'tg-t').filter(Boolean), tousT = !ts.length;
+        var du = $('tg-du').value, au = $('tg-au') ? $('tg-au').value : du, rep = $('tg-rep') ? $('tg-rep').value : '';
+        var jt = $('tg-jt') && $('tg-jt').checked, hd = jt ? '00:00' : $('tg-hd').value, hf = jt ? '23:59' : $('tg-hf').value;
+        if (!du || (au && au < du)) return toast('Vérifie les dates');
+        if (!jt && (!hd || !hf || hf <= hd)) return toast('Vérifie les heures');
+        if (fermeture && o.decaler(du, 62) < au) return toast('Deux mois au plus');
+        var jours = [];
+        if (fermeture) for (var j = du; j <= au; j = o.decaler(j, 1)) jours.push(j);
+        else { jours.push(du); if (rep) { if (rep > o.decaler(du, 300)) return toast('Répétition trop longue'); for (var k = o.decaler(du, 7); k <= rep; k = o.decaler(k, 7)) jours.push(k); } }
+        var base = { categorie: fermeture ? 'ferme' : $('tg-cat').value, source: 'local', libelle: $('tg-lib').value.trim().slice(0, 60) || null, note: $('tg-note').value.trim().slice(0, 200) || null };
+        var lignes = [];
+        jours.forEach(function (jj) { (tousT ? [null] : ts).forEach(function (t) { lignes.push(Object.assign({ terrain_id: t, debut: o.horodatage(jj, hd), fin: o.horodatage(jj, hf) }, base)); }); });
+        if (lignes.length > 400) return toast('Trop de créneaux d\'un coup (400 au plus)');
+        if (TG.demo) {
+          if (v.id) T.demoStore.retirer(v.id);
+          lignes.forEach(function (l) { T.demoStore.ajouter(l); }); fermer(); demoMsg(); return recharger();
+        }
+        var req = v.id ? sb.from('terrains_occupations').update(Object.assign(lignes[0], { maj_le: new Date().toISOString() })).eq('id', v.id) : sb.from('terrains_occupations').insert(lignes);
+        this.disabled = true;
+        q(req).then(function () { toast(v.id ? 'Occupation modifiée' : lignes.length + ' créneau' + (lignes.length > 1 ? 'x ajoutés' : ' ajouté')); fermer(); recharger(); }).catch(function () { toast('Enregistrement impossible'); $('tg-ok').disabled = false; });
+      };
+    });
+  };
+
+  // ----- Occupations et fermetures à venir -----
+  var ongOccupations = function () {
+    var l = LOC.filter(function (x) { return new Date(x.fin) > new Date(); }).sort(function (a, b) { return a.debut < b.debut ? -1 : 1; });
+    var parJour = {}; l.forEach(function (x) { var j = quand(x.debut).jour; (parJour[j] = parJour[j] || []).push(x); });
+    C().innerHTML = '<div class="toolbar"><button class="btn" id="tg-n1">Ajouter une occupation</button><button class="btn line" id="tg-n2">Signaler une fermeture</button></div>' +
+      '<p class="small mut" style="margin-top:0">Cours, stages, animations, compétitions ou fermetures saisis par le club. Ils apparaissent dans le planning des adhérents comme « Info du club, non confirmée par ADOC ». Pour bloquer réellement un terrain, fais-le aussi dans ADOC.</p>' +
+      (l.length ? Object.keys(parJour).map(function (j) {
+        return '<div class="sect">' + esc(fmtD(j)) + '</div><div class="card list" style="padding:0 16px">' + parJour[j].map(function (x) {
+          var a = quand(x.debut), b = quand(x.fin), C2 = T.CATS[x.categorie] || T.CATS.occupe, jt = a.h === '0h00' && (b.h === '23h59' || b.h === '0h00');
+          return '<div class="it"><span><span class="badge c-' + x.categorie + '" style="border:1px solid">' + esc(C2.court) + '</span> <b>' + esc(nomT(x.terrain_id)) + '</b> · ' + (jt ? 'toute la journée' : a.h + ' – ' + b.h) + (x.libelle ? ' · ' + esc(x.libelle) : '') + (x.note ? '<br><span class="xs mut">Note : ' + esc(x.note) + '</span>' : '') + '</span>' +
+            '<span class="chips"><button class="btn sm line" data-tgm="' + x.id + '">Modifier</button><button class="btn sm ko" data-tgs="' + x.id + '">Supprimer</button></span></div>';
+        }).join('') + '</div>';
+      }).join('') : '<div class="card mut">Aucune occupation ni fermeture à venir.</div>');
+    $('tg-n1').onclick = function () { formOccupation({ jour: o.parisDe(new Date()).jour }); };
+    $('tg-n2').onclick = function () { formOccupation({ jour: o.parisDe(new Date()).jour, categorie: 'ferme', fermeture: true }); };
+    var parId = function (id) { return LOC.filter(function (x) { return x.id === id; })[0]; };
+    all('[data-tgm]', C()).forEach(function (b) { b.onclick = function () { formOccupation(occFormDe(parId(b.dataset.tgm))); }; });
+    all('[data-tgs]', C()).forEach(function (b) { b.onclick = function () { supprimerOcc(parId(b.dataset.tgs)); }; });
+  };
+
+  // ----- Synchronisation et réglages -----
+  var STATUTS = { jamais: ['Jamais utilisée', ''], ok: ['OK', 'b-ok'], erreur: ['Erreur', 'b-ko'], non_configure: ['Non disponible', 'b-warn'], en_attente: ['En attente', 'b-warn'] };
+  var ongSynchro = function () {
+    var c = cfg(), S2 = (D && D.synchro) || [];
+    var adoc = TG.demo ? { statut: 'non_configure', message: 'Aucune connexion officielle avec ADOC pour le moment : en attente d\'une autorisation de la FFT.' } : S2.filter(function (s) { return s.source === 'adoc'; })[0] || { statut: 'non_configure' };
+    var imp = TG.demo ? { statut: 'jamais' } : S2.filter(function (s) { return s.source === 'import'; })[0] || { statut: 'jamais' };
+    var carte = function (titre, s, aide) {
+      var st = STATUTS[s.statut] || STATUTS.jamais;
+      return '<div class="card stack" style="gap:6px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>' + titre + '</b><span class="badge ' + st[1] + '">' + st[0] + '</span></div>' +
+        (s.message ? '<span class="small">' + esc(s.message) + '</span>' : '') +
+        (s.derniere_reussite ? '<span class="small mut">Dernière réussite : ' + esc(new Date(s.derniere_reussite).toLocaleString('fr-FR')) + '</span>' : '') +
+        (s.dernier_essai ? '<span class="small mut">Dernier essai : ' + esc(new Date(s.dernier_essai).toLocaleString('fr-FR')) + '</span>' : '') +
+        (s.couverture_debut ? '<span class="small mut">État complet connu du ' + esc(fmtD(s.couverture_debut)) + ' au ' + esc(fmtD(s.couverture_fin)) + '</span>' : '') + '<span class="xs mut">' + aide + '</span></div>';
+    };
+    C().innerHTML = (TG.demo ? '<p class="small"><b>En vrai</b> (la démonstration simule une synchronisation pour montrer les créneaux libres) :</p>' : '') +
+      '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">' +
+      carte('ADOC (synchronisation officielle)', adoc, 'Lecture seule. Elle se branchera dès qu\'un accès officiel sera accordé par la FFT : aucun identifiant ADOC n\'est demandé ni gardé dans l\'appli.') +
+      carte('Fichier importé', imp, 'Onglet Import : si un export du tableau de réservation est disponible.') +
+      carte('Saisie du club', { statut: LOC.length ? 'ok' : 'jamais', message: LOC.length + ' occupation' + (LOC.length > 1 ? 's' : '') + ' ou fermeture' + (LOC.length > 1 ? 's' : '') + ' saisie' + (LOC.length > 1 ? 's' : '') + ' (à venir ou récentes)' }, 'Toujours affichée comme « Info du club, non confirmée par ADOC ».') + '</div>' +
+      '<div class="toolbar" style="margin-top:12px"><button class="btn" id="tg-sync">Actualiser maintenant</button><span class="small mut">Relance la synchronisation (quand elle existera) et recharge le planning.</span></div>' +
+      '<div class="card stack" style="gap:10px;margin-top:6px"><b>Réglages</b><div class="row3">' +
+      '<label class="l">Synchronisation automatique<select class="f" id="tg-freq">' + [[15, 'Toutes les 15 min'], [30, 'Toutes les 30 min'], [60, 'Toutes les heures'], [180, 'Toutes les 3 h']].map(function (x) { return '<option value="' + x[0] + '"' + (+c.frequence_min === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><span class="xs mut" style="font-weight:400">Utilisée dès que la synchronisation officielle existera.</span></label>' +
+      '<label class="l">Données « plus à jour » après<select class="f" id="tg-seuil">' + [[60, '1 heure'], [120, '2 heures'], [240, '4 heures'], [720, '12 heures'], [1440, '24 heures']].map(function (x) { return '<option value="' + x[0] + '"' + (+c.seuil_min === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><span class="xs mut" style="font-weight:400">Passé ce délai, les créneaux libres deviennent « à vérifier » et un avertissement s\'affiche.</span></label>' +
+      '<label class="l">Lien du bouton « Réserver sur Ten\'Up »<input class="f" id="tg-url" value="' + esc(c.tenup_url) + '"></label></div><button class="btn sm" id="tg-cfg" style="align-self:flex-start">Enregistrer les réglages</button></div>';
+    $('tg-sync').onclick = function () {
+      var b = this; b.disabled = true;
+      if (TG.demo) { toast('Démo : la synchronisation ADOC n\'existe pas encore'); b.disabled = false; return; }
+      sb.functions.invoke('terrains-synchro', { body: { action: 'actualiser' } }).then(function (r) {
+        var st = r && r.data && r.data.sources && r.data.sources.adoc;
+        toast(st && st.statut === 'non_configure' ? 'ADOC : pas encore de connexion officielle. Planning rechargé.' : r && r.error ? 'Synchronisation indisponible, planning rechargé' : 'Planning actualisé');
+      }).catch(function () { toast('Synchronisation indisponible, planning rechargé'); }).then(function () { b.disabled = false; recharger(); });
+    };
+    $('tg-cfg').onclick = function () {
+      var u = $('tg-url').value.trim();
+      if (!/^https:\/\//.test(u)) return toast('Le lien doit commencer par https://');
+      enregistrerCfg({ frequence_min: +$('tg-freq').value, seuil_min: +$('tg-seuil').value, tenup_url: u });
+    };
+  };
+
+  // ----- Terrains et horaires -----
+  var JOURS = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  var ongTerrains = function () {
+    var H = TG.demo ? T.demoStore.horaires() : ((D && D.horaires) || []);
+    var resumeJ = function (js) { js = (js || []).map(Number).sort(); if (js.join() === '1,2,3,4,5,6,7') return 'Tous les jours'; if (js.join() === '1,2,3,4,5') return 'Lun – Ven'; if (js.join() === '6,7') return 'Week-end'; return js.map(function (j) { return JOURS[j]; }).join(', '); };
+    C().innerHTML = '<div class="two"><div class="card"><div class="sect" style="margin-top:0">Les terrains</div><div class="list">' + tous().map(function (t, i) {
+      var s = T.SURFACES[t.surface] || T.SURFACES.autre;
+      return '<div class="it"><span><span class="tp-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + s[1] + '"></span> <b>' + esc(t.nom) + '</b> <span class="small mut">' + esc(s[0]) + '</span></span>' +
+        '<label class="l" style="flex-direction:row;align-items:center;gap:6px">ID FFT<input class="f" data-tgc="' + i + '" value="' + esc(t.adoc_court_id || '') + '" placeholder="à relier plus tard" style="width:150px"></label></div>';
+    }).join('') + '</div><button class="btn sm line" id="tg-ids" style="margin-top:10px">Enregistrer les ID</button><p class="xs mut">L\'ID du court côté FFT servira à relier la future synchronisation ADOC à chaque terrain. Laisser vide pour l\'instant.</p></div>' +
+      '<div class="card"><div class="sect" style="margin-top:0">Horaires d\'ouverture</div><div class="list">' + (H.length ? H.map(function (h, i) {
+        return '<div class="it"><span><b>' + esc(o.hh(o.min(h.ouverture))) + ' – ' + esc(o.hh(o.min(h.fermeture))) + '</b> · ' + esc(resumeJ(h.jours)) + ' · ' + esc(nomT(h.terrain_id)) + (h.du || h.au ? '<br><span class="xs mut">' + (h.du ? 'du ' + esc(fmtD(h.du)) : '') + (h.au ? ' au ' + esc(fmtD(h.au)) : '') + '</span>' : '') + '</span><span class="chips"><button class="btn sm line" data-tghm="' + i + '">Modifier</button>' + (H.length > 1 ? '<button class="btn sm ko" data-tghs="' + i + '">Supprimer</button>' : '') + '</span></div>';
+      }).join('') : '<div class="it mut">Aucun horaire : 8h30 – 22h30 par défaut.</div>') + '</div><button class="btn sm" id="tg-hn" style="margin-top:10px">Ajouter un horaire</button>' +
+      '<p class="xs mut">La règle la plus précise l\'emporte : un terrain précis passe avant « tous les terrains », une période (ex. horaires d\'été) avant « toute l\'année ». Les créneaux du planning démarrent à l\'heure d\'ouverture (8h30, 9h30…).</p></div></div>';
+    $('tg-ids').onclick = function () {
+      var maj = all('[data-tgc]', C()).map(function (i) { var t = tous()[+i.dataset.tgc]; return { id: t.id, v: i.value.trim() || null }; });
+      if (TG.demo) { T.demoStore.terrains(tous().map(function (t, i) { return Object.assign({}, t, { adoc_court_id: maj[i].v }); })); return demoMsg(); }
+      Promise.all(maj.map(function (x) { return q(sb.from('terrains').update({ adoc_court_id: x.v, maj_le: new Date().toISOString() }).eq('id', x.id)); })).then(function () { toast('ID enregistrés'); }).catch(function () { toast('Enregistrement impossible'); });
+    };
+    var formH = function (h) {
+      var nouveau = !h; h = h || { jours: [1, 2, 3, 4, 5, 6, 7], ouverture: '08:30', fermeture: '22:30' };
+      panneau(nouveau ? 'Ajouter un horaire' : 'Modifier l\'horaire', '<div class="stack" style="gap:10px"><label class="l">Terrain<select class="f" id="th-t"><option value="">Tous les terrains</option>' + tous().map(function (t) { return '<option value="' + t.id + '"' + (h.terrain_id === t.id ? ' selected' : '') + '>' + esc(t.nom) + '</option>'; }).join('') + '</select></label>' +
+        '<div class="l">Jours<div class="chips">' + [1, 2, 3, 4, 5, 6, 7].map(function (j) { var on = (h.jours || []).map(Number).indexOf(j) >= 0; return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" name="th-j" value="' + j + '" style="display:none"' + (on ? ' checked' : '') + '>' + JOURS[j] + '</label>'; }).join('') + '</div></div>' +
+        '<div class="row2"><label class="l">Ouverture<input class="f" type="time" step="1800" id="th-o" value="' + esc(String(h.ouverture).slice(0, 5)) + '"></label><label class="l">Fermeture<input class="f" type="time" step="1800" id="th-f" value="' + esc(String(h.fermeture).slice(0, 5)) + '"></label></div>' +
+        '<div class="row2"><label class="l">Du (facultatif)<input class="f" type="date" id="th-du" value="' + esc(h.du || '') + '"></label><label class="l">Au (facultatif)<input class="f" type="date" id="th-au" value="' + esc(h.au || '') + '"></label></div>' +
+        '<button class="btn" id="th-ok">Enregistrer</button></div>', function (box) {
+        lierChips(box);
+        $('th-ok').onclick = function () {
+          var r = { terrain_id: $('th-t').value || null, jours: lus(box, 'th-j').map(Number), ouverture: $('th-o').value, fermeture: $('th-f').value, du: $('th-du').value || null, au: $('th-au').value || null };
+          if (!r.jours.length) return toast('Choisis au moins un jour');
+          if (!r.ouverture || !r.fermeture || r.fermeture <= r.ouverture) return toast('Vérifie les heures');
+          if (r.du && r.au && r.au < r.du) return toast('Vérifie les dates');
+          if (TG.demo) { var l = H.slice(); if (nouveau) l.push(r); else l[l.indexOf(h)] = r; T.demoStore.horaires(l); D.horaires = l; fermer(); demoMsg(); return ongTerrains(); }
+          q(nouveau ? sb.from('terrains_horaires').insert(r) : sb.from('terrains_horaires').update(Object.assign(r, { maj_le: new Date().toISOString() })).eq('id', h.id)).then(function () { toast('Horaire enregistré'); fermer(); recharger(); }).catch(function () { toast('Enregistrement impossible'); });
+        };
+      });
+    };
+    $('tg-hn').onclick = function () { formH(null); };
+    all('[data-tghm]', C()).forEach(function (b) { b.onclick = function () { formH(H[+b.dataset.tghm]); }; });
+    all('[data-tghs]', C()).forEach(function (b) {
+      b.onclick = function () {
+        var h = H[+b.dataset.tghs]; if (!confirm('Supprimer cet horaire ?')) return;
+        if (TG.demo) { var l = H.filter(function (x) { return x !== h; }); T.demoStore.horaires(l); D.horaires = l; demoMsg(); return ongTerrains(); }
+        q(sb.from('terrains_horaires').delete().eq('id', h.id)).then(function () { toast('Horaire supprimé'); recharger(); }).catch(function () { toast('Suppression impossible'); });
+      };
+    });
+  };
+
+  // ----- Import d'un fichier -----
+  var ongImport = function () {
+    C().innerHTML = '<div class="card stack" style="gap:10px"><b>Importer un fichier de réservations</b>' +
+      '<span class="small">À utiliser seulement si un export autorisé du tableau de réservation est disponible (ADOC ou autre). Fichier CSV (Excel : « Enregistrer sous » → CSV), une ligne par occupation, avec ces titres en première ligne :</span>' +
+      '<code class="small" style="background:var(--soft);padding:8px 10px;border-radius:8px">date ; début ; fin ; terrain ; type ; libellé</code>' +
+      '<span class="xs mut">Exemple : 25/11/2026 ; 18h30 ; 19h30 ; Couvert 1 ; Cours ; Groupe ados. Le type est reconnu par mots-clés (cours, animation, tournoi, fermé, réservation…). Les noms de joueurs ne sont jamais repris pour les réservations d\'adhérents.</span>' +
+      '<input class="f" type="file" id="ti-f" accept=".csv,.txt,text/csv"><div id="ti-r"></div></div>';
+    $('ti-f').onchange = function () {
+      var f = this.files && this.files[0]; if (!f) return;
+      var lec = new FileReader();
+      lec.onload = function () {
+        var res = T.lireFichier(String(lec.result || ''), tous()), r = $('ti-r');
+        var parJour = {}; res.lignes.forEach(function (l) { var j = quand(l.debut).jour; parJour[j] = (parJour[j] || 0) + 1; });
+        r.innerHTML = (res.lignes.length ? '<p class="small"><b>' + res.lignes.length + ' occupation' + (res.lignes.length > 1 ? 's' : '') + '</b> lue' + (res.lignes.length > 1 ? 's' : '') + (res.du ? ', du ' + esc(fmtD(res.du)) + ' au ' + esc(fmtD(res.au)) : '') + ' : ' + Object.keys(parJour).sort().map(function (j) { return esc(fmtD(j)) + ' (' + parJour[j] + ')'; }).join(', ') + '</p>' : '') +
+          (res.erreurs.length ? '<div class="card" style="border-color:var(--ko)"><b class="small">' + res.erreurs.length + ' ligne' + (res.erreurs.length > 1 ? 's' : '') + ' ignorée' + (res.erreurs.length > 1 ? 's' : '') + '</b><div class="xs">' + res.erreurs.slice(0, 12).map(esc).join('<br>') + (res.erreurs.length > 12 ? '<br>…' : '') + '</div></div>' : '') +
+          (res.lignes.length ? '<label class="c"><input type="checkbox" id="ti-complet"> Ce fichier contient <b>toutes</b> les réservations de ces jours (les créneaux absents seront affichés libres, tant que les données restent à jour)</label><button class="btn" id="ti-ok">Importer</button><p class="xs mut">Un nouvel import sur les mêmes jours remplace le précédent : pas de doublons.</p>' : '');
+        if ($('ti-ok')) $('ti-ok').onclick = function () {
+          if (TG.demo) return demoMsg();
+          var b = this; b.disabled = true;
+          q(sb.rpc('terrains_importer', { p_lignes: res.lignes, p_du: res.du, p_au: res.au, p_complet: $('ti-complet').checked })).then(function (x) { toast((x && x.importees) + ' occupations importées'); recharger(); }).catch(function (e) { toast('Import impossible' + (e && e.message ? ' : ' + e.message : '')); b.disabled = false; });
+        };
+      };
+      lec.readAsText(f, 'utf-8');
+    };
+  };
+
+  m.innerHTML = entete('Terrains') + '<div class="skel"></div>';
+  recharger();
+}
+var VUES = { droits: vueDroits, alaune: vueALaUne, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes, terrains: vueTerrains };
 function router() {
   if (!A.user) return;
   fermer();
