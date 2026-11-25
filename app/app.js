@@ -3546,14 +3546,14 @@ function ligneMsgClub(x) {
     (nl ? '<span class="badge" style="background:var(--ac);color:#fff;min-width:22px;justify-content:center;flex:none">1</span>' : '') + '</span></span></a>';
 }
 // ---------- Messages privés lancés par l'équipe (bouton + dans Messages) ----------
-// Qui peut lancer : rôles cochés dans Gestion → Réglages (vérifié par la base). Les familles répondent mais ne lancent pas.
+// Qui peut lancer : rôles cochés dans Gestion → Rôles et accès, ou tous les adhérents si « ouvert à tous » est coché (vérifié par la base).
 function chargerPrive() {
   S.peutPrive = false; S.jeunesComptes = [];
   if (!S.user || S.apercu) return Promise.resolve();
   var l = [];
   S.acces = [];
+  l.push(q(sb.rpc('peux_lancer_prive')).then(function (r) { S.peutPrive = r === true; }).catch(function () { }));
   if (S.roles.length || nomCoachCompte()) {
-    l.push(q(sb.rpc('peux_lancer_prive')).then(function (r) { S.peutPrive = r === true; }).catch(function () { }));
     l.push(q(sb.rpc('mes_acces')).then(function (r) { S.acces = r || []; }).catch(function () { S.acces = S.isDir ? ['*'] : []; }));
   }
   if (S.pers.some(function (p) { return p.profil === 'jeune'; })) l.push(q(sb.rpc('mes_jeunes_comptes')).then(function (r) { S.jeunesComptes = r || []; }).catch(function () { }));
@@ -3574,7 +3574,7 @@ function peutEcrireGroupe(gid) { return !S.apercu && (aAcces('ecrire_groupes') |
 function nouveauMessage(choisi) {
   var E = { res: [], choisi: choisi || null, t: 0, q: '' };
   var ligneRes = function (d, i) {
-    var dest = !d.comptes ? 'Pas de compte dans l\'appli : passe par WhatsApp ou mail' : quiRecoit(d);
+    var dest = !d.comptes ? 'Pas encore de compte dans l\'appli' : quiRecoit(d);
     return '<button class="pick" data-dst="' + i + '"' + (d.comptes ? '' : ' disabled') + ' style="width:100%;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;height:auto' + (d.comptes ? '' : ';opacity:.55') + '">' +
       '<b>' + esc(d.prenom + ' ' + d.nom) + '</b><span class="xs mut">' + [d.age != null ? d.age + ' ans' : '', d.niveau || ''].filter(Boolean).map(esc).join(' · ') + (d.age != null || d.niveau ? ' · ' : '') + dest + '</span></button>';
   };
@@ -3667,7 +3667,7 @@ function pageMessages() {
   if (MSGF === 'annonces' && nonLus().length > 1) h += '<button class="chip" id="msg-tout" style="align-self:flex-end">Tout marquer comme lu</button>';
   if (S.peutPrive && !S.apercu) h += '<button class="fab" id="msg-new" aria-label="Nouveau message" title="Nouveau message">' + ic('plus', 26, '#fff') + '<span>Nouveau message</span></button>';
   h += items.length ? '<section class="card tight">' + items.map(function (i) { return i.h; }).join('') + '</section>'
-    : '<section class="card empty">' + (({ annonces: 'Aucune annonce du club pour le moment. Les infos du club et des coachs arriveront ici, avec une notification.', club: 'Rien pour le moment. Les discussions CLOC\'ARENA et Next Gen dont tu fais partie arriveront ici.', Interclub: 'Rien pour le moment. Les discussions de ton équipe d\'interclub arriveront ici.', prives: 'Aucune conversation. Touche « Envoyer un message » sous une petite annonce pour en démarrer une.' })[MSGF] || 'Rien pour le moment.') + '</section>';
+    : '<section class="card empty">' + (({ annonces: 'Aucune annonce du club pour le moment. Les infos du club et des coachs arriveront ici, avec une notification.', club: 'Rien pour le moment. Les discussions CLOC\'ARENA et Next Gen dont tu fais partie arriveront ici.', Interclub: 'Rien pour le moment. Les discussions de ton équipe d\'interclub arriveront ici.', prives: S.peutPrive && !S.apercu ? 'Aucune conversation. Touche « Nouveau message » pour écrire à un adhérent du club.' : 'Aucune conversation. Touche « Envoyer un message » sous une petite annonce pour en démarrer une.' })[MSGF] || 'Rien pour le moment.') + '</section>';
   h += '</main>';
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-msgf]'), function (b) { b.onclick = function () { MSGF = b.dataset.msgf; render(); }; });

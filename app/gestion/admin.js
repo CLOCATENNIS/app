@@ -3008,8 +3008,8 @@ function vueDroits(m) {
     '<div class="chips" style="margin-bottom:14px"><button class="chip' + (DR.onglet === 'roles' ? ' on' : '') + '" data-dro="roles">Par rôle</button><button class="chip' + (DR.onglet === 'perso' ? ' on' : '') + '" data-dro="perso">Par personne</button></div><div id="dr-l"><div class="skel"></div></div>';
   all('[data-dro]').forEach(function (b) { b.onclick = function () { DR.onglet = b.dataset.dro; vueDroits(m); }; });
   var lignes = MODULES.map(function (x) { return [x[0], x[1], '']; }).concat(DROITS_APPLI);
-  Promise.all([q(sb.from('acces_roles').select('role, module')), q(sb.rpc('equipe_acces'))]).then(function (r) {
-    var R = r[0] || [], E = r[1] || [];
+  Promise.all([q(sb.from('acces_roles').select('role, module')), q(sb.rpc('equipe_acces')), q(sb.from('reglages_publics').select('valeur').eq('cle', 'prive_tous')).catch(function () { return []; })]).then(function (r) {
+    var R = r[0] || [], E = r[1] || [], tous = !!(r[2] && r[2][0] && r[2][0].valeur === true);
     var aRole = function (role, mod) { return R.some(function (x) { return x.role === role && x.module === mod; }); };
     var box = $('dr-l');
     if (DR.onglet === 'roles') {
@@ -3018,7 +3018,13 @@ function vueDroits(m) {
           var fixe = DROITS_FIXES.indexOf(l[0]) >= 0, sep = i === MODULES.length ? ' style="border-top:2px solid var(--bd)"' : '';
           return '<tr' + sep + '><td><b class="small">' + esc(l[1]) + '</b>' + (l[2] ? '<div class="xs mut">' + esc(l[2]) + '</div>' : '') + (fixe ? '<div class="xs mut">Réservé à la direction</div>' : '') + '</td><td class="small mut">toujours</td>' +
             DROITS_ROLES.map(function (x) { return '<td>' + (fixe ? '<span class="mut">—</span>' : '<input type="checkbox" style="width:18px;height:18px;accent-color:var(--ac)" data-drr="' + x[0] + '|' + l[0] + '"' + (aRole(x[0], l[0]) ? ' checked' : '') + ' aria-label="' + esc(x[1] + ' : ' + l[1]) + '">') + '</td>'; }).join('') + '</tr>';
-        }).join('') + '</tbody></table></div><p class="mut xs">Chaque case s\'enregistre tout de suite. Une personne qui a plusieurs rôles cumule leurs accès, sauf réglage contraire dans « Par personne ».</p>';
+        }).join('') + '</tbody></table></div><p class="mut xs">Chaque case s\'enregistre tout de suite. Une personne qui a plusieurs rôles cumule leurs accès, sauf réglage contraire dans « Par personne ».</p>' +
+        '<div class="card stack" style="gap:6px;margin-top:14px"><label class="small" style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="dr-ptous" style="width:18px;height:18px;accent-color:var(--ac)"' + (tous ? ' checked' : '') + '> <b>Messages privés ouverts à tous les adhérents</b></label>' +
+        '<span class="xs mut">Cochée : chaque adhérent qui a un compte voit le bouton « Nouveau message » et peut écrire à n\'importe qui du club. Pour un jeune, le message arrive aussi à ses parents (sauf s\'ils se sont désabonnés). Décochée : seuls les rôles cochés ci-dessus. « Jamais » dans « Par personne » l\'emporte toujours.</span></div>';
+      $('dr-ptous').onchange = function () {
+        var c = this;
+        q(sb.from('reglages_publics').upsert({ cle: 'prive_tous', valeur: c.checked, maj_le: new Date().toISOString() })).then(function () { toast(c.checked ? 'Messages privés ouverts à tous' : 'Messages privés réservés aux rôles cochés'); }).catch(function () { c.checked = !c.checked; toast('Enregistrement impossible'); });
+      };
       all('[data-drr]').forEach(function (c) {
         c.onchange = function () {
           var v = c.dataset.drr.split('|'), op = c.checked ? sb.from('acces_roles').insert({ role: v[0], module: v[1] }) : sb.from('acces_roles').delete().eq('role', v[0]).eq('module', v[1]);
