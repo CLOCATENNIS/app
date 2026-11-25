@@ -2622,7 +2622,7 @@ function blocPersonneProfil(p) {
     (tags.length ? '<span class="pf-tags">' + tags.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span>' : '') +
     (function () {
       var j = (S.jeunesComptes || []).filter(function (x) { return x.personne_id === p.id; })[0];
-      return j ? '<label class="check pf-jeune"><input type="checkbox" data-jmsg="' + p.id + '"' + (j.je_recois ? '' : ' checked') + '><span class="small">Je ne veux plus recevoir les messages du club destinés à ' + esc(p.prenom) + '<span class="xs mut" style="display:block">' + esc(p.prenom) + ' a son propre compte : les messages lui arrivent directement. Ce choix ne concerne que toi.</span></span></label>' : '';
+      return j ? '<label class="check pf-jeune"><input type="checkbox" data-jmsg="' + p.id + '"' + (j.je_recois ? ' checked' : '') + '><span class="small">Je vois tous les messages de ' + esc(p.prenom) + '<span class="xs mut" style="display:block">' + esc(p.prenom) + ' a son propre compte. Coché : tu reçois en copie (lecture seule) ses conversations privées, celles qu\'on lui envoie comme celles qu\'il lance. Ce choix ne concerne que toi.</span></span></label>' : '';
     })() +
     '<a href="#/joueur/' + p.id + '" class="small pf-fiche">Voir la fiche joueur →</a></div>';
 }
@@ -2686,10 +2686,10 @@ function pageProfil() {
   setTimeout(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-jmsg]'), function (c) {
       c.onchange = function () {
-        var pid = c.dataset.jmsg, recevoir = !c.checked; c.disabled = true;
+        var pid = c.dataset.jmsg, recevoir = c.checked; c.disabled = true;
         q(sb.rpc('parent_messages_regler', { p_personne: pid, p_recevoir: recevoir })).then(function () {
           (S.jeunesComptes || []).forEach(function (x) { if (x.personne_id === pid) x.je_recois = recevoir; }); c.disabled = false;
-          toast(recevoir ? 'Tu reçois de nouveau ses messages' : 'Tu ne recevras plus ses messages');
+          toast(recevoir ? 'Tu vois de nouveau ses messages' : 'Tu ne vois plus ses messages');
           chargerDiscussions();
         }).catch(function () { c.checked = !c.checked; c.disabled = false; toast('Réglage impossible'); });
       };
