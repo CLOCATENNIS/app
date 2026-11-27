@@ -27,6 +27,7 @@ var MODULES = [
   ['annonces', 'Petites annonces', ['direction', 'bureau', 'accueil']],
   ['cordage', 'Cordage', ['direction', 'accueil', 'cordeur']],
   ['boutique', 'Boutique et ardoise', ['direction', 'bureau', 'accueil']],
+  ['courses', 'Liste de courses', ['direction', 'bureau']],
   ['arena', 'CLOC\'ARENA', ['direction', 'bureau']],
   ['nextgen', 'Next Gen', ['direction']],
   ['missions', 'Missions coachs', ['direction']],
@@ -48,7 +49,7 @@ var RUBRIQUES = [
   ['Adhérents', ['adherents', 'niveaux', 'groupes', 'adoc'], 'adherents', 'users', 'Fiches des adhérents, niveaux des joueurs, groupes et cours, mise à jour depuis ADOC.'],
   ['Compétitions', ['arena', 'double'], 'competitions', 'trophy', 'CLOC\'ARENA (Tweener, Masters, Versus : séances, inscriptions, résultats) et tournoi interne de double.'],
   ['Équipe pédagogique', ['nextgen', 'missions'], 'equipe', 'cap', 'Jeunes Next Gen et missions des coachs.'],
-  ['Services du club', ['cordage', 'boutique', 'annonces', 'presence'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise, petites annonces, présence au club.'],
+  ['Services du club', ['cordage', 'boutique', 'courses', 'annonces', 'presence'], 'services', 'bag', 'Atelier cordage, boutique, stock et ardoise, liste de courses du club, petites annonces, présence au club.'],
   ['Administration', ['reglages', 'equipe', 'droits', 'acces', 'retours', 'historique'], 'admin', 'shield', 'Réglages de l\'appli, équipe du club (organigramme), rôles et accès, accès particuliers, idées et bugs des adhérents, historique de toutes les actions.']
 ];
 var DESC_MOD = {
@@ -58,7 +59,7 @@ var DESC_MOD = {
   inscriptions: 'Voir les inscrits, les listes d\'attente et les paiements.', fetes: 'Fête de Noël, tombola, stages, animations et tournois : chaque catégorie a sa page.', presence: 'Indiquer si le club house est ouvert ou fermé.', adherents: 'Fiches des adhérents, familles, cotisations.',
   groupes: 'Groupes, niveaux CLOC\'ARENA et créneaux de cours.', adoc: 'Mettre à jour les adhérents depuis l\'export ADOC.', arena: 'Saisie des résultats, historique des matchs par jour et niveaux des joueurs.',
   double: 'Équipes et poules du tournoi interne de double.', nextgen: 'Mini-coachs, coachs juniors et Next Gen : encadrements et absences.', missions: 'Confier des missions aux coachs et suivre ce qui est fait.',
-  cordage: 'Raquettes à corder, prêtes et à encaisser ; historique ; tarifs et cordages proposés.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.', reglages: 'Infos pratiques, horaires, textes du cordage, durée des annonces, terrains : tout ce que voient les familles.'
+  cordage: 'Raquettes à corder, prêtes et à encaisser ; historique ; tarifs et cordages proposés.', boutique: 'Ventes, ardoise, stock de la vitrine et articles.', courses: 'Ce qu\'il faut acheter pour le club : à cocher au fur et à mesure, date limite, factures.', equipe: 'L\'organigramme : coachs, bureau, accueil. Les fonctions donnent automatiquement les bons accès.', acces: 'Cas particuliers : coach d\'un groupe CLOC\'ARENA, responsable d\'une animation…', retours: 'La boîte à idées et les bugs signalés par les adhérents depuis l\'appli.', historique: 'Tout ce qui a été ajouté, modifié ou supprimé.', reglages: 'Infos pratiques, horaires, textes du cordage, durée des annonces, terrains : tout ce que voient les familles.'
 };
 var ICG = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -3294,6 +3295,7 @@ var JCAT = {
   annonces: ['Petites annonces', 'annonce', 'annonces', 1],
   cordage_demandes: ['Cordage', 'demande de cordage', 'demandes de cordage', 1], cordages: ['Cordage', 'cordage', 'cordages'], cordage_tarifs: ['Cordage', 'tarif', 'tarifs'],
   boutique_ventes: ['Boutique', 'vente', 'ventes', 1], boutique_articles: ['Boutique', 'article', 'articles'], boutique_mouvements: ['Boutique', 'mouvement de stock', 'mouvements de stock'],
+  courses_listes: ['Liste de courses', 'liste', 'listes'], courses_articles: ['Liste de courses', 'article', 'articles', 1], courses_factures: ['Liste de courses', 'facture', 'factures'],
   coach_missions: ['Coachs', 'mission', 'missions', 1], notes_coach: ['Coachs', 'note de coach', 'notes de coach', 1],
   absences_cours: ['Agenda', 'absence à un cours', 'absences aux cours', 1], nextgen: ['Next Gen', 'jeune Next Gen', 'jeunes Next Gen'], nextgen_absences: ['Next Gen', 'absence', 'absences', 1],
   club_presence: ['Présence au club', 'changement', 'changements'],
@@ -4620,7 +4622,231 @@ function vueAccueilApp(m, arg, O) {
   }).catch(function () { $('ac-l').innerHTML = '<div class="card empty">Impossible de charger les réglages de l\'accueil.</div>'; });
 }
 
-var VUES = { droits: vueDroits, alaune: vueALaUne, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
+// ---------- Liste de courses du club (direction + bureau par défaut, réglable dans Rôles et accès) ----------
+var CS = { liste: null, filtre: 'a', archives: false };
+function csJours(d) { if (!d) return null; var a = new Date(d + 'T12:00:00'), n = new Date(); n.setHours(12, 0, 0, 0); return Math.round((a - n) / 864e5); }
+function csDate(d) { return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); }
+function csAvant(d, court) {
+  if (!d) return '';
+  var j = csJours(d), cls = j < 0 ? ' b-ko' : j <= 3 ? ' b-warn' : '';
+  return '<span class="badge' + cls + '">' + (court ? '' : 'Avant le ') + esc(csDate(d)) + (j < 0 ? ' · dépassé' : j === 0 ? ' · aujourd\'hui' : j === 1 ? ' · demain' : ' · dans ' + j + ' j') + '</span>';
+}
+function csStyle() {
+  if ($('cs-style')) return;
+  var st = document.createElement('style'); st.id = 'cs-style';
+  st.textContent = '.cs-art{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}' +
+    '.cs-art:first-child{border-top:0}.cs-ck{width:26px;height:26px;accent-color:var(--ok);cursor:pointer;margin:0}' +
+    '.cs-nom{font-weight:600}.cs-q{color:var(--ac);font-weight:700;margin-left:6px;display:inline-block;max-width:100%}.cs-fait .cs-nom,.cs-fait .cs-q{text-decoration:line-through;color:var(--mut)}' +
+    '.cs-info{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center}.cs-act{display:flex;gap:6px;align-items:center}' +
+    '.cs-bar{height:8px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:8px}.cs-bar>i{display:block;height:100%;background:var(--ok);border-radius:4px}' +
+    '.cs-add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}' +
+    '.cs-fac{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}.cs-fac:first-child{border-top:0}.cs-fac .chips{flex-wrap:nowrap}' +
+    '@media (max-width:700px){.cs-add{grid-template-columns:1fr 1fr}.cs-add .cs-n{grid-column:1/-1}.cs-add .btn{grid-column:1/-1}.cs-act .cs-pr{padding:0 8px}}';
+  document.head.appendChild(st);
+}
+function vueCourses(m) {
+  csStyle();
+  m.innerHTML = entete('Liste de courses', 'Ce qu\'il faut acheter pour le club. Coche au fur et à mesure : chacun voit qui s\'en charge et ce qui est déjà acheté.', '<button class="btn sm" id="cs-new">+ Nouvelle liste</button>') +
+    '<div id="cs-w"><div class="skel"></div></div>';
+  $('cs-new').onclick = function () { csListe(null, charger); };
+  var L = [], ART = [], FAC = [];
+  var charger = function () {
+    q(sb.from('courses_listes').select('*').order('archivee').order('avant_le', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })).then(function (l) {
+      L = l || [];
+      var vis = L.filter(function (x) { return x.archivee === CS.archives; });
+      if (!vis.some(function (x) { return x.id === CS.liste; })) CS.liste = vis.length ? vis[0].id : null;
+      var ids = L.filter(function (x) { return !x.archivee || x.id === CS.liste; }).map(function (x) { return x.id; });
+      return Promise.all([
+        ids.length ? q(sb.from('courses_articles').select('*').in('liste_id', ids).order('ordre').order('created_at')) : [],
+        CS.liste ? q(sb.from('courses_factures').select('*').eq('liste_id', CS.liste).order('created_at', { ascending: false })) : []
+      ]);
+    }).then(function (r) { ART = r[0] || []; FAC = r[1] || []; dessiner(); })
+      .catch(function () { $('cs-w').innerHTML = '<div class="card empty">Impossible de charger la liste de courses.</div>'; });
+  };
+  var dessiner = function () {
+    var w = $('cs-w'); if (!w) return;
+    var actives = L.filter(function (x) { return !x.archivee; }), arch = L.filter(function (x) { return x.archivee; });
+    var reste = function (id) { return ART.filter(function (a) { return a.liste_id === id && !a.achete; }).length; };
+    var h = '<div class="chips" style="margin-bottom:14px">' + (CS.archives ? arch : actives).map(function (x) {
+      return '<button class="chip' + (x.id === CS.liste ? ' on' : '') + '" data-csl="' + x.id + '">' + esc(x.titre) + (CS.archives ? '' : '<span class="nb">' + (reste(x.id) || '') + '</span>') + '</button>';
+    }).join('') + (arch.length || CS.archives ? '<button class="chip" data-csarch="1">' + (CS.archives ? '← Listes en cours' : 'Archivées (' + arch.length + ')') + '</button>' : '') + '</div>';
+    var li = L.filter(function (x) { return x.id === CS.liste; })[0];
+    if (!li) {
+      w.innerHTML = h + '<div class="card empty">' + (CS.archives ? 'Aucune liste archivée.' : 'Aucune liste en cours. Crée la première avec « + Nouvelle liste ».') + '</div>' + piedAcces();
+      lier(); return;
+    }
+    var arts = ART.filter(function (a) { return a.liste_id === li.id; }), faits = arts.filter(function (a) { return a.achete; }).length;
+    var pct = arts.length ? Math.round(faits * 100 / arts.length) : 0;
+    h += '<div class="card" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">' +
+      '<div><h2 style="margin:0 0 6px;font-size:20px">' + esc(li.titre) + (li.archivee ? ' <span class="badge">Archivée</span>' : '') + '</h2><div class="chips" style="gap:6px">' + csAvant(li.avant_le) +
+      '<span class="badge ' + (arts.length && faits === arts.length ? 'b-ok' : '') + '">' + faits + ' / ' + arts.length + ' acheté' + (faits > 1 ? 's' : '') + '</span></div></div>' +
+      '<div class="chips"><button class="btn sm line" id="cs-wa" title="Copier ce qu\'il reste à acheter, à coller dans WhatsApp">Copier pour WhatsApp</button><button class="btn sm line" id="cs-mod">Modifier</button>' +
+      '<button class="btn sm ghost" id="cs-dup" title="Créer une nouvelle liste avec les mêmes articles, tout à acheter (ex. l\'année prochaine)">Dupliquer</button>' +
+      '<button class="btn sm ghost" id="cs-arc">' + (li.archivee ? 'Remettre en cours' : 'Archiver') + '</button></div></div>' +
+      (li.note ? '<p class="small mut" style="margin:10px 0 0;white-space:pre-wrap">' + esc(li.note) + '</p>' : '') +
+      '<div class="cs-bar"><i style="width:' + pct + '%"></i></div></div>';
+    var ajout = '';
+    if (!li.archivee) {
+      var rayons = []; ART.forEach(function (a) { if (a.rayon && rayons.indexOf(a.rayon) < 0) rayons.push(a.rayon); });
+      ajout = '<div class="sect">Ajouter un article</div><div class="card" style="margin-bottom:12px"><form class="cs-add" id="cs-af"><label class="l cs-n">Article<input class="f" id="cs-an" placeholder="Ex. Farine" required maxlength="160"></label>' +
+        '<label class="l">Quantité<input class="f" id="cs-aq" placeholder="Ex. 5 kg" maxlength="60"></label>' +
+        '<label class="l">Rayon<input class="f" id="cs-ar" list="cs-rl" placeholder="Ex. Crêpes" maxlength="60"></label><datalist id="cs-rl">' + rayons.map(function (r) { return '<option value="' + esc(r) + '">'; }).join('') + '</datalist>' +
+        '<button class="btn" type="submit">Ajouter</button></form></div>';
+    }
+    var nbA = arts.length - faits;
+    h += '<div class="chips" style="margin-bottom:10px">' + [['a', 'À acheter (' + nbA + ')'], ['f', 'Achetés (' + faits + ')'], ['t', 'Tout']].map(function (x) { return '<button class="chip' + (CS.filtre === x[0] ? ' on' : '') + '" data-csf="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    var vis = arts.filter(function (a) { return CS.filtre === 't' || (CS.filtre === 'a' ? !a.achete : a.achete); });
+    if (!vis.length) h += '<div class="card empty" style="margin-bottom:12px">' + (CS.filtre === 'a' ? (arts.length ? 'Tout est acheté. Bravo !' : 'Aucun article pour le moment.') : 'Rien ici.') + '</div>';
+    else {
+      var groupes = [], par = {};
+      vis.forEach(function (a) { var r = a.rayon || 'Divers'; if (!par[r]) { par[r] = []; groupes.push(r); } par[r].push(a); });
+      h += groupes.map(function (r) {
+        return '<div class="sect" style="margin-top:6px">' + esc(r) + ' <span class="mut">· ' + par[r].length + '</span></div><div class="card tight" style="margin-bottom:10px">' + par[r].map(function (a) {
+          var moi = a.pris_par === A.user.id, info = [];
+          if (a.achete) info.push('<span class="badge b-ok">Acheté' + (a.achete_par_nom ? ' par ' + esc(a.achete_par_nom) : '') + (a.achete_le ? ' · ' + esc(new Date(a.achete_le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })) : '') + '</span>');
+          else if (a.pris_par) info.push('<span class="badge b-ac">' + (moi ? 'Je m\'en charge' : 'Pris par ' + esc(a.pris_par_nom || '?')) + '</span>');
+          if (a.avant_le && !a.achete) info.push(csAvant(a.avant_le));
+          if (a.note) info.push('<span class="xs mut">' + esc(a.note) + '</span>');
+          return '<div class="cs-art' + (a.achete ? ' cs-fait' : '') + '"><input type="checkbox" class="cs-ck" data-csc="' + a.id + '"' + (a.achete ? ' checked' : '') + (li.archivee ? ' disabled' : '') + ' aria-label="' + esc((a.achete ? 'Remettre à acheter : ' : 'Acheté : ') + a.nom) + '">' +
+            '<div><span class="cs-nom">' + esc(a.nom) + '</span>' + (a.quantite ? '<span class="cs-q">' + esc(a.quantite) + '</span>' : '') + (info.length ? '<div class="cs-info">' + info.join('') + '</div>' : '') + '</div>' +
+            '<div class="cs-act">' + (!a.achete && !li.archivee ? '<button class="btn sm ' + (moi ? 'ghost' : 'line') + ' cs-pr" data-csp="' + a.id + '">' + (moi ? 'Je laisse' : 'Je prends') + '</button>' : '') +
+            (li.archivee ? '' : '<button class="btn sm line" data-cse="' + a.id + '" aria-label="Modifier ' + esc(a.nom) + '">✏️</button>') + '</div></div>';
+        }).join('') + '</div>';
+      }).join('');
+    }
+    h += ajout + '<div class="sect">Factures et tickets</div><div class="card">' + (FAC.length ? '<div>' + FAC.map(function (f) {
+      return '<div class="cs-fac"><div><b class="small">' + esc(f.libelle || f.nom_fichier || 'Facture') + '</b><div class="xs mut">' + esc([f.libelle ? f.nom_fichier : '', f.ajoute_par_nom, new Date(f.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')) + '</div></div>' +
+        '<div class="chips"><button class="btn sm line" data-csd="' + f.id + '">Télécharger</button><button class="btn sm ko" data-csx="' + f.id + '" aria-label="Supprimer la facture">×</button></div></div>';
+    }).join('') + '</div>' : '<p class="small mut" style="margin:0 0 4px">Aucune facture pour l\'instant.</p>') +
+      '<form id="cs-ff" class="cs-add" style="margin-top:12px;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto"><label class="l cs-n">Fichier (PDF ou photo du ticket)<input class="f" id="cs-fi" type="file" accept="application/pdf,image/*" required></label>' +
+      '<label class="l">Nom<input class="f" id="cs-fl" placeholder="Ex. Ticket Leclerc" maxlength="80"></label><button class="btn line" type="submit">Ajouter</button></form></div>' + piedAcces();
+    w.innerHTML = h;
+    lier(li, arts);
+  };
+  var piedAcces = function () {
+    return '<p class="xs mut" style="margin-top:14px">Visible par la direction et les personnes qui ont l\'accès « Liste de courses » (le bureau par défaut).' + (peut('droits') ? ' <a href="#/droits">Changer qui y a accès</a>' : '') + '</p>';
+  };
+  var err = function (t) { return function (e) { toast(t + (e && e.message ? ' : ' + e.message : '')); }; };
+  var lier = function (li, arts) {
+    all('[data-csl]').forEach(function (b) { b.onclick = function () { CS.liste = b.dataset.csl; charger(); }; });
+    all('[data-csarch]').forEach(function (b) { b.onclick = function () { CS.archives = !CS.archives; CS.liste = null; charger(); }; });
+    all('[data-csf]').forEach(function (b) { b.onclick = function () { CS.filtre = b.dataset.csf; dessiner(); }; });
+    if (!li) return;
+    $('cs-mod').onclick = function () { csListe(li, charger); };
+    $('cs-arc').onclick = function () {
+      q(sb.from('courses_listes').update({ archivee: !li.archivee }).eq('id', li.id)).then(function () { toast(li.archivee ? 'Liste remise en cours' : 'Liste archivée : elle reste dans « Archivées »'); CS.archives = !li.archivee ? CS.archives : false; CS.liste = li.archivee ? li.id : null; charger(); }).catch(err('Action impossible'));
+    };
+    $('cs-dup').onclick = function () {
+      var t = prompt('Nom de la nouvelle liste', li.titre.replace(/\d{4}/, function (y) { return String(+y + 1); }) + (/\d{4}/.test(li.titre) ? '' : ' (copie)'));
+      if (!t || !t.trim()) return;
+      q(sb.from('courses_listes').insert({ titre: t.trim(), note: li.note }).select('id').single()).then(function (n) {
+        var rows = arts.map(function (a) { return { liste_id: n.id, nom: a.nom, quantite: a.quantite, rayon: a.rayon, note: a.note, ordre: a.ordre }; });
+        return (rows.length ? q(sb.from('courses_articles').insert(rows)) : Promise.resolve()).then(function () { CS.archives = false; CS.liste = n.id; CS.filtre = 'a'; toast('Liste dupliquée : tout est à acheter'); charger(); });
+      }).catch(err('Duplication impossible'));
+    };
+    $('cs-wa').onclick = function () {
+      var r = arts.filter(function (a) { return !a.achete; }), g = [], p = {};
+      if (!r.length) { toast('Tout est déjà acheté'); return; }
+      r.forEach(function (a) { var k = a.rayon || 'Divers'; if (!p[k]) { p[k] = []; g.push(k); } p[k].push(a); });
+      var t = '🛒 *' + li.titre + '*' + (li.avant_le ? ' (avant le ' + csDate(li.avant_le) + ')' : '') + '\n' + g.map(function (k) {
+        return '\n*' + k + '*\n' + p[k].map(function (a) { return '• ' + a.nom + (a.quantite ? ' : ' + a.quantite : '') + (a.pris_par_nom ? ' (' + a.pris_par_nom + ')' : ''); }).join('\n');
+      }).join('\n') + '\n\nÀ cocher dans l\'appli : Gestion › Services du club › Liste de courses';
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { toast('Liste copiée : colle-la dans WhatsApp'); }).catch(function () { prompt('Copie ce texte :', t); });
+    };
+    all('[data-csc]').forEach(function (c) {
+      c.onchange = function () {
+        var a = arts.filter(function (x) { return x.id === c.dataset.csc; })[0];
+        q(sb.from('courses_articles').update({ achete: c.checked }).eq('id', a.id)).then(function () { toast(c.checked ? a.nom + ' : acheté' : a.nom + ' : à acheter'); charger(); }).catch(function (e) { c.checked = !c.checked; err('Action impossible')(e); });
+      };
+    });
+    all('[data-csp]').forEach(function (b) {
+      b.onclick = function () {
+        var a = arts.filter(function (x) { return x.id === b.dataset.csp; })[0], moi = a.pris_par === A.user.id;
+        q(sb.from('courses_articles').update({ pris_par: moi ? null : A.user.id }).eq('id', a.id)).then(function () { toast(moi ? 'Tu laisses ' + a.nom : 'Tu t\'en charges : ' + a.nom); charger(); }).catch(err('Action impossible'));
+      };
+    });
+    all('[data-cse]').forEach(function (b) { b.onclick = function () { csArticle(arts.filter(function (x) { return x.id === b.dataset.cse; })[0], charger); }; });
+    if ($('cs-af')) $('cs-af').onsubmit = function (e) {
+      e.preventDefault();
+      var nm = $('cs-an').value.trim(); if (!nm) return;
+      var ordre = arts.reduce(function (mx, a) { return Math.max(mx, a.ordre || 0); }, 0) + 1;
+      q(sb.from('courses_articles').insert({ liste_id: li.id, nom: nm, quantite: $('cs-aq').value.trim() || null, rayon: $('cs-ar').value.trim() || null, ordre: ordre })).then(function () {
+        toast(nm + ' ajouté'); var r = $('cs-ar').value; CS.filtre = CS.filtre === 'f' ? 'a' : CS.filtre;
+        charger(); setTimeout(function () { if ($('cs-ar')) { $('cs-ar').value = r; $('cs-an').focus(); } }, 400);
+      }).catch(err('Ajout impossible'));
+    };
+    $('cs-ff').onsubmit = function (e) {
+      e.preventDefault();
+      var f = $('cs-fi').files[0]; if (!f) return;
+      if (f.size > 10485760) { toast('Fichier trop lourd (10 Mo maximum)'); return; }
+      var propre = norm(f.name).replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '') || 'facture';
+      var ch = li.id + '/' + Date.now() + '-' + propre, btn = this.querySelector('button'); btn.disabled = true; btn.textContent = 'Envoi…';
+      sb.storage.from('courses').upload(ch, f, { contentType: f.type || 'application/octet-stream' }).then(function (r) {
+        if (r.error) throw r.error;
+        return q(sb.from('courses_factures').insert({ liste_id: li.id, chemin: ch, nom_fichier: f.name, libelle: $('cs-fl').value.trim() || null }));
+      }).then(function () { toast('Facture ajoutée'); charger(); }).catch(function (e) { btn.disabled = false; btn.textContent = 'Ajouter'; err('Envoi impossible')(e); });
+    };
+    all('[data-csd]').forEach(function (b) {
+      b.onclick = function () {
+        var f = FAC.filter(function (x) { return x.id === b.dataset.csd; })[0], win = window.open('', '_blank');
+        sb.storage.from('courses').createSignedUrl(f.chemin, 300, { download: f.nom_fichier || true }).then(function (r) {
+          if (r.error) throw r.error;
+          if (win) win.location = r.data.signedUrl; else location.href = r.data.signedUrl;
+        }).catch(function (e) { if (win) win.close(); err('Téléchargement impossible')(e); });
+      };
+    });
+    all('[data-csx]').forEach(function (b) {
+      b.onclick = function () {
+        var f = FAC.filter(function (x) { return x.id === b.dataset.csx; })[0];
+        if (!confirm('Supprimer « ' + (f.libelle || f.nom_fichier || 'cette facture') + ' » ?')) return;
+        sb.storage.from('courses').remove([f.chemin]).catch(function () { }).then(function () { return q(sb.from('courses_factures').delete().eq('id', f.id)); })
+          .then(function () { toast('Facture supprimée'); charger(); }).catch(err('Suppression impossible'));
+      };
+    });
+  };
+  charger();
+}
+// Créer ou modifier une liste
+function csListe(li, apres) {
+  panneau(li ? 'Modifier la liste' : 'Nouvelle liste de courses', '<div class="stack"><label class="l">Nom de la liste<input class="f" id="csl-t" maxlength="120" placeholder="Ex. Fête de Noël 2026" value="' + esc(li ? li.titre : '') + '"></label>' +
+    '<label class="l">À acheter avant le (facultatif)<input class="f" id="csl-d" type="date" value="' + esc(li && li.avant_le ? li.avant_le : '') + '"></label>' +
+    '<label class="l">Note (facultatif)<textarea class="f" id="csl-n" rows="3" placeholder="Ex. Prévu pour 200 personnes, budget validé par le bureau">' + esc(li && li.note ? li.note : '') + '</textarea></label>' +
+    '<button class="btn" id="csl-ok">' + (li ? 'Enregistrer' : 'Créer la liste') + '</button>' + (li ? '<button class="btn ko" id="csl-sup">Supprimer la liste</button>' : '') + '</div>');
+  $('csl-ok').onclick = function () {
+    var t = $('csl-t').value.trim(); if (!t) { toast('Donne un nom à la liste'); return; }
+    var row = { titre: t, avant_le: $('csl-d').value || null, note: $('csl-n').value.trim() || null };
+    (li ? q(sb.from('courses_listes').update(row).eq('id', li.id)).then(function () { return li; }) : q(sb.from('courses_listes').insert(row).select('id').single()))
+      .then(function (x) { CS.liste = x.id; CS.archives = li ? li.archivee : false; CS.filtre = 'a'; toast(li ? 'Liste enregistrée' : 'Liste créée'); fermer(); apres(); })
+      .catch(function (e) { toast('Enregistrement impossible' + (e && e.message ? ' : ' + e.message : '')); });
+  };
+  if ($('csl-sup')) $('csl-sup').onclick = function () {
+    if (!confirm('Supprimer la liste « ' + li.titre + ' », ses articles et ses factures ? Pour la garder, archive-la plutôt.')) return;
+    q(sb.from('courses_factures').select('chemin').eq('liste_id', li.id)).then(function (f) {
+      return f && f.length ? sb.storage.from('courses').remove(f.map(function (x) { return x.chemin; })).catch(function () { }) : null;
+    }).then(function () { return q(sb.from('courses_listes').delete().eq('id', li.id)); })
+      .then(function () { CS.liste = null; toast('Liste supprimée'); fermer(); apres(); }).catch(function () { toast('Suppression impossible'); });
+  };
+}
+// Modifier un article
+function csArticle(a, apres) {
+  panneau('Modifier l\'article', '<div class="stack"><label class="l">Article<input class="f" id="csa-n" maxlength="160" value="' + esc(a.nom) + '"></label>' +
+    '<label class="l">Quantité<input class="f" id="csa-q" maxlength="60" value="' + esc(a.quantite || '') + '"></label>' +
+    '<label class="l">Rayon<input class="f" id="csa-r" maxlength="60" value="' + esc(a.rayon || '') + '"></label>' +
+    '<label class="l">Note<input class="f" id="csa-o" maxlength="200" placeholder="Ex. marque, magasin, pour quoi faire…" value="' + esc(a.note || '') + '"></label>' +
+    '<label class="l">Avant le (si plus tôt que la liste)<input class="f" id="csa-d" type="date" value="' + esc(a.avant_le || '') + '"></label>' +
+    '<button class="btn" id="csa-ok">Enregistrer</button><button class="btn ko" id="csa-sup">Supprimer l\'article</button></div>');
+  $('csa-ok').onclick = function () {
+    var n = $('csa-n').value.trim(); if (!n) { toast('Le nom est obligatoire'); return; }
+    q(sb.from('courses_articles').update({ nom: n, quantite: $('csa-q').value.trim() || null, rayon: $('csa-r').value.trim() || null, note: $('csa-o').value.trim() || null, avant_le: $('csa-d').value || null }).eq('id', a.id))
+      .then(function () { toast('Article enregistré'); fermer(); apres(); }).catch(function () { toast('Enregistrement impossible'); });
+  };
+  $('csa-sup').onclick = function () {
+    if (!confirm('Supprimer « ' + a.nom + ' » ?')) return;
+    q(sb.from('courses_articles').delete().eq('id', a.id)).then(function () { toast('Article supprimé'); fermer(); apres(); }).catch(function () { toast('Suppression impossible'); });
+  };
+}
+
+var VUES = { droits: vueDroits, alaune: vueALaUne, accueilapp: vueAccueilApp, messages: vueMessages, discussions: vueDiscussions, questionnaires: vueQuestionnaires, adoc: vueAdoc, accueil: vueAccueil, actus: vueActus, evenements: vueEvenements, inscriptions: vueInscriptions, adherents: vueAdherents, groupes: vueGroupes, annonces: vueAnnonces, cordage: vueCordage, arena: vueArena, nextgen: vueNextGen, missions: vueMissions, boutique: vueBoutique, courses: vueCourses, double: vueDouble, reseaux: vueReseaux, presence: vuePresence, equipe: vueEquipe, acces: vueAcces, historique: vueHistorique, retours: vueRetours, niveaux: vueNiveaux, reglages: vueReglages, fetes: vueFetes };
 function router() {
   if (!A.user) return;
   fermer();
