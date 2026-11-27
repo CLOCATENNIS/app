@@ -45,6 +45,18 @@ button{font:inherit;cursor:pointer;border-radius:12px;min-height:48px;padding:0 
 .ok li span{color:var(--mut);font-weight:500;font-size:14px;text-align:right}
 .tk{display:inline-block;background:var(--balle);color:#1b2208;border-radius:999px;padding:2px 10px;font-weight:700;font-size:14px}
 .mut{color:var(--mut)}.small{font-size:14px}
+.tete{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
+.mes{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.mes li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:var(--soft);border-radius:14px;padding:12px 14px}
+.mes .n{font-weight:700;font-size:18px}.mes .d{grid-column:1;color:var(--mut);font-size:13px}
+.mes .c{grid-row:1/3;grid-column:2;text-align:center;background:var(--balle);color:#1b2208;border-radius:12px;padding:6px 12px;min-width:64px}
+.mes .c b{display:block;font-family:var(--disp);font-size:32px;line-height:1}.mes .c span{font-size:12px;font-weight:600}
+.lots,.tous{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:2px}
+.lots li,.tous li{display:flex;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid var(--bd);font-size:15px}
+.lots li:last-child,.tous li:last-child{border-bottom:0}
+.lots li span,.tous li span{color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tous li.moi{background:var(--soft);border-radius:10px;font-weight:700;padding-inline:10px}
+.tag{color:var(--ac);font-weight:700}
 </style>
 </head>
 <body>
@@ -59,14 +71,16 @@ button{font:inherit;cursor:pointer;border-radius:12px;min-height:48px;padding:0 
     <button class="go" id="go">M'enregistrer</button>
     <p class="mut small">Adhérent du club : prénom et nom comme sur ta licence, on te retrouve tout seul. Invité : ton nom sert seulement pour les jeux et la tombola de la soirée.</p>
   </form>
-  <section id="fini" class="card ok" hidden>
-    <h2>C'est fait !</h2>
-    <p class="mut small" style="margin:0">Regarde l'écran : ton nom peut sortir au prochain tirage.</p>
-    <ul id="res"></ul>
+  <section id="suivi" hidden>
+    <div class="card ok" id="bravo" hidden><h2>C'est fait !</h2><p class="mut small" style="margin:0">Regarde l'écran : ton nom peut sortir au prochain tirage. Tes tickets montent quand tu joues.</p></div>
+    <div class="card"><div class="tete"><b>Tes tickets</b><span class="mut small" id="maj"></span></div><ul class="mes" id="mes"></ul></div>
+    <div class="card" id="lotsBox" hidden><b>Les lots</b><p class="mut small" style="margin:4px 0 0">Le premier ticket tiré gagne le lot 1, le deuxième le lot 2, et ainsi de suite.</p><ol class="lots" id="lots"></ol></div>
+    <div class="card"><div class="tete"><b>Tous les participants</b><span class="mut small" id="tot"></span></div><ol class="tous" id="tous"></ol></div>
     <button type="button" class="add" id="encore">Enregistrer d'autres personnes</button>
   </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="tombola.js?v=202611271130"></script>
 <script>
 (function () {
 'use strict';
@@ -93,7 +107,35 @@ function lire() {
   return Array.prototype.map.call($('liste').children, function (c) { var i = c.querySelectorAll('input'); return { prenom: i[0].value.trim(), nom: i[1].value.trim(), ops: i[2].checked }; }).filter(function (p) { return p.prenom; });
 }
 $('plus').onclick = function () { personne(false); };
-$('encore').onclick = function () { $('fini').hidden = true; $('form').hidden = false; $('liste').innerHTML = ''; personne(true); };
+$('encore').onclick = function () { $('suivi').hidden = true; $('bravo').hidden = true; $('form').hidden = false; $('liste').innerHTML = ''; personne(true); window.scrollTo(0, 0); };
+// ----- Mes tickets en direct : le téléphone se souvient des personnes qu'il a enregistrées -----
+var CLE = 'cloca-soiree-' + code.toUpperCase(), minuterie = null;
+function mesK() { try { return JSON.parse(localStorage.getItem(CLE) || '[]'); } catch (e) { return []; } }
+function retenir(l) { var m = mesK(); l.forEach(function (k) { if (k && m.indexOf(k) < 0) m.push(k); }); try { localStorage.setItem(CLE, JSON.stringify(m)); } catch (e) {} }
+function suivre() {
+  sb.rpc('jeu_insc_suivi', { p_code: code }).then(function (r) {
+    var S = r.data; if (r.error || !S) return;
+    var TB = window.TOMBOLA, H = S.hist || [], M = S.manches || [], W = S.winners || [], L = TB.lots(S.lots), mes = mesK();
+    var nom = function (k) { var p = S.joueurs.filter(function (x) { return x.k === k; })[0]; return p ? p.nom : '?'; };
+    var all = S.joueurs.slice().sort(function (a, b) { return TB.tickets(b.k, H, M) - TB.tickets(a.k, H, M) || a.nom.localeCompare(b.nom, 'fr'); });
+    var gagne = function (k) { var i = W.indexOf(k); return i < 0 ? '' : 'Gagnant n° ' + (i + 1) + (L[i] ? ' · ' + L[i] : ''); };
+    $('mes').innerHTML = mes.filter(function (k) { return S.joueurs.some(function (p) { return p.k === k; }); }).map(function (k) {
+      var t = TB.tickets(k, H, M);
+      return '<li><span class="n">' + esc(nom(k)) + '</span><span class="d">' + (gagne(k) ? '<span class="tag">' + esc(gagne(k)) + '</span>' : esc(TB.detail(k, H, M))) + '</span><span class="c"><b>' + t + '</b><span>ticket' + (t > 1 ? 's' : '') + '</span></span></li>';
+    }).join('') || '<li><span class="n">Personne d\'enregistré sur ce téléphone</span></li>';
+    $('lotsBox').hidden = !L.length;
+    $('lots').innerHTML = L.map(function (l, i) { return '<li>' + (i + 1) + '. ' + esc(l) + '<span>' + (W[i] ? esc(nom(W[i])) : 'à tirer') + '</span></li>'; }).join('');
+    var sum = all.reduce(function (s, p) { return s + TB.tickets(p.k, H, M); }, 0);
+    $('tot').textContent = all.length + ' · ' + sum + ' tickets';
+    $('tous').innerHTML = all.map(function (p, i) { var t = TB.tickets(p.k, H, M), g = W.indexOf(p.k) >= 0; return '<li' + (mes.indexOf(p.k) >= 0 ? ' class="moi"' : '') + '>' + (i + 1) + '. ' + esc(p.nom) + (g ? ' <span class="tag">gagnant</span>' : '') + '<span>' + t + ' ticket' + (t > 1 ? 's' : '') + '</span></li>'; }).join('');
+    $('maj').textContent = 'à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }).catch(function () {});
+}
+function voirSuivi(bravo) {
+  $('form').hidden = true; $('ferme').hidden = true; $('suivi').hidden = false; $('bravo').hidden = !bravo;
+  $('encore').hidden = !OUVERT; suivre(); clearInterval(minuterie); minuterie = setInterval(suivre, 10000); window.scrollTo(0, 0);
+}
+var OUVERT = false;
 $('form').onsubmit = function (e) {
   e.preventDefault();
   var l = lire(); $('msg').textContent = '';
@@ -103,8 +145,8 @@ $('form').onsubmit = function (e) {
   sb.rpc('jeu_insc_public', { p_code: code, p_personnes: l }).then(function (r) {
     $('go').disabled = false; renum();
     if (r.error) { $('msg').textContent = (r.error.message || 'Enregistrement impossible') + '. Réessaie ou préviens un organisateur.'; return; }
-    $('res').innerHTML = (r.data || []).map(function (x) { return '<li>' + esc(x.nom) + '<span>' + (x.deja ? 'déjà enregistré' : '<span class="tk">+1 ticket</span>') + '</span></li>'; }).join('');
-    $('form').hidden = true; $('fini').hidden = false; window.scrollTo(0, 0);
+    retenir((r.data || []).map(function (x) { return x.k; }));
+    voirSuivi(true);
   }).catch(function () { $('go').disabled = false; renum(); $('msg').textContent = 'Pas de connexion : réessaie dans un instant.'; });
 };
 if (!code) { $('sous').textContent = ''; ferme('Lien incomplet', 'Scanne le QR code affiché à l\'entrée ou sur l\'écran du club.'); return; }
@@ -113,6 +155,8 @@ sb.rpc('jeu_insc_infos', { p_code: code }).then(function (r) {
   if (r.error || !D) { $('sous').textContent = ''; ferme('Ce QR code ne correspond à aucune soirée', 'Vérifie que tu as scanné le bon QR code.'); return; }
   $('titre').textContent = D.titre;
   $('sous').textContent = [D.jour ? new Date(D.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '', D.lieu || ''].filter(Boolean).join(' · ');
+  OUVERT = !!D.ouvert;
+  if (mesK().length) return voirSuivi(false);
   if (!D.ouvert) { ferme('L\'enregistrement n\'est pas ouvert', 'Il s\'ouvre le jour de la soirée. À tout à l\'heure sur les terrains !'); return; }
   $('form').hidden = false; personne(true);
 }).catch(function () { ferme('Pas de connexion', 'Vérifie ta connexion internet puis recharge la page.'); });

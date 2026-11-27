@@ -3577,6 +3577,22 @@ function jxCodeAteliers(JE) {
       '<div class="chips" style="justify-content:center"><a class="btn sm line" target="_blank" rel="noopener" href="' + esc(lien + '?p=' + JE.cle_pilote) + '">Ouvrir sur cet appareil</a></div></div>');
   }).catch(jxErr('Code impossible'));
 }
+// Lots de la tombola gratuite : une ligne par lot, dans l'ordre du tirage (le 1er ticket tiré gagne le lot 1).
+// Affichés seulement si la case est cochée : sur les téléphones (après le QR code) et sur l'écran au moment du tirage.
+function jxLots(JE, apres) {
+  if (JE.lots === undefined) { toast('La base n\'est pas encore à jour pour les lots (script soiree-tickets-lots.sql)'); return; }
+  var L = JE.lots || { afficher: false, liste: [] };
+  panneau('Lots de la tombola', '<div class="stack"><label class="check" style="display:flex;gap:8px;font-weight:600"><input type="checkbox" id="jl-on"' + (L.afficher ? ' checked' : '') + '> Afficher les lots sur les téléphones et sur l\'écran du tirage</label>' +
+    '<label class="l">Un lot par ligne, dans l\'ordre du tirage<textarea class="f" id="jl-l" style="min-height:160px" placeholder="Ex.\nTube de balles\nBon cordage offert\nSac Tecnifibre">' + esc((L.liste || []).join('\n')) + '</textarea></label>' +
+    '<p class="mut small" style="margin:0">Le premier ticket tiré gagne le lot 1, le deuxième le lot 2… Décoché, rien n\'apparaît : utile si tu veux garder la surprise ou si les lots ne sont pas encore prêts.</p>' +
+    '<div><button class="btn" id="jl-ok">Enregistrer</button></div></div>', function () {
+    $('jl-ok').onclick = function () {
+      var nv = { afficher: $('jl-on').checked, liste: $('jl-l').value.split('\n').map(function (x) { return x.trim().slice(0, 80); }).filter(Boolean).slice(0, 40) };
+      if (nv.afficher && !nv.liste.length) { toast('Ajoute au moins un lot, ou décoche l\'affichage'); return; }
+      q(sb.from('jeux').update({ lots: nv }).eq('id', JE.id)).then(function () { JE.lots = nv; fermer(); toast(nv.afficher ? 'Lots enregistrés et affichés' : 'Lots enregistrés (non affichés)'); if (apres) apres(); }).catch(jxErr('Pas enregistré'));
+    };
+  });
+}
 function jxQrInsc(JE) {
   if (!JE.code_insc) { toast('La base n\'est pas encore à jour pour l\'enregistrement (script soiree-ateliers.sql)'); return; }
   var lien = jxLienInsc(JE.code_insc);
@@ -3637,11 +3653,12 @@ function vueJeux(m, id) {
   var entetes = function () {
     var lien = jxLienEcran(JE.cle);
     $('jx-h').innerHTML = entete(JE.titre, (JE.jour ? esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ' · ' : '') + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' · ' + JE.manches.length + ' manche' + (JE.manches.length > 1 ? 's' : '') + (JE.insc_appli && JE.insc_ouvre_le ? ' · carte dans l\'appli dès le ' + esc(fmtJ(new Date(JE.insc_ouvre_le))) + ' à ' + fmtH(new Date(JE.insc_ouvre_le)) + (JE.public_cible === 'tous' ? '' : ' (adultes)') : ''),
-      '<button class="btn sm ghost" id="jx-arch">' + (JE.archive ? 'Désarchiver' : 'Archiver') + '</button><button class="btn sm ko" id="jx-del">Supprimer le jeu</button><a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button><button class="btn sm line" id="jx-at">Écran des ateliers (pickleball, touch, tombola)</button><button class="btn sm line" id="jx-qr">QR code d\'enregistrement</button>');
+      '<button class="btn sm ghost" id="jx-arch">' + (JE.archive ? 'Désarchiver' : 'Archiver') + '</button><button class="btn sm ko" id="jx-del">Supprimer le jeu</button><a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button><button class="btn sm line" id="jx-at">Écran des ateliers (pickleball, touch, tombola)</button><button class="btn sm line" id="jx-qr">QR code d\'enregistrement</button><button class="btn sm line" id="jx-lots">Lots de la tombola' + (JE.lots && JE.lots.afficher ? ' · affichés' : '') + '</button>');
     $('jx-del').onclick = function () { if (confirm('Supprimer définitivement « ' + JE.titre + ' », ses joueurs et ses résultats ? La carte disparaît aussi de l\'appli.')) q(sb.from('jeux').delete().eq('id', JE.id)).then(function () { toast('Jeu supprimé'); location.hash = '#/fetes/jeux'; }).catch(jxErr('Suppression impossible')); };
     $('jx-arch').onclick = function () { var v = !JE.archive; q(sb.from('jeux').update({ archive: v }).eq('id', JE.id)).then(function () { JE.archive = v; toast(v ? 'Jeu archivé : la carte de l\'appli et l\'écran sont coupés' : 'Jeu désarchivé'); entetes(); }).catch(jxErr('Action impossible')); };
     $('jx-at').onclick = function () { jxCodeAteliers(JE); };
     $('jx-qr').onclick = function () { jxQrInsc(JE); };
+    $('jx-lots').onclick = function () { jxLots(JE, entetes); };
     $('jx-cp').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié : ouvre-le sur l\'ordi ou la TV du club'); }).catch(function () { window.prompt('Lien de l\'écran', lien); }); };
     $('jx-tabs').innerHTML = [['jouer', 'Jouer'], ['joueurs', 'Joueurs (' + JE.joueurs.length + ')'], ['reglages', 'Réglages']].map(function (x) { return '<button class="chip' + (JX.onglet === x[0] ? ' on' : '') + '" data-jxt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     all('[data-jxt]').forEach(function (b) { b.onclick = function () { JX.onglet = b.dataset.jxt; entetes(); vue(); }; });

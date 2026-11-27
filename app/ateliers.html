@@ -63,14 +63,15 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .pied{padding:10px max(2vw,14px);display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line)}
 .pied h2{font-size:22px;font-weight:700}
 .pied p{margin:0;color:var(--mute);font-size:14px}
-.chips{display:flex;gap:8px;flex-wrap:wrap;flex:1;cursor:pointer}
-.chip{padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap;font-weight:600}
+.chips{display:flex;gap:8px;flex-wrap:nowrap;overflow:hidden;flex:1;cursor:pointer;align-items:center}
+.chip.tout{background:var(--ball);color:#1b1f0a;border:0}.chip.tout b{color:#1b1f0a}
+.chip{flex:none;padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap;font-weight:600}
 .chip b{color:var(--ball);margin-left:6px;font-variant-numeric:tabular-nums}
 .qr{display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 12px}
 .qr .q{background:#fff;padding:5px;border-radius:8px;line-height:0}
 .qr .q img,.qr .q canvas{width:72px!important;height:72px!important}
 .qr span{font-weight:700;max-width:13ch;line-height:1.2}
-dialog{background:#171d25;color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:22px;width:min(640px,94vw);max-height:90vh}
+dialog{overflow:auto;background:#171d25;color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:22px;width:min(640px,94vw);max-height:90vh}
 dialog::backdrop{background:rgba(0,0,0,.65)}
 dialog h2{font-size:32px;margin-bottom:12px}
 dialog.wide{width:min(1000px,96vw)}
@@ -86,6 +87,7 @@ label{display:block;font-weight:600;margin:10px 0 6px}
 .pl.paused .n{color:var(--mute);text-decoration:line-through}
 .pl button{min-height:38px;font-size:14px;padding:0 10px}
 .win{font-family:var(--disp);font-weight:800;font-size:clamp(44px,8vw,80px);color:var(--ball);text-align:center;padding:12px 0;min-height:1.4em}
+.lotjeu{text-align:center;font-family:var(--disp);font-weight:700;font-size:clamp(22px,2.6vw,32px);color:var(--ink)}.lotjeu b{color:var(--ball)}
 .tnum{text-align:center;font-family:var(--disp);font-weight:700;font-size:clamp(24px,3vw,36px);color:var(--mute);font-variant-numeric:tabular-nums;min-height:1.2em}
 summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 table{width:100%;border-collapse:collapse;font-size:15px}
@@ -114,6 +116,9 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .relier h2{font-size:40px}
 .relier input{font-family:var(--disp);font-size:40px;letter-spacing:.3em;text-align:center;text-transform:uppercase;min-height:72px}
 @media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+/* Grand écran : tout tient dans la hauteur, la bande des tickets reste visible en bas */
+@media(min-width:901px){body{height:100vh}main{min-height:0}.half{overflow-y:auto}}
+@media(min-width:901px) and (max-height:820px){.top{padding-block:8px}.top h1{font-size:24px}.hh h2{font-size:34px}.half{gap:10px;padding:12px 18px}.draw{padding:12px;gap:10px}.slot{min-height:46px;font-size:22px}.btn-draw,.btn-go{min-height:52px;font-size:22px}.me input{min-height:42px;font-size:16px}.court{padding:10px;gap:6px}.pied{padding-block:6px}.qr .q img,.qr .q canvas{width:60px!important;height:60px!important}}
 @media(max-width:520px){.teams{grid-template-columns:minmax(0,1fr)}.vs{text-align:center}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -146,7 +151,7 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </main>
 <footer class="pied" id="pied" hidden>
   <div class="qr" id="qrBox" hidden title="Agrandir le QR code"><span class="q" id="qrMini"></span><span>Enregistre-toi : 1 ticket offert</span></div>
-  <div><h2>Tombola gratuite · tickets</h2><p>Présence 1 · pickle / touch : match joué 1, victoire +1 · One Point Slam : point gagné 1, manche gagnée 5</p></div>
+  <div><h2>Tombola gratuite · en tête</h2><p>Présence 1 · atelier joué 1, victoire +1 · One Point Slam : point 1, manche 5</p></div>
   <div class="chips" id="chips" title="Voir tous les tickets"></div>
 </footer>
 
@@ -186,6 +191,7 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <button class="close" data-close>Fermer</button>
   <h2>Tirage de la tombola</h2>
   <p class="hint">Chaque ticket a un numéro. L'ordinateur tire un numéro au hasard (générateur aléatoire sécurisé du navigateur) : plus tu as de tickets, plus tu as de chances. Un gagnant n'est tiré qu'une fois.</p>
+  <div class="lotjeu" id="lotJeu"></div>
   <div class="tnum" id="tnum"></div>
   <div class="win" id="win" aria-live="polite"></div>
   <div class="row"><button class="btn-draw" id="bWin">Tirer un ticket</button></div>
@@ -200,6 +206,7 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="tombola.js?v=202611271130"></script>
 <script>
 (function () {
 'use strict';
@@ -211,7 +218,7 @@ var $ = function (id) { return document.getElementById(id); };
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 var cle = '', D = null, A = DEF(), T = { winners: [] }, envoi = null, enAttente = false, dernierA = '', dernierT = '', dernierBrut = '';
-var msgs = { pick: '', touch: '' }, spinning = { pick: false, touch: false }, meVal = { pick: '', touch: '' };
+var montre = -1, msgs = { pick: '', touch: '' }, spinning = { pick: false, touch: false }, meVal = { pick: '', touch: '' };
 try { cle = new URLSearchParams(location.search).get('p') || localStorage.getItem(KEY) || ''; } catch (e) {}
 
 // ----- Hasard : générateur sécurisé du navigateur, sans biais -----
@@ -230,23 +237,14 @@ function normaliser(a) {
   a.hist = a.hist || []; a.pause = a.pause || []; return a;
 }
 // Statistiques d'un joueur : ateliers (matchs, victoires) + One Point Slam (points gagnés, manches gagnées)
-function stats(k) {
-  var s = { played: 0, wins: 0, osp: 0 };
-  A.hist.forEach(function (h) { if (h.players.indexOf(k) >= 0) { s.played++; if (h.win.indexOf(k) >= 0) s.wins++; } });
-  ((D && D.manches) || []).forEach(function (m) {
-    var e = m && m.etat; if (!e) return;
-    if (e.pts && e.pts[k]) s.osp += e.pts[k];
-    if (e.fmt === 'montante' && e.vic && e.vic[k]) s.osp += e.vic[k];
-    if (e.statut === 'finie' && (e.gagnant === k || (e.gagnants && e.gagnants.indexOf(k) >= 0))) s.osp += 5;
-  });
-  return s;
-}
-function tickets(k) { var s = stats(k); return 1 + s.played + s.wins + s.osp; }
-function ticketRanges() {
-  var start = 1;
-  return J().filter(function (p) { return T.winners.indexOf(p.k) < 0; }).slice().sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); })
-    .map(function (p) { var t = tickets(p.k), r = { p: p, from: start, to: start + t - 1, t: t }; start += t; return r; });
-}
+var TB = window.TOMBOLA;
+function hist() { return A.hist; }
+function manches() { return (D && D.manches) || []; }
+function stats(k) { return TB.stats(k, hist(), manches()); }
+function tickets(k) { return TB.tickets(k, hist(), manches()); }
+function ticketRanges() { return TB.ranges(J(), T.winners, hist(), manches()); }
+function lotsListe() { return TB.lots(D && D.lots); }
+function lotDe(i) { var L = lotsListe(); return L[i] || ''; }
 function busy(k) {
   for (var a in A.act) { var x = A.act[a]; if (x.draft.indexOf(k) >= 0) return true; for (var c in x.courts) if (x.courts[c].players.indexOf(k) >= 0) return true; }
   return false;
@@ -373,10 +371,16 @@ function half(a) {
     (!full && !spinning[a] ? '<form class="me" data-me="' + a + '"><input id="me-' + a + '" list="dl-' + a + '" placeholder="Ton prénom pour te placer" autocomplete="off" aria-label="Ton prénom" value="' + esc(meVal[a]) + '"><datalist id="dl-' + a + '">' + dispo + '</datalist><button>Je me place</button></form>' : '') +
     '<div class="msg" aria-live="polite">' + esc(msgs[a]) + '</div></div><div class="courts">' + courts + '</div>';
 }
-function detail(k) {
-  var s = stats(k);
-  return ['Présence 1', s.played ? s.played + ' match' + (s.played > 1 ? 's' : '') : '', s.wins ? s.wins + ' victoire' + (s.wins > 1 ? 's' : '') : '', s.osp ? 'One Point Slam ' + s.osp : ''].filter(Boolean).join(' · ');
+// Bande du bas : les mieux placés sur une seule ligne, autant que la largeur le permet, puis « + N · tous les tickets »
+function chips(all) {
+  var box = $('chips'), sum = all.reduce(function (s, p) { return s + tickets(p.k); }, 0);
+  if (!all.length) { box.innerHTML = '<span class="hint">Scanne le QR code pour t’enregistrer et gagner ton premier ticket.</span>'; return; }
+  var chip = function (p) { return '<span class="chip">' + esc(p.nom) + '<b>' + tickets(p.k) + '</b></span>'; };
+  var fin = function (reste) { return '<span class="chip tout">' + (reste ? '+ ' + reste + ' · ' : '') + 'Tous les tickets<b>' + all.length + ' joueurs · ' + sum + '</b></span>'; };
+  var n = Math.min(all.length, 12);
+  do { box.innerHTML = all.slice(0, n).map(chip).join('') + fin(all.length - n); n--; } while (n >= 0 && box.scrollWidth > box.clientWidth + 1);
 }
+function detail(k) { return TB.detail(k, hist(), manches()); }
 function render() {
   if (!D) return;
   var foc = document.activeElement && document.activeElement.id;
@@ -384,7 +388,7 @@ function render() {
   $('pick').innerHTML = half('pick'); $('touch').innerHTML = half('touch');
   if (foc && /^me-/.test(foc) && $(foc)) { var el = $(foc); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
   var all = J().slice().sort(function (a, b) { return tickets(b.k) - tickets(a.k) || a.nom.localeCompare(b.nom, 'fr'); });
-  $('chips').innerHTML = all.length ? all.slice(0, 24).map(function (p) { return '<span class="chip">' + esc(p.nom) + '<b>' + tickets(p.k) + '</b></span>'; }).join('') + (all.length > 24 ? '<span class="chip">+ ' + (all.length - 24) + '</span>' : '') : '<span class="hint">Scanne le QR code pour t’enregistrer et gagner ton premier ticket.</span>';
+  chips(all);
   // Joueurs
   $('nPresent').textContent = J().length + ' joueur' + (J().length > 1 ? 's' : '') + ' enregistré' + (J().length > 1 ? 's' : '');
   $('list').innerHTML = J().slice().sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); }).map(function (p) {
@@ -401,7 +405,10 @@ function render() {
       '</div><div class="stub"><b>' + t + '</b><span>ticket' + (t > 1 ? 's' : '') + '</span></div></div>';
   }).join('') : '<p class="hint">Aucun ticket pour l’instant.</p>';
   $('tTab').innerHTML = R.length ? '<thead><tr><th>Joueur</th><th class="r">Tickets</th><th class="r">Numéros</th><th class="r">Chances</th></tr></thead><tbody>' + R.map(function (r) { return '<tr><td>' + esc(r.p.nom) + '</td><td class="r">' + r.t + '</td><td class="r">' + r.from + ' à ' + r.to + '</td><td class="r">' + (100 * r.t / tot).toFixed(1) + ' %</td></tr>'; }).join('') + '</tbody>' : '<tbody><tr><td>Aucun ticket en jeu.</td></tr></tbody>';
-  $('winners').textContent = T.winners.length ? 'Gagnants dans l’ordre : ' + T.winners.map(function (k, i) { return (i + 1) + '. ' + nm(k); }).join(' · ') : '';
+  $('winners').textContent = T.winners.length ? 'Gagnants dans l’ordre : ' + T.winners.map(function (k, i) { return (i + 1) + '. ' + nm(k) + (lotDe(i) ? ' (' + lotDe(i) + ')' : ''); }).join(' · ') : '';
+  // Lot en jeu avant le tirage ; juste après, le lot qui vient d'être gagné reste affiché jusqu'au tirage suivant
+  var il = montre >= 0 ? montre : T.winners.length, lj = lotDe(il), nl = lotsListe().length;
+  $('lotJeu').innerHTML = nl ? (lj ? 'Lot ' + (il + 1) + ' sur ' + nl + ' : <b>' + esc(lj) + '</b>' : 'Tous les lots ont été tirés') : '';
   tick();
 }
 function tick() {
@@ -426,7 +433,7 @@ $('qrBox').onclick = function () { $('dQr').showModal(); };
 $('bPlayers').onclick = function () { $('dPlayers').showModal(); $('iPr').focus(); };
 $('bTickets').onclick = function () { $('dTickets').showModal(); };
 $('bSettings').onclick = function () { $('sPc').value = A.cfg.pick.courts; $('sTc').value = A.cfg.touch.courts; $('sPf').value = A.cfg.pick.fmt; $('sTf').value = A.cfg.touch.fmt; $('setMsg').textContent = ''; $('bReset').textContent = 'Remettre les ateliers à zéro'; $('dSettings').showModal(); };
-$('bFinal').onclick = function () { $('win').textContent = ''; $('tnum').textContent = ''; $('dFinal').showModal(); };
+$('bFinal').onclick = function () { montre = -1; render(); $('win').textContent = ''; $('tnum').textContent = ''; $('dFinal').showModal(); };
 $('fAdd').onsubmit = function (e) {
   e.preventDefault(); var pr = $('iPr').value.trim(), no = $('iNo').value.trim(); if (!pr) return;
   sb.rpc('jeu_atelier_joueur', { p_cle: cle, p_prenom: pr, p_nom: no }).then(function (r) {
@@ -451,11 +458,12 @@ $('bReset').onclick = function () {
 };
 $('bOublier').onclick = function () { $('dSettings').close(); oublier(); };
 $('bWin').onclick = function () {
+  montre = -1; render();
   var R = ticketRanges();
   if (!R.length) { $('tnum').textContent = ''; $('win').textContent = 'Plus aucun ticket en jeu'; return; }
   var tot = R[R.length - 1].to, num = rnd(tot) + 1, w = R.filter(function (r) { return num >= r.from && num <= r.to; })[0].p;
   var done = function () {
-    $('tnum').textContent = 'Ticket n° ' + num + ' sur ' + tot; $('win').textContent = w.nom;
+    $('tnum').textContent = 'Ticket n° ' + num + ' sur ' + tot; $('win').textContent = w.nom; montre = T.winners.length;
     T.winners.push(w.k); T.tirages = (T.tirages || []).concat([{ k: w.k, num: num, tot: tot, at: Date.now() }]);
     sauver(true); render(); $('bWin').disabled = false;
   };
