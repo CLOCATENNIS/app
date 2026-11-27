@@ -4634,19 +4634,19 @@ function csAvant(d, court) {
 function csStyle() {
   if ($('cs-style')) return;
   var st = document.createElement('style'); st.id = 'cs-style';
-  st.textContent = '.cs-art{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}' +
+  st.textContent = '.cs-art{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}.cs-lab{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}' +
     '.cs-art:first-child{border-top:0}.cs-ck{width:26px;height:26px;accent-color:var(--ok);cursor:pointer;margin:0}' +
     '.cs-nom{font-weight:600}.cs-q{color:var(--ac);font-weight:700;margin-left:6px;display:inline-block;max-width:100%}.cs-fait .cs-nom,.cs-fait .cs-q{text-decoration:line-through;color:var(--mut)}' +
     '.cs-info{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center}.cs-act{display:flex;gap:6px;align-items:center}' +
     '.cs-bar{height:8px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:8px}.cs-bar>i{display:block;height:100%;background:var(--ok);border-radius:4px}' +
     '.cs-add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}' +
     '.cs-fac{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}.cs-fac:first-child{border-top:0}.cs-fac .chips{flex-wrap:nowrap}' +
-    '@media (max-width:700px){.cs-add{grid-template-columns:1fr 1fr}.cs-add .cs-n{grid-column:1/-1}.cs-add .btn{grid-column:1/-1}.cs-act .cs-pr{padding:0 8px}}';
+    '@media (max-width:700px){.cs-add{grid-template-columns:1fr 1fr}.cs-add .cs-n{grid-column:1/-1}.cs-add .btn{grid-column:1/-1}}';
   document.head.appendChild(st);
 }
 function vueCourses(m) {
   csStyle();
-  m.innerHTML = entete('Liste de courses', 'Ce qu\'il faut acheter pour le club. Coche au fur et à mesure : chacun voit qui s\'en charge et ce qui est déjà acheté.', '<button class="btn sm" id="cs-new">+ Nouvelle liste</button>') +
+  m.innerHTML = entete('Liste de courses', 'Ce qu\'il faut acheter pour le club. Dès qu\'un article est acheté, touche-le : il passe dans « Achetés ».', '<button class="btn sm" id="cs-new">+ Nouvelle liste</button>') +
     '<div id="cs-w"><div class="skel"></div></div>';
   $('cs-new').onclick = function () { csListe(null, charger); };
   var L = [], ART = [], FAC = [];
@@ -4702,14 +4702,13 @@ function vueCourses(m) {
       vis.forEach(function (a) { var r = a.rayon || 'Divers'; if (!par[r]) { par[r] = []; groupes.push(r); } par[r].push(a); });
       h += groupes.map(function (r) {
         return '<div class="sect" style="margin-top:6px">' + esc(r) + ' <span class="mut">· ' + par[r].length + '</span></div><div class="card tight" style="margin-bottom:10px">' + par[r].map(function (a) {
-          var moi = a.pris_par === A.user.id, info = [];
+          var info = [];
           if (a.achete) info.push('<span class="badge b-ok">Acheté' + (a.achete_par_nom ? ' par ' + esc(a.achete_par_nom) : '') + (a.achete_le ? ' · ' + esc(new Date(a.achete_le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })) : '') + '</span>');
-          else if (a.pris_par) info.push('<span class="badge b-ac">' + (moi ? 'Je m\'en charge' : 'Pris par ' + esc(a.pris_par_nom || '?')) + '</span>');
           if (a.avant_le && !a.achete) info.push(csAvant(a.avant_le));
           if (a.note) info.push('<span class="xs mut">' + esc(a.note) + '</span>');
-          return '<div class="cs-art' + (a.achete ? ' cs-fait' : '') + '"><input type="checkbox" class="cs-ck" data-csc="' + a.id + '"' + (a.achete ? ' checked' : '') + (li.archivee ? ' disabled' : '') + ' aria-label="' + esc((a.achete ? 'Remettre à acheter : ' : 'Acheté : ') + a.nom) + '">' +
-            '<div><span class="cs-nom">' + esc(a.nom) + '</span>' + (a.quantite ? '<span class="cs-q">' + esc(a.quantite) + '</span>' : '') + (info.length ? '<div class="cs-info">' + info.join('') + '</div>' : '') + '</div>' +
-            '<div class="cs-act">' + (!a.achete && !li.archivee ? '<button class="btn sm ' + (moi ? 'ghost' : 'line') + ' cs-pr" data-csp="' + a.id + '">' + (moi ? 'Je laisse' : 'Je prends') + '</button>' : '') +
+          return '<div class="cs-art' + (a.achete ? ' cs-fait' : '') + '"><label class="cs-lab"><input type="checkbox" class="cs-ck" data-csc="' + a.id + '"' + (a.achete ? ' checked' : '') + (li.archivee ? ' disabled' : '') + ' aria-label="' + esc((a.achete ? 'Remettre à acheter : ' : 'Acheté : ') + a.nom) + '">' +
+            '<div><span class="cs-nom">' + esc(a.nom) + '</span>' + (a.quantite ? '<span class="cs-q">' + esc(a.quantite) + '</span>' : '') + (info.length ? '<div class="cs-info">' + info.join('') + '</div>' : '') + '</div></label>' +
+            '<div class="cs-act">' +
             (li.archivee ? '' : '<button class="btn sm line" data-cse="' + a.id + '" aria-label="Modifier ' + esc(a.nom) + '">✏️</button>') + '</div></div>';
         }).join('') + '</div>';
       }).join('');
@@ -4749,7 +4748,7 @@ function vueCourses(m) {
       if (!r.length) { toast('Tout est déjà acheté'); return; }
       r.forEach(function (a) { var k = a.rayon || 'Divers'; if (!p[k]) { p[k] = []; g.push(k); } p[k].push(a); });
       var t = '🛒 *' + li.titre + '*' + (li.avant_le ? ' (avant le ' + csDate(li.avant_le) + ')' : '') + '\n' + g.map(function (k) {
-        return '\n*' + k + '*\n' + p[k].map(function (a) { return '• ' + a.nom + (a.quantite ? ' : ' + a.quantite : '') + (a.pris_par_nom ? ' (' + a.pris_par_nom + ')' : ''); }).join('\n');
+        return '\n*' + k + '*\n' + p[k].map(function (a) { return '• ' + a.nom + (a.quantite ? ' : ' + a.quantite : ''); }).join('\n');
       }).join('\n') + '\n\nÀ cocher dans l\'appli : Gestion › Services du club › Liste de courses';
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { toast('Liste copiée : colle-la dans WhatsApp'); }).catch(function () { prompt('Copie ce texte :', t); });
     };
@@ -4757,12 +4756,6 @@ function vueCourses(m) {
       c.onchange = function () {
         var a = arts.filter(function (x) { return x.id === c.dataset.csc; })[0];
         q(sb.from('courses_articles').update({ achete: c.checked }).eq('id', a.id)).then(function () { toast(c.checked ? a.nom + ' : acheté' : a.nom + ' : à acheter'); charger(); }).catch(function (e) { c.checked = !c.checked; err('Action impossible')(e); });
-      };
-    });
-    all('[data-csp]').forEach(function (b) {
-      b.onclick = function () {
-        var a = arts.filter(function (x) { return x.id === b.dataset.csp; })[0], moi = a.pris_par === A.user.id;
-        q(sb.from('courses_articles').update({ pris_par: moi ? null : A.user.id }).eq('id', a.id)).then(function () { toast(moi ? 'Tu laisses ' + a.nom : 'Tu t\'en charges : ' + a.nom); charger(); }).catch(err('Action impossible'));
       };
     });
     all('[data-cse]').forEach(function (b) { b.onclick = function () { csArticle(arts.filter(function (x) { return x.id === b.dataset.cse; })[0], charger); }; });
