@@ -31,6 +31,7 @@ create or replace function public.jeu_insc_suivi(p_code text)
         'fmt', y->'etat'->'fmt', 'statut', y->'etat'->'statut', 'pts', y->'etat'->'pts', 'vic', y->'etat'->'vic', 'gagnant', y->'etat'->'gagnant', 'gagnants', y->'etat'->'gagnants') end))
       from jsonb_array_elements(j.manches) y), '[]'::jsonb),
     'winners', coalesce(j.tombola->'winners', '[]'::jsonb),
+    'tirage', j.tombola->'tirage',
     'lots', case when (j.lots->>'afficher')::boolean then j.lots else jsonb_build_object('afficher', false) end)
   from public.jeux j
   where j.code_insc = upper(btrim(p_code)) and length(btrim(p_code)) >= 6 and not j.archive
