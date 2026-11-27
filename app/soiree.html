@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no, email=no, address=no, date=no">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0B3547">
+<title>Je m'enregistre · CLOCA Tennis</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Enregistrement à la soirée par QR code : sans compte, sur téléphone, en 10 secondes. */
+:root{--bg:#f5f2ec;--card:#fff;--bd:#e7e1d7;--tx:#12304a;--mut:#5d6b78;--navy:#0B3547;--balle:#DDF901;--ac:#b4532a;--ok:#1f6f4a;--ko:#9b2c24;--soft:#f1ece3;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--disp:'Barlow Condensed','Arial Narrow',sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1923;--card:#16252f;--bd:#26394a;--tx:#eef3f7;--mut:#a3b3c0;--soft:#1d2d39;--ac:#d06a3c;--ok:#2f9a68;--ko:#d0553f;color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 var(--font);-webkit-text-size-adjust:100%}
+.haut{background:var(--navy);color:#fff;padding:calc(22px + env(safe-area-inset-top,0px)) 20px 26px}
+.haut img{width:56px;height:56px;border-radius:14px;background:#fff;display:block;margin-bottom:12px}
+.haut h1{font-family:var(--disp);font-weight:800;font-size:34px;line-height:1.02;margin:0;text-transform:uppercase}
+.haut p{margin:6px 0 0;color:#c9d6df}
+main{max-width:520px;margin:0 auto;padding:18px 16px calc(40px + env(safe-area-inset-bottom,0px))}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:12px}
+.pers{display:grid;gap:10px}
+.pers .t{display:flex;justify-content:space-between;align-items:center;font-weight:700}
+label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:4px}
+input[type=text]{width:100%;font:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);min-height:48px}
+input:focus-visible,button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chk{display:flex;gap:10px;align-items:center;font-size:15px;min-height:44px}
+.chk input{width:22px;height:22px;accent-color:var(--ac)}
+button{font:inherit;cursor:pointer;border-radius:12px;min-height:48px;padding:0 16px;font-weight:700}
+.go{width:100%;background:var(--ac);color:#fff;border:0;font-size:18px;min-height:56px}
+.go:disabled{opacity:.6}
+.add{width:100%;background:transparent;border:2px dashed var(--bd);color:var(--tx)}
+.del{background:transparent;border:0;color:var(--ko);min-height:40px;padding:0 8px;font-weight:600}
+.msg{color:var(--ko);font-weight:600;margin:8px 0}
+.ok h2{font-family:var(--disp);font-weight:800;font-size:30px;margin:0 0 6px;text-transform:uppercase}
+.ok ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}
+.ok li{display:flex;justify-content:space-between;gap:10px;background:var(--soft);border-radius:12px;padding:10px 12px;font-weight:600}
+.ok li span{color:var(--mut);font-weight:500;font-size:14px;text-align:right}
+.tk{display:inline-block;background:var(--balle);color:#1b2208;border-radius:999px;padding:2px 10px;font-weight:700;font-size:14px}
+.mut{color:var(--mut)}.small{font-size:14px}
+</style>
+</head>
+<body>
+<header class="haut"><img src="logo.png" alt="CLOCA Tennis"><h1 id="titre">Soirée du club</h1><p id="sous">Chargement…</p></header>
+<main>
+  <section id="ferme" class="card" hidden><b id="fermeT"></b><p class="mut small" id="fermeP"></p></section>
+  <form id="form" hidden novalidate>
+    <p class="small mut" style="margin-top:0">Enregistre-toi pour jouer au pickleball, au touch tennis et au One Point Slam. Chaque personne enregistrée gagne <span class="tk">1 ticket</span> pour la tombola gratuite.</p>
+    <div id="liste"></div>
+    <button type="button" class="add" id="plus">+ Ajouter une personne (famille, invité…)</button>
+    <p class="msg" id="msg" role="alert"></p>
+    <button class="go" id="go">M'enregistrer</button>
+    <p class="mut small">Adhérent du club : prénom et nom comme sur ta licence, on te retrouve tout seul. Invité : ton nom sert seulement pour les jeux et la tombola de la soirée.</p>
+  </form>
+  <section id="fini" class="card ok" hidden>
+    <h2>C'est fait !</h2>
+    <p class="mut small" style="margin:0">Regarde l'écran : ton nom peut sortir au prochain tirage.</p>
+    <ul id="res"></ul>
+    <button type="button" class="add" id="encore">Enregistrer d'autres personnes</button>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+'use strict';
+var sb = window.supabase.createClient('https://ccvfdsriogqerdcopuuv.supabase.co', 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM', { auth: { persistSession: false } });
+var code = (new URLSearchParams(location.search).get('c') || '').trim();
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+var n = 0;
+function ferme(t, p) { $('form').hidden = true; $('ferme').hidden = false; $('fermeT').textContent = t; $('fermeP').textContent = p || ''; }
+function personne(premiere) {
+  n++;
+  var d = document.createElement('div'); d.className = 'card pers'; d.dataset.p = n;
+  d.innerHTML = '<div class="t"><span>' + (premiere ? 'Toi' : 'Personne ' + $('liste').children.length + 1) + '</span>' + (premiere ? '' : '<button type="button" class="del">Retirer</button>') + '</div>' +
+    '<div class="row"><div><label for="pr' + n + '">Prénom</label><input type="text" id="pr' + n + '" autocomplete="' + (premiere ? 'given-name' : 'off') + '" maxlength="30" autocapitalize="words" required></div>' +
+    '<div><label for="no' + n + '">Nom</label><input type="text" id="no' + n + '" autocomplete="' + (premiere ? 'family-name' : 'off') + '" maxlength="40" autocapitalize="words"></div></div>' +
+    '<label class="chk"><input type="checkbox" checked> Je participe au One Point Slam</label>';
+  $('liste').appendChild(d);
+  var del = d.querySelector('.del'); if (del) del.onclick = function () { d.remove(); renum(); };
+  renum();
+  if (!premiere) d.querySelector('input').focus();
+}
+function renum() { var n = $('liste').children.length; Array.prototype.forEach.call($('liste').children, function (c, i) { c.querySelector('.t span').textContent = i === 0 ? 'Toi' : 'Personne ' + (i + 1); }); $('plus').hidden = n >= 10; $('go').textContent = n > 1 ? 'Enregistrer les ' + n + ' personnes' : 'M\'enregistrer'; }
+function lire() {
+  return Array.prototype.map.call($('liste').children, function (c) { var i = c.querySelectorAll('input'); return { prenom: i[0].value.trim(), nom: i[1].value.trim(), ops: i[2].checked }; }).filter(function (p) { return p.prenom; });
+}
+$('plus').onclick = function () { personne(false); };
+$('encore').onclick = function () { $('fini').hidden = true; $('form').hidden = false; $('liste').innerHTML = ''; personne(true); };
+$('form').onsubmit = function (e) {
+  e.preventDefault();
+  var l = lire(); $('msg').textContent = '';
+  if (!l.length) { $('msg').textContent = 'Indique au moins un prénom.'; return; }
+  if (l.some(function (p) { return !p.nom; })) { $('msg').textContent = 'Ajoute aussi le nom de chaque personne, pour qu\'on la retrouve dans le club.'; return; }
+  $('go').disabled = true; $('go').textContent = 'Enregistrement…';
+  sb.rpc('jeu_insc_public', { p_code: code, p_personnes: l }).then(function (r) {
+    $('go').disabled = false; renum();
+    if (r.error) { $('msg').textContent = (r.error.message || 'Enregistrement impossible') + '. Réessaie ou préviens un organisateur.'; return; }
+    $('res').innerHTML = (r.data || []).map(function (x) { return '<li>' + esc(x.nom) + '<span>' + (x.deja ? 'déjà enregistré' : '<span class="tk">+1 ticket</span>') + '</span></li>'; }).join('');
+    $('form').hidden = true; $('fini').hidden = false; window.scrollTo(0, 0);
+  }).catch(function () { $('go').disabled = false; renum(); $('msg').textContent = 'Pas de connexion : réessaie dans un instant.'; });
+};
+if (!code) { $('sous').textContent = ''; ferme('Lien incomplet', 'Scanne le QR code affiché à l\'entrée ou sur l\'écran du club.'); return; }
+sb.rpc('jeu_insc_infos', { p_code: code }).then(function (r) {
+  var D = r.data;
+  if (r.error || !D) { $('sous').textContent = ''; ferme('Ce QR code ne correspond à aucune soirée', 'Vérifie que tu as scanné le bon QR code.'); return; }
+  $('titre').textContent = D.titre;
+  $('sous').textContent = [D.jour ? new Date(D.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '', D.lieu || ''].filter(Boolean).join(' · ');
+  if (!D.ouvert) { ferme('L\'enregistrement n\'est pas ouvert', 'Il s\'ouvre le jour de la soirée. À tout à l\'heure sur les terrains !'); return; }
+  $('form').hidden = false; personne(true);
+}).catch(function () { ferme('Pas de connexion', 'Vérifie ta connexion internet puis recharge la page.'); });
+})();
+</script>
+</body>
+</html>

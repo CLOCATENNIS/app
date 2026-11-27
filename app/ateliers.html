@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Ateliers et tombola · CLOCA Tennis</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Écran des ateliers de la soirée : pickleball à gauche (bleu court dur), touch tennis à droite (terre battue), tombola en pied.
+   Les joueurs touchent l'écran eux-mêmes : gros boutons, lisible de loin. Toujours sombre. */
+:root{color-scheme:dark;--bg:#0d1117;--ink:#f4f6f8;--mute:#b9c2cc;--ball:#e4f24a;--blue:#14427a;--clay:#8a3519;--card:rgba(255,255,255,.09);--line:rgba(255,255,255,.18);
+  --disp:"Barlow Condensed","Arial Narrow",sans-serif;--font:Barlow,system-ui,sans-serif}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--font);overflow-x:clip;min-height:100vh;display:flex;flex-direction:column}
+h1,h2{font-family:var(--disp);line-height:1.05;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:0 16px;cursor:pointer;font-weight:600}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--ball);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px max(2vw,14px)}
+.top h1{font-size:28px;font-weight:700}.top h1 span{color:var(--ball)}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.etat{font-size:13px;color:var(--mute)}.etat.ko{color:#ff9a7a;font-weight:600}
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.half{padding:clamp(14px,1.8vw,28px);display:flex;flex-direction:column;gap:14px}
+.pick{background:linear-gradient(160deg,#1a4f8f,var(--blue) 60%)}
+.touch{background:linear-gradient(160deg,#a2421f,var(--clay) 60%)}
+.hh{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.hh h2{font-size:clamp(34px,3.4vw,52px);font-weight:800}
+.fmt{color:var(--mute);font-size:17px}
+.draw{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:14px}
+.teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center}
+.team{display:grid;gap:8px}
+.vs{font-family:var(--disp);font-weight:800;font-size:30px;color:var(--ball)}
+.slot{min-height:58px;border-radius:12px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px 6px 14px;font-family:var(--disp);font-weight:700;font-size:clamp(22px,2vw,30px)}
+.slot.on{border-style:solid;border-color:var(--ball);background:rgba(228,242,74,.12)}
+.slot.spin{border-style:solid;color:var(--ball)}
+.slot .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot .vide{color:var(--mute);font-size:18px}
+.slot button{min-height:40px;min-width:40px;padding:0 10px;font-family:var(--font);font-size:14px}
+.go{display:flex;gap:10px;flex-wrap:wrap}
+.btn-draw{flex:1 1 220px;min-height:64px;font-family:var(--disp);font-size:28px;font-weight:800;background:var(--ball);color:#1b1f0a;border:0}
+.btn-go{flex:1 1 200px;min-height:64px;font-family:var(--disp);font-size:24px;font-weight:700;background:#fff;color:#111;border:0}
+.me{display:flex;gap:8px;flex-wrap:wrap}
+.me input,.f{flex:1 1 200px;min-height:48px;font-size:18px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);padding:0 14px}
+.me button{min-height:48px}
+.msg{min-height:22px;color:var(--ball);font-weight:600}
+.courts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px}
+.court{border-radius:16px;background:var(--card);border:1px solid var(--line);padding:14px;display:grid;gap:10px;align-content:start}
+.court.free{border-style:dashed;background:transparent}
+.ct{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:var(--mute)}
+.ct b{font-family:var(--disp);font-size:24px;color:var(--ink)}
+.clock{font-variant-numeric:tabular-nums;white-space:nowrap}
+.line{font-family:var(--disp);font-weight:700;font-size:22px;line-height:1.15}
+.line small{display:block;color:var(--ball);font-size:15px;font-family:var(--font);font-weight:600}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:8px}.res button{font-size:14px;line-height:1.2;padding:6px 10px}
+.res .x{grid-column:1/-1;background:transparent;border-color:transparent;color:var(--mute);min-height:36px}
+.pied{padding:10px max(2vw,14px);display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line)}
+.pied h2{font-size:22px;font-weight:700}
+.pied p{margin:0;color:var(--mute);font-size:14px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;flex:1;cursor:pointer}
+.chip{padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap;font-weight:600}
+.chip b{color:var(--ball);margin-left:6px;font-variant-numeric:tabular-nums}
+.qr{display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 12px}
+.qr .q{background:#fff;padding:5px;border-radius:8px;line-height:0}
+.qr .q img,.qr .q canvas{width:72px!important;height:72px!important}
+.qr span{font-weight:700;max-width:13ch;line-height:1.2}
+dialog{background:#171d25;color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:22px;width:min(640px,94vw);max-height:90vh}
+dialog::backdrop{background:rgba(0,0,0,.65)}
+dialog h2{font-size:32px;margin-bottom:12px}
+dialog.wide{width:min(1000px,96vw)}
+dialog.full{width:96vw;max-width:1600px;height:92vh;max-height:92vh}
+.close{float:right}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.row select,.row input{flex:1 1 200px;min-height:44px;font-size:16px;border-radius:10px;border:1px solid var(--line);background:#0d1117;padding:0 12px}
+label{display:block;font-weight:600;margin:10px 0 6px}
+.hint{color:var(--mute);font-size:14px;margin:4px 0}
+.list{display:grid;gap:6px;margin-top:12px}
+.pl{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:10px;background:var(--card)}
+.pl .n{flex:1;font-weight:600}.pl .s{color:var(--mute);font-size:14px;white-space:nowrap}
+.pl.paused .n{color:var(--mute);text-decoration:line-through}
+.pl button{min-height:38px;font-size:14px;padding:0 10px}
+.win{font-family:var(--disp);font-weight:800;font-size:clamp(44px,8vw,80px);color:var(--ball);text-align:center;padding:12px 0;min-height:1.4em}
+.tnum{text-align:center;font-family:var(--disp);font-weight:700;font-size:clamp(24px,3vw,36px);color:var(--mute);font-variant-numeric:tabular-nums;min-height:1.2em}
+summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto}
+.tks{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:14px;margin-top:14px}
+.tk{display:grid;grid-template-columns:minmax(0,1fr) auto;border-radius:14px;background:#f4f1e6;color:#1b1d22;overflow:hidden;position:relative}
+.tk .main{padding:12px 14px;display:grid;gap:4px}
+.tk .who{font-family:var(--disp);font-weight:700;font-size:26px;line-height:1.05;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk .det{font-size:13px;color:#4a4f57}
+.tk .num{font-size:13px;font-weight:600;color:#1d4f8f;white-space:nowrap}
+.tk .stub{border-left:2px dashed #b9b4a3;padding:10px 14px;display:grid;place-items:center;align-content:center;background:var(--ball);min-width:84px}
+.tk .stub b{font-family:var(--disp);font-weight:800;font-size:42px;line-height:1}
+.tk .stub span{font-size:12px;font-weight:600}
+.tk::before,.tk::after{content:"";position:absolute;right:76px;width:16px;height:16px;border-radius:50%;background:#171d25}
+.tk::before{top:-8px}.tk::after{bottom:-8px}
+.tk.won{opacity:.55}.tk.won .stub{background:#c9c4b3}
+.tk .tag{font-size:12px;font-weight:700;color:#8a3519}
+.bigqr{display:grid;place-items:center;gap:14px;text-align:center}
+.bigqr .q{background:#fff;padding:16px;border-radius:16px;line-height:0}
+.bigqr .q img,.bigqr .q canvas{width:min(60vh,420px)!important;height:auto!important}
+.bigqr p{font-size:22px;margin:0}
+.relier{flex:1;display:grid;place-items:center;padding:24px}
+.relier .boite{width:min(520px,100%);background:#171d25;border:1px solid var(--line);border-radius:20px;padding:28px;display:grid;gap:14px}
+.relier h2{font-size:40px}
+.relier input{font-family:var(--disp);font-size:40px;letter-spacing:.3em;text-align:center;text-transform:uppercase;min-height:72px}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:520px){.teams{grid-template-columns:minmax(0,1fr)}.vs{text-align:center}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 id="titre">Soirée du club <span>· CLOCA Tennis</span></h1>
+  <div class="acts" id="acts" hidden>
+    <span class="etat" id="etat"></span>
+    <button id="bPlayers">Joueurs</button>
+    <button id="bTickets">Tickets</button>
+    <button id="bFinal">Tirage tombola</button>
+    <button id="bSettings">Réglages</button>
+  </div>
+</header>
+
+<section class="relier" id="relier" hidden>
+  <form class="boite" id="fRelier">
+    <h2>Relier cet écran</h2>
+    <p class="hint">Dans la gestion de l'appli (Animations › Jeux › ta soirée), touche « Code pour l'écran des ateliers » et tape le code ici. Il est valable 15 minutes ; ensuite l'écran reste relié.</p>
+    <input class="f" id="iCode" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code à 6 caractères">
+    <button class="btn-draw" id="bRelier">Relier</button>
+    <p class="msg" id="relMsg" role="alert"></p>
+  </form>
+</section>
+
+<main id="ecran" hidden>
+  <section class="half pick" id="pick"></section>
+  <section class="half touch" id="touch"></section>
+</main>
+<footer class="pied" id="pied" hidden>
+  <div class="qr" id="qrBox" hidden title="Agrandir le QR code"><span class="q" id="qrMini"></span><span>Enregistre-toi : 1 ticket offert</span></div>
+  <div><h2>Tombola gratuite · tickets</h2><p>Présence 1 · pickle / touch : match joué 1, victoire +1 · One Point Slam : point gagné 1, manche gagnée 5</p></div>
+  <div class="chips" id="chips" title="Voir tous les tickets"></div>
+</footer>
+
+<dialog id="dPlayers">
+  <button class="close" data-close>Fermer</button>
+  <h2>Joueurs de la soirée</h2>
+  <p class="hint">Les joueurs s'enregistrent avec le QR code. Pour ajouter quelqu'un à la main, tape son prénom et son nom.</p>
+  <form class="row" id="fAdd"><input id="iPr" placeholder="Prénom" autocomplete="off" aria-label="Prénom"><input id="iNo" placeholder="Nom" autocomplete="off" aria-label="Nom"><button>Ajouter</button></form>
+  <p class="hint">« Pause » : le joueur n'est plus tiré au sort aux ateliers (il fait le One Point Slam, prend un verre…). Il garde ses tickets.</p>
+  <p class="hint" id="nPresent"></p>
+  <div class="list" id="list"></div>
+</dialog>
+
+<dialog id="dSettings">
+  <button class="close" data-close>Fermer</button>
+  <h2>Réglages</h2>
+  <label for="sPc">Terrains de pickleball</label>
+  <div class="row"><select id="sPc"><option>1</option><option>2</option></select></div>
+  <label for="sPf">Format pickleball</label>
+  <div class="row"><input id="sPf" maxlength="70"></div>
+  <label for="sTc">Terrains de touch tennis</label>
+  <div class="row"><select id="sTc"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+  <label for="sTf">Format touch tennis</label>
+  <div class="row"><input id="sTf" maxlength="70"></div>
+  <div class="row" style="margin-top:18px"><button id="bUndo">Annuler le dernier résultat</button><button id="bReset">Remettre les ateliers à zéro</button><button id="bOublier">Délier cet écran</button></div>
+  <p class="hint" id="setMsg"></p>
+</dialog>
+
+<dialog id="dTickets" class="full">
+  <button class="close" data-close>Fermer</button>
+  <h2>Tickets de la tombola</h2>
+  <p class="hint" id="tkSum"></p>
+  <div class="tks" id="tks"></div>
+</dialog>
+
+<dialog id="dFinal" class="wide">
+  <button class="close" data-close>Fermer</button>
+  <h2>Tirage de la tombola</h2>
+  <p class="hint">Chaque ticket a un numéro. L'ordinateur tire un numéro au hasard (générateur aléatoire sécurisé du navigateur) : plus tu as de tickets, plus tu as de chances. Un gagnant n'est tiré qu'une fois.</p>
+  <div class="tnum" id="tnum"></div>
+  <div class="win" id="win" aria-live="polite"></div>
+  <div class="row"><button class="btn-draw" id="bWin">Tirer un ticket</button></div>
+  <p class="hint" id="winners"></p>
+  <details><summary>Voir les tickets de chacun</summary><div class="scroll"><table id="tTab"></table></div></details>
+</dialog>
+
+<dialog id="dQr" class="wide">
+  <button class="close" data-close>Fermer</button>
+  <div class="bigqr"><h2>Enregistre-toi</h2><span class="q" id="qrBig"></span><p>Scanne avec l'appareil photo de ton téléphone.<br>Chaque personne enregistrée gagne 1 ticket de tombola.</p><p class="hint" id="qrUrl"></p></div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function () {
+'use strict';
+var sb = window.supabase.createClient('https://ccvfdsriogqerdcopuuv.supabase.co', 'sb_publishable_01H1gmGMH3t4XLqD1EeTeg_ErdW1VvM', { auth: { persistSession: false } });
+var KEY = 'cloca-ateliers-cle';
+var ACT = { pick: { name: 'Pickleball', size: 4, label: 'Pickle' }, touch: { name: 'Touch tennis', size: 2, label: 'Touch' } };
+var DEF = function () { return { cfg: { pick: { courts: 2, fmt: 'Double tiré au sort · super tie-break en 10 points' }, touch: { courts: 3, fmt: 'Simple · super tie-break en 10 points' } }, act: { pick: { draft: [], courts: {} }, touch: { draft: [], courts: {} } }, hist: [], pause: [] }; };
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+var cle = '', D = null, A = DEF(), T = { winners: [] }, envoi = null, enAttente = false, dernierA = '', dernierT = '', dernierBrut = '';
+var msgs = { pick: '', touch: '' }, spinning = { pick: false, touch: false }, meVal = { pick: '', touch: '' };
+try { cle = new URLSearchParams(location.search).get('p') || localStorage.getItem(KEY) || ''; } catch (e) {}
+
+// ----- Hasard : générateur sécurisé du navigateur, sans biais -----
+function rnd(n) {
+  if (window.crypto && crypto.getRandomValues) { var lim = Math.floor(4294967296 / n) * n, a = new Uint32Array(1); do { crypto.getRandomValues(a); } while (a[0] >= lim); return a[0] % n; }
+  return Math.floor(Math.random() * n);
+}
+// ----- Données -----
+function J() { return (D && D.joueurs) || []; }
+function P(k) { return J().filter(function (p) { return p.k === k; })[0]; }
+function nm(k) { var p = P(k); return p ? p.nom : '?'; }
+function normaliser(a) {
+  var d = DEF(); a = a && typeof a === 'object' ? a : {};
+  a.cfg = a.cfg || d.cfg; ['pick', 'touch'].forEach(function (k) { a.cfg[k] = Object.assign({}, d.cfg[k], a.cfg[k] || {}); });
+  a.act = a.act || d.act; ['pick', 'touch'].forEach(function (k) { a.act[k] = a.act[k] || { draft: [], courts: {} }; a.act[k].draft = a.act[k].draft || []; a.act[k].courts = a.act[k].courts || {}; });
+  a.hist = a.hist || []; a.pause = a.pause || []; return a;
+}
+// Statistiques d'un joueur : ateliers (matchs, victoires) + One Point Slam (points gagnés, manches gagnées)
+function stats(k) {
+  var s = { played: 0, wins: 0, osp: 0 };
+  A.hist.forEach(function (h) { if (h.players.indexOf(k) >= 0) { s.played++; if (h.win.indexOf(k) >= 0) s.wins++; } });
+  ((D && D.manches) || []).forEach(function (m) {
+    var e = m && m.etat; if (!e) return;
+    if (e.pts && e.pts[k]) s.osp += e.pts[k];
+    if (e.fmt === 'montante' && e.vic && e.vic[k]) s.osp += e.vic[k];
+    if (e.statut === 'finie' && (e.gagnant === k || (e.gagnants && e.gagnants.indexOf(k) >= 0))) s.osp += 5;
+  });
+  return s;
+}
+function tickets(k) { var s = stats(k); return 1 + s.played + s.wins + s.osp; }
+function ticketRanges() {
+  var start = 1;
+  return J().filter(function (p) { return T.winners.indexOf(p.k) < 0; }).slice().sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); })
+    .map(function (p) { var t = tickets(p.k), r = { p: p, from: start, to: start + t - 1, t: t }; start += t; return r; });
+}
+function busy(k) {
+  for (var a in A.act) { var x = A.act[a]; if (x.draft.indexOf(k) >= 0) return true; for (var c in x.courts) if (x.courts[c].players.indexOf(k) >= 0) return true; }
+  return false;
+}
+function freeCourt(a) { for (var i = 1; i <= A.cfg[a].courts; i++) if (!A.act[a].courts[i]) return i; return 0; }
+function candidates() { return J().filter(function (p) { return A.pause.indexOf(p.k) < 0 && !busy(p.k); }); }
+function played(k) { return stats(k).played; }
+
+// ----- Enregistrement dans la base (l'écran est la seule source pour les ateliers et la tombola) -----
+function sauver(tombola) {
+  enAttente = true; clearTimeout(envoi);
+  envoi = setTimeout(function () {
+    var a = JSON.stringify(A), t = JSON.stringify(T);
+    sb.rpc('jeu_atelier_maj', { p_cle: cle, p_ateliers: A, p_tombola: tombola || t !== dernierT ? T : null }).then(function (r) {
+      if (r.error) { etat('Pas enregistré : ' + r.error.message, true); return; }
+      dernierA = a; dernierT = t; enAttente = false; etat('Enregistré');
+    }).catch(function () { etat('Connexion perdue : nouvel essai…', true); setTimeout(function () { sauver(tombola); }, 3000); });
+  }, 250);
+}
+function etat(t, ko) { var e = $('etat'); e.textContent = t; e.className = 'etat' + (ko ? ' ko' : ''); }
+function charger(premier) {
+  if (!cle) return;
+  sb.rpc('jeu_atelier', { p_cle: cle }).then(function (r) {
+    if (r.error || !r.data) { if (premier || !D) { oublier(); $('relMsg').textContent = 'Cet écran n\'est plus relié à une soirée (lien changé ou soirée archivée).'; } return; }
+    var brut = JSON.stringify(r.data);
+    if (!premier && brut === dernierBrut) { if (!enAttente) etat('À jour · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })); return; }
+    dernierBrut = brut; D = r.data;
+    var ra = JSON.stringify(D.ateliers || {}), rt = JSON.stringify(D.tombola || {});
+    // On reprend l'état de la base au démarrage, ou si un autre écran l'a changé (et qu'on n'a rien en cours d'envoi)
+    if (premier || (!enAttente && ra !== dernierA)) { A = normaliser(JSON.parse(ra)); dernierA = JSON.stringify(A); }
+    if (premier || (!enAttente && rt !== dernierT)) { T = Object.assign({ winners: [] }, JSON.parse(rt)); T.winners = T.winners || []; dernierT = JSON.stringify(T); }
+    if (premier) { afficher(); qr(); }
+    if (!spinning.pick && !spinning.touch) render();
+    if (!enAttente) etat('À jour · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+  }).catch(function () { etat('Connexion perdue : nouvel essai…', true); });
+}
+function afficher() { $('relier').hidden = true; $('ecran').hidden = false; $('pied').hidden = false; $('acts').hidden = false; }
+function oublier() { try { localStorage.removeItem(KEY); } catch (e) {} cle = ''; D = null; $('relier').hidden = false; $('ecran').hidden = true; $('pied').hidden = true; $('acts').hidden = true; setTimeout(function () { $('iCode').focus(); }, 50); }
+function lienInsc() { return D && D.code_insc ? new URL('soiree.html?c=' + encodeURIComponent(D.code_insc), location.href).href : ''; }
+function qr() {
+  var u = lienInsc(); if (!u || !window.QRCode) return;
+  try {
+    $('qrMini').innerHTML = ''; $('qrBig').innerHTML = '';
+    new QRCode($('qrMini'), { text: u, width: 168, height: 168, correctLevel: QRCode.CorrectLevel.M });
+    new QRCode($('qrBig'), { text: u, width: 420, height: 420, correctLevel: QRCode.CorrectLevel.M });
+    $('qrBox').hidden = false; $('qrUrl').textContent = u.replace(/^https?:\/\//, '');
+  } catch (e) {}
+}
+
+// ----- Ateliers -----
+function draw(a) {
+  var x = A.act[a]; if (spinning[a] || x.draft.length >= ACT[a].size) return;
+  var c = candidates();
+  if (!c.length) { msgs[a] = 'Plus personne de disponible pour l’instant.'; render(); return; }
+  var min = Math.min.apply(null, c.map(function (p) { return played(p.k); }));
+  var pool = c.filter(function (p) { return played(p.k) === min; }), pick = pool[rnd(pool.length)];
+  msgs[a] = '';
+  var fin = function () { spinning[a] = false; if (!busy(pick.k)) x.draft.push(pick.k); sauver(); render(); };
+  if (reduce) return fin();
+  spinning[a] = true; render();
+  var el = document.querySelector('#' + a + ' .slot.spin .nm'), n = 0;
+  var t = setInterval(function () { if (el) el.textContent = c[n++ % c.length].nom; }, 70);
+  setTimeout(function () { clearInterval(t); fin(); }, 900);
+}
+function placeMe(a, raw) {
+  var x = A.act[a], v = String(raw || '').trim();
+  if (!v || x.draft.length >= ACT[a].size || spinning[a]) return;
+  var p = J().filter(function (q) { return q.nom.toLowerCase() === v.toLowerCase(); })[0];
+  var poser = function (p) {
+    if (busy(p.k)) { msgs[a] = p.nom + ' est déjà en jeu ou déjà tiré.'; render(); return; }
+    A.pause = A.pause.filter(function (k) { return k !== p.k; });
+    x.draft.push(p.k); meVal[a] = '';
+    msgs[a] = x.draft.length < ACT[a].size ? p.nom + ' est placé, tire les autres joueurs.' : ''; sauver(); render();
+  };
+  if (p) return poser(p);
+  // Nom pas encore enregistré : on l'ajoute à la soirée (relié à sa fiche si c'est un adhérent)
+  var mots = v.split(/\s+/), pr = mots.shift(), no = mots.join(' ');
+  msgs[a] = 'Enregistrement de ' + v + '…'; render();
+  sb.rpc('jeu_atelier_joueur', { p_cle: cle, p_prenom: pr, p_nom: no }).then(function (r) {
+    if (r.error) { msgs[a] = 'Impossible d’ajouter ' + v + ' : ' + r.error.message; render(); return; }
+    var nv = { k: r.data.k, nom: r.data.nom }; if (!P(nv.k)) D.joueurs.push(nv); poser(P(nv.k));
+  }).catch(function () { msgs[a] = 'Pas de connexion : réessaie.'; render(); });
+}
+function cancel(a, k) { A.act[a].draft = A.act[a].draft.filter(function (x) { return x !== k; }); sauver(); render(); }
+function launch(a) {
+  var x = A.act[a], c = freeCourt(a); if (x.draft.length < ACT[a].size || !c) return;
+  x.courts[c] = { players: x.draft.slice(), start: Date.now() }; x.draft = []; sauver(); render();
+}
+function result(a, c, w) {
+  var m = A.act[a].courts[c]; if (!m) return;
+  var half = m.players.length / 2, win = w === 0 ? m.players.slice(0, half) : m.players.slice(half);
+  A.hist.push({ k: a, c: +c, players: m.players, win: win, at: Date.now() });
+  msgs[a] = ACT[a].label + ' ' + c + ' terminé : +2 tickets pour ' + win.map(nm).join(' / ') + ', +1 pour ' + m.players.filter(function (k) { return win.indexOf(k) < 0; }).map(nm).join(' / ');
+  delete A.act[a].courts[c]; sauver(); render();
+}
+function abort(a, c) { delete A.act[a].courts[c]; sauver(); render(); }
+
+// ----- Affichage -----
+function team(ids, n, a) {
+  var h = '';
+  for (var i = 0; i < n; i++) {
+    var k = ids[i];
+    if (k) h += '<div class="slot on"><span class="nm">' + esc(nm(k)) + '</span><button data-cancel="' + a + ':' + esc(k) + '" aria-label="Annuler ' + esc(nm(k)) + '">Annuler</button></div>';
+    else if (i === ids.length && spinning[a]) h += '<div class="slot spin"><span class="nm">…</span></div>';
+    else h += '<div class="slot"><span class="nm vide">À tirer</span></div>';
+  }
+  return '<div class="team">' + h + '</div>';
+}
+function half(a) {
+  var x = A.act[a], cfg = A.cfg[a], sz = ACT[a].size, hs = sz / 2, full = x.draft.length >= sz, fc = freeCourt(a);
+  var goTxt = !full ? 'Lancer le match' : fc ? 'Lancer sur ' + ACT[a].label + ' ' + fc : 'Terrains occupés', courts = '';
+  for (var i = 1; i <= cfg.courts; i++) {
+    var m = x.courts[i];
+    if (!m) { courts += '<div class="court free"><div class="ct"><b>' + ACT[a].label + ' ' + i + '</b><span>Libre</span></div></div>'; continue; }
+    var h = m.players.length / 2, tA = m.players.slice(0, h).map(nm).join(' / '), tB = m.players.slice(h).map(nm).join(' / ');
+    courts += '<div class="court"><div class="ct"><b>' + ACT[a].label + ' ' + i + '</b><span class="clock" data-start="' + m.start + '"></span></div>' +
+      '<div class="line">' + esc(tA) + '<small>contre</small>' + esc(tB) + '</div>' +
+      '<div class="res"><button data-res="' + a + ':' + i + ':0">Victoire ' + esc(tA) + '</button><button data-res="' + a + ':' + i + ':1">Victoire ' + esc(tB) + '</button><button class="x" data-abort="' + a + ':' + i + '">Annuler le match</button></div></div>';
+  }
+  var dispo = candidates().map(function (p) { return '<option value="' + esc(p.nom) + '">'; }).join('');
+  return '<div class="hh"><h2>' + ACT[a].name + '</h2><span class="fmt">' + esc(cfg.fmt) + '</span></div>' +
+    '<div class="draw"><div class="teams">' + team(x.draft.slice(0, hs), hs, a) + '<div class="vs">VS</div>' + team(x.draft.slice(hs), hs, a) + '</div>' +
+    '<div class="go"><button class="btn-draw" data-draw="' + a + '"' + (full || spinning[a] ? ' disabled' : '') + '>Je tire un joueur</button><button class="btn-go" data-go="' + a + '"' + (!full || !fc ? ' disabled' : '') + '>' + goTxt + '</button></div>' +
+    (!full && !spinning[a] ? '<form class="me" data-me="' + a + '"><input id="me-' + a + '" list="dl-' + a + '" placeholder="Ton prénom pour te placer" autocomplete="off" aria-label="Ton prénom" value="' + esc(meVal[a]) + '"><datalist id="dl-' + a + '">' + dispo + '</datalist><button>Je me place</button></form>' : '') +
+    '<div class="msg" aria-live="polite">' + esc(msgs[a]) + '</div></div><div class="courts">' + courts + '</div>';
+}
+function detail(k) {
+  var s = stats(k);
+  return ['Présence 1', s.played ? s.played + ' match' + (s.played > 1 ? 's' : '') : '', s.wins ? s.wins + ' victoire' + (s.wins > 1 ? 's' : '') : '', s.osp ? 'One Point Slam ' + s.osp : ''].filter(Boolean).join(' · ');
+}
+function render() {
+  if (!D) return;
+  var foc = document.activeElement && document.activeElement.id;
+  $('titre').innerHTML = esc(D.titre) + ' <span>· ateliers</span>';
+  $('pick').innerHTML = half('pick'); $('touch').innerHTML = half('touch');
+  if (foc && /^me-/.test(foc) && $(foc)) { var el = $(foc); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  var all = J().slice().sort(function (a, b) { return tickets(b.k) - tickets(a.k) || a.nom.localeCompare(b.nom, 'fr'); });
+  $('chips').innerHTML = all.length ? all.slice(0, 24).map(function (p) { return '<span class="chip">' + esc(p.nom) + '<b>' + tickets(p.k) + '</b></span>'; }).join('') + (all.length > 24 ? '<span class="chip">+ ' + (all.length - 24) + '</span>' : '') : '<span class="hint">Scanne le QR code pour t’enregistrer et gagner ton premier ticket.</span>';
+  // Joueurs
+  $('nPresent').textContent = J().length + ' joueur' + (J().length > 1 ? 's' : '') + ' enregistré' + (J().length > 1 ? 's' : '');
+  $('list').innerHTML = J().slice().sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); }).map(function (p) {
+    var pa = A.pause.indexOf(p.k) >= 0;
+    return '<div class="pl' + (pa ? ' paused' : '') + '"><span class="n">' + esc(p.nom) + '</span><span class="s">' + (p.src === 'qr' ? 'QR · ' : '') + tickets(p.k) + ' t</span><button data-pause="' + esc(p.k) + '">' + (pa ? 'Dispo' : 'Pause') + '</button></div>';
+  }).join('') || '<p class="hint">Personne pour l’instant.</p>';
+  // Tickets
+  var R = ticketRanges(), tot = R.length ? R[R.length - 1].to : 0, sum = all.reduce(function (s, p) { return s + tickets(p.k); }, 0);
+  $('tkSum').textContent = all.length ? sum + ' tickets pour ' + all.length + ' joueur' + (all.length > 1 ? 's' : '') + ' · encore en jeu : ' + tot + ' ticket' + (tot > 1 ? 's' : '') : '';
+  $('tks').innerHTML = all.length ? all.map(function (p) {
+    var r = R.filter(function (x) { return x.p.k === p.k; })[0], won = T.winners.indexOf(p.k) >= 0, t = tickets(p.k);
+    return '<div class="tk' + (won ? ' won' : '') + '"><div class="main"><span class="who">' + esc(p.nom) + '</span><span class="det">' + esc(detail(p.k)) + '</span>' +
+      (won ? '<span class="tag">Gagnant n° ' + (T.winners.indexOf(p.k) + 1) + '</span>' : r ? '<span class="num">' + (r.from === r.to ? 'Ticket n° ' + r.from : 'N° ' + r.from + ' à ' + r.to) + '</span>' : '') +
+      '</div><div class="stub"><b>' + t + '</b><span>ticket' + (t > 1 ? 's' : '') + '</span></div></div>';
+  }).join('') : '<p class="hint">Aucun ticket pour l’instant.</p>';
+  $('tTab').innerHTML = R.length ? '<thead><tr><th>Joueur</th><th class="r">Tickets</th><th class="r">Numéros</th><th class="r">Chances</th></tr></thead><tbody>' + R.map(function (r) { return '<tr><td>' + esc(r.p.nom) + '</td><td class="r">' + r.t + '</td><td class="r">' + r.from + ' à ' + r.to + '</td><td class="r">' + (100 * r.t / tot).toFixed(1) + ' %</td></tr>'; }).join('') + '</tbody>' : '<tbody><tr><td>Aucun ticket en jeu.</td></tr></tbody>';
+  $('winners').textContent = T.winners.length ? 'Gagnants dans l’ordre : ' + T.winners.map(function (k, i) { return (i + 1) + '. ' + nm(k); }).join(' · ') : '';
+  tick();
+}
+function tick() {
+  Array.prototype.forEach.call(document.querySelectorAll('.clock'), function (el) { var s = Math.max(0, Math.floor((Date.now() - +el.dataset.start) / 1000)); el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); });
+}
+
+// ----- Événements -----
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('button'); if (!t) return; var d = t.dataset, v;
+  if (d.draw) draw(d.draw);
+  else if (d.go) launch(d.go);
+  else if (d.cancel) { v = d.cancel.split(':'); cancel(v[0], v.slice(1).join(':')); }
+  else if (d.res) { v = d.res.split(':'); result(v[0], v[1], +v[2]); }
+  else if (d.abort) { v = d.abort.split(':'); abort(v[0], v[1]); }
+  else if (d.pause) { var k = d.pause, i = A.pause.indexOf(k); if (i >= 0) A.pause.splice(i, 1); else { A.pause.push(k); for (var a in A.act) A.act[a].draft = A.act[a].draft.filter(function (x) { return x !== k; }); } sauver(); render(); }
+  else if ('close' in d) t.closest('dialog').close();
+});
+document.addEventListener('submit', function (e) { var f = e.target.closest('form[data-me]'); if (!f) return; e.preventDefault(); placeMe(f.dataset.me, f.querySelector('input').value); });
+document.addEventListener('input', function (e) { var m = e.target.id && e.target.id.match(/^me-(\w+)$/); if (m) meVal[m[1]] = e.target.value; });
+$('chips').onclick = function () { $('dTickets').showModal(); };
+$('qrBox').onclick = function () { $('dQr').showModal(); };
+$('bPlayers').onclick = function () { $('dPlayers').showModal(); $('iPr').focus(); };
+$('bTickets').onclick = function () { $('dTickets').showModal(); };
+$('bSettings').onclick = function () { $('sPc').value = A.cfg.pick.courts; $('sTc').value = A.cfg.touch.courts; $('sPf').value = A.cfg.pick.fmt; $('sTf').value = A.cfg.touch.fmt; $('setMsg').textContent = ''; $('bReset').textContent = 'Remettre les ateliers à zéro'; $('dSettings').showModal(); };
+$('bFinal').onclick = function () { $('win').textContent = ''; $('tnum').textContent = ''; $('dFinal').showModal(); };
+$('fAdd').onsubmit = function (e) {
+  e.preventDefault(); var pr = $('iPr').value.trim(), no = $('iNo').value.trim(); if (!pr) return;
+  sb.rpc('jeu_atelier_joueur', { p_cle: cle, p_prenom: pr, p_nom: no }).then(function (r) {
+    if (r.error) { $('nPresent').textContent = 'Impossible : ' + r.error.message; return; }
+    if (!P(r.data.k)) D.joueurs.push({ k: r.data.k, nom: r.data.nom });
+    $('iPr').value = ''; $('iNo').value = ''; $('iPr').focus(); render();
+    $('nPresent').textContent = r.data.nom + (r.data.deja ? ' était déjà enregistré' : ' ajouté' + (r.data.adherent ? ' (adhérent)' : ' (invité)'));
+  });
+};
+var setCourts = function (a) { return function (e) {
+  var n = +e.target.value; for (var c in A.act[a].courts) if (+c > n) { $('setMsg').textContent = 'Termine d’abord le match en cours sur ce terrain.'; e.target.value = A.cfg[a].courts; return; }
+  A.cfg[a].courts = n; sauver(); render();
+}; };
+$('sPc').onchange = setCourts('pick'); $('sTc').onchange = setCourts('touch');
+$('sPf').oninput = function (e) { A.cfg.pick.fmt = e.target.value; sauver(); render(); };
+$('sTf').oninput = function (e) { A.cfg.touch.fmt = e.target.value; sauver(); render(); };
+$('bUndo').onclick = function () { var h = A.hist.pop(); if (!h) { $('setMsg').textContent = 'Aucun résultat à annuler.'; return; } sauver(); render(); $('setMsg').textContent = 'Annulé : match ' + h.players.map(nm).join(', ') + '.'; };
+$('bReset').onclick = function () {
+  var b = $('bReset');
+  if (b.textContent.indexOf('Confirmer') === 0) { var cfg = A.cfg; A = DEF(); A.cfg = cfg; sauver(); render(); b.textContent = 'Remettre les ateliers à zéro'; $('setMsg').textContent = 'Ateliers remis à zéro (les joueurs, le One Point Slam et la tombola restent).'; }
+  else { b.textContent = 'Confirmer : effacer les matchs des ateliers'; $('setMsg').textContent = 'Les matchs de pickleball et de touch tennis (et leurs tickets) seront effacés.'; }
+};
+$('bOublier').onclick = function () { $('dSettings').close(); oublier(); };
+$('bWin').onclick = function () {
+  var R = ticketRanges();
+  if (!R.length) { $('tnum').textContent = ''; $('win').textContent = 'Plus aucun ticket en jeu'; return; }
+  var tot = R[R.length - 1].to, num = rnd(tot) + 1, w = R.filter(function (r) { return num >= r.from && num <= r.to; })[0].p;
+  var done = function () {
+    $('tnum').textContent = 'Ticket n° ' + num + ' sur ' + tot; $('win').textContent = w.nom;
+    T.winners.push(w.k); T.tirages = (T.tirages || []).concat([{ k: w.k, num: num, tot: tot, at: Date.now() }]);
+    sauver(true); render(); $('bWin').disabled = false;
+  };
+  if (reduce) return done();
+  $('bWin').disabled = true; $('win').textContent = '…'; var t = setInterval(function () { $('tnum').textContent = 'Ticket n° ' + (1 + Math.floor(Math.random() * tot)) + ' sur ' + tot; }, 70);
+  setTimeout(function () { clearInterval(t); done(); }, 2500);
+};
+$('fRelier').onsubmit = function (e) {
+  e.preventDefault(); var c = $('iCode').value.trim().toUpperCase(); $('relMsg').textContent = '';
+  if (c.length !== 6) { $('relMsg').textContent = 'Le code fait 6 caractères.'; return; }
+  sb.rpc('jeu_code_pilote', { p_code: c }).then(function (r) {
+    if (r.error || !r.data) { $('relMsg').textContent = 'Code inconnu ou expiré : demande un nouveau code dans la gestion.'; return; }
+    cle = r.data; try { localStorage.setItem(KEY, cle); } catch (x) {} $('iCode').value = ''; charger(true);
+  }).catch(function () { $('relMsg').textContent = 'Pas de connexion : réessaie.'; });
+};
+
+if (cle) charger(true); else oublier();
+setInterval(function () { charger(false); }, 3000);
+setInterval(tick, 1000);
+try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); }); } catch (x) {}
+})();
+</script>
+</body>
+</html>

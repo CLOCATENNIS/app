@@ -3556,6 +3556,43 @@ function jxNomCourt(p) { return p.prenom + ' ' + String(p.nom || '').charAt(0).t
 function jxErr(t) { return function (e) { toast(t + ((e && (e.message || e.code)) ? ' : ' + (e.message || e.code) : '')); }; }
 function jxLocal(iso) { if (!iso) return ''; var d = new Date(iso); return isoJour(d) + 'T' + hhmm(d); }
 function jxLienEcran(cle) { return new URL('../ecran.html?k=' + cle, location.href).href; }
+// Soirée : écran des ateliers (pickleball, touch tennis, tombola) relié par un code court, et QR code d'enregistrement sans compte
+function jxLienAteliers() { return new URL('../ateliers.html', location.href).href; }
+function jxLienInsc(code) { return new URL('../soiree.html?c=' + encodeURIComponent(code), location.href).href; }
+function jxQr(box, texte, taille) {
+  var go = function () { try { box.innerHTML = ''; new QRCode(box, { text: texte, width: taille, height: taille, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { box.textContent = texte; } };
+  if (window.QRCode) return go();
+  var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'; s.onload = go; s.onerror = function () { box.textContent = texte; }; document.head.appendChild(s);
+}
+function jxCodeAteliers(JE) {
+  if (!JE.cle_pilote) { toast('La base n\'est pas encore à jour pour les ateliers (script soiree-ateliers.sql)'); return; }
+  var abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', a = new Uint32Array(6), c = '';
+  crypto.getRandomValues(a); for (var i = 0; i < 6; i++) c += abc[a[i] % abc.length];
+  var exp = new Date(Date.now() + 15 * 60000);
+  q(sb.from('jeux').update({ code_ecran: c, code_ecran_exp: exp.toISOString() }).eq('id', JE.id)).then(function () {
+    var lien = jxLienAteliers();
+    panneau('Écran des ateliers', '<div class="stack" style="text-align:center"><p class="mut small" style="margin:0">Sur l\'ordinateur de l\'écran, ouvre</p><div style="font-size:22px;font-weight:700">' + esc(lien.replace(/^https?:\/\//, '').replace(/\.html$/, '')) + '</div><p class="mut small" style="margin:0">puis tape ce code :</p>' +
+      '<div style="font-family:var(--disp,\'Barlow Condensed\',sans-serif);font-weight:800;font-size:64px;letter-spacing:.25em;line-height:1">' + c + '</div><p class="mut small" style="margin:0">Valable jusqu\'à ' + fmtH(exp) + '. Une fois relié, l\'écran le reste (même après un redémarrage).</p>' +
+      '<p class="mut xs" style="margin:6px 0 0">Pickleball et touch tennis à gauche et à droite, tickets et tirage de la tombola en bas, QR code d\'enregistrement affiché. Les tickets du One Point Slam se comptent tout seuls : 1 par point gagné, 5 par manche gagnée.</p>' +
+      '<div class="chips" style="justify-content:center"><a class="btn sm line" target="_blank" rel="noopener" href="' + esc(lien + '?p=' + JE.cle_pilote) + '">Ouvrir sur cet appareil</a></div></div>');
+  }).catch(jxErr('Code impossible'));
+}
+function jxQrInsc(JE) {
+  if (!JE.code_insc) { toast('La base n\'est pas encore à jour pour l\'enregistrement (script soiree-ateliers.sql)'); return; }
+  var lien = jxLienInsc(JE.code_insc);
+  panneau('QR code d\'enregistrement', '<div class="stack" style="text-align:center;align-items:center"><div id="jq-qr" style="background:#fff;padding:12px;border-radius:12px;line-height:0"></div>' +
+    '<p style="margin:0;font-weight:600">Chacun scanne, s\'enregistre (et ses invités) et gagne 1 ticket de tombola.</p><p class="mut small" style="margin:0">Fonctionne sans compte, uniquement le jour de la soirée' + (JE.jour ? ' (' + esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ')' : '') + '. Les adhérents sont reconnus par leur prénom et leur nom ; les autres sont enregistrés comme invités.</p>' +
+    '<div class="mut xs" style="word-break:break-all">' + esc(lien) + '</div><div class="chips" style="justify-content:center"><button class="btn sm" id="jq-print">Imprimer l\'affichette</button><button class="btn sm ghost" id="jq-cp">Copier le lien</button></div></div>', function () {
+    jxQr($('jq-qr'), lien, 220);
+    $('jq-cp').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié'); }).catch(function () { window.prompt('Lien d\'enregistrement', lien); }); };
+    $('jq-print').onclick = function () {
+      var w = window.open('', '_blank'); if (!w) { toast('Autorise les fenêtres pour imprimer'); return; }
+      var img = $('jq-qr').querySelector('img,canvas'), src = img ? (img.tagName === 'CANVAS' ? img.toDataURL() : img.src) : '';
+      w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Enregistre-toi</title><style>body{font-family:Arial,sans-serif;text-align:center;padding:40px;color:#0B3547}h1{font-size:54px;margin:0 0 6px;text-transform:uppercase}h2{font-size:26px;margin:0 0 30px;font-weight:600}img{width:420px;height:420px;image-rendering:pixelated}p{font-size:24px;margin:24px 0 0}.t{display:inline-block;background:#DDF901;padding:4px 14px;border-radius:999px;font-weight:700}</style></head><body><h1>Enregistre-toi</h1><h2>' + esc(JE.titre) + '</h2>' + (src ? '<img src="' + src + '" alt="QR code">' : '') + '<p>Scanne avec l\'appareil photo de ton téléphone.</p><p><span class="t">1 ticket de tombola offert</span> à chaque personne enregistrée</p><p style="font-size:16px;color:#5d6b78">' + esc(lien) + '</p><script>setTimeout(function(){window.print()},300)<\/script></body></html>');
+      w.document.close();
+    };
+  });
+}
 function vueJeux(m, id) {
   var J = window.JEUX, F = J ? J.FORMATS : {};
   if (!J) { m.innerHTML = '<div class="card empty">Le module des jeux n\'a pas pu se charger. Recharge la page.</div>'; return; }
@@ -3600,9 +3637,11 @@ function vueJeux(m, id) {
   var entetes = function () {
     var lien = jxLienEcran(JE.cle);
     $('jx-h').innerHTML = entete(JE.titre, (JE.jour ? esc(fmtJour(new Date(JE.jour + 'T12:00:00'))) + ' · ' : '') + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + ' · ' + JE.manches.length + ' manche' + (JE.manches.length > 1 ? 's' : '') + (JE.insc_appli && JE.insc_ouvre_le ? ' · carte dans l\'appli dès le ' + esc(fmtJ(new Date(JE.insc_ouvre_le))) + ' à ' + fmtH(new Date(JE.insc_ouvre_le)) + (JE.public_cible === 'tous' ? '' : ' (adultes)') : ''),
-      '<button class="btn sm ghost" id="jx-arch">' + (JE.archive ? 'Désarchiver' : 'Archiver') + '</button><button class="btn sm ko" id="jx-del">Supprimer le jeu</button><a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button>');
+      '<button class="btn sm ghost" id="jx-arch">' + (JE.archive ? 'Désarchiver' : 'Archiver') + '</button><button class="btn sm ko" id="jx-del">Supprimer le jeu</button><a class="btn sm line" href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir l\'écran du club</a><a class="btn sm line" href="' + esc(lien + '&vue=prochains') + '" target="_blank" rel="noopener">Petit écran : prochains matchs</a><button class="btn sm ghost" id="jx-cp">Copier le lien de l\'écran</button><button class="btn sm line" id="jx-at">Écran des ateliers (pickleball, touch, tombola)</button><button class="btn sm line" id="jx-qr">QR code d\'enregistrement</button>');
     $('jx-del').onclick = function () { if (confirm('Supprimer définitivement « ' + JE.titre + ' », ses joueurs et ses résultats ? La carte disparaît aussi de l\'appli.')) q(sb.from('jeux').delete().eq('id', JE.id)).then(function () { toast('Jeu supprimé'); location.hash = '#/fetes/jeux'; }).catch(jxErr('Suppression impossible')); };
     $('jx-arch').onclick = function () { var v = !JE.archive; q(sb.from('jeux').update({ archive: v }).eq('id', JE.id)).then(function () { JE.archive = v; toast(v ? 'Jeu archivé : la carte de l\'appli et l\'écran sont coupés' : 'Jeu désarchivé'); entetes(); }).catch(jxErr('Action impossible')); };
+    $('jx-at').onclick = function () { jxCodeAteliers(JE); };
+    $('jx-qr').onclick = function () { jxQrInsc(JE); };
     $('jx-cp').onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(lien) : Promise.reject()).then(function () { toast('Lien copié : ouvre-le sur l\'ordi ou la TV du club'); }).catch(function () { window.prompt('Lien de l\'écran', lien); }); };
     $('jx-tabs').innerHTML = [['jouer', 'Jouer'], ['joueurs', 'Joueurs (' + JE.joueurs.length + ')'], ['reglages', 'Réglages']].map(function (x) { return '<button class="chip' + (JX.onglet === x[0] ? ' on' : '') + '" data-jxt="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     all('[data-jxt]').forEach(function (b) { b.onclick = function () { JX.onglet = b.dataset.jxt; entetes(); vue(); }; });
@@ -3677,7 +3716,7 @@ function vueJeux(m, id) {
     $('jx-ti').onchange = function () { jouer(); };
     all('[data-jxmo]').forEach(function (b) { b.onclick = function () { M.mode = b.dataset.jxmo; enregistrer(); jouer(); }; });
     if ($('jx-fmt')) $('jx-fmt').onchange = function () { M.fmt = this.value; enregistrer(); jouer(); };
-    if ($('jx-tirage')) $('jx-tirage').onclick = function () { maj(J.demarrer(M.fmt || JE.format, JE.joueurs.map(function (p) { return p.k; }), JE.config, M.mode)); toast('Tirage fait : premier match sur le terrain'); };
+    if ($('jx-tirage')) $('jx-tirage').onclick = function () { maj(J.demarrer(M.fmt || JE.format, JE.joueurs.filter(function (p) { return !p.hors_ops; }).map(function (p) { return p.k; }), JE.config, M.mode)); toast('Tirage fait : premier match sur le terrain'); };
     all('[data-jxw]').forEach(function (b) { b.onclick = function () { var ne = J.point(e, b.dataset.jxw, J.regles(M, JE.config)); var msg = []; if (ne.sortie) msg.push(nom(ne.sortie.k) + ' sort' + (ne.sortie.tirage ? ' (tirage au sort)' : ' (le plus ancien)')); if (ne.dernierAcc) msg.push(nom(ne.dernierAcc.k) + ' enfile : ' + ne.dernierAcc.t); if (msg.length) toast(msg.join(' · ')); maj(ne); }; });
     all('[data-jxc]').forEach(function (b) { b.onclick = function () { var v = b.dataset.jxc.split('|'); J.choisir(e, +v[0], v.slice(1).join('|')); maj(e); }; });
     if ($('jx-tour')) $('jx-tour').onclick = function () { maj(J.validerTour(e, J.regles(M, JE.config))); };
@@ -3694,7 +3733,7 @@ function vueJeux(m, id) {
     C().innerHTML = '<div class="card stack" style="margin-bottom:12px"><b>Ajouter un adhérent</b>' + CHERCHEUR + '</div>' +
       '<div class="card stack" style="margin-bottom:12px"><b>Ajouter un invité ou plusieurs noms</b><textarea class="f" id="jx-noms" placeholder="Un nom par ligne (conjoints, amis, joueurs pas encore dans l\'appli)"></textarea><div><button class="btn sm" id="jx-addn">Ajouter</button></div></div>' +
       '<div class="card"><b>' + JE.joueurs.length + ' joueur' + (JE.joueurs.length > 1 ? 's' : '') + '</b><div class="list" style="margin-top:6px">' + (JE.joueurs.length ? JE.joueurs.map(function (p) {
-        return '<div class="it"><span>' + esc(p.nom) + ' ' + (p.appli ? '<span class="badge b-ok">inscrit par l\'appli</span>' : p.pid ? '<span class="badge">adhérent</span>' : '<span class="badge">invité</span>') + (enJeu[p.k] ? ' <span class="badge b-ac">dans la manche en cours</span>' : '') + '</span><button class="btn sm ko" data-jxd="' + esc(p.k) + '"' + (enJeu[p.k] ? ' disabled title="Termine ou refais la manche en cours d\'abord"' : '') + '>Retirer</button></div>';
+        return '<div class="it"><span>' + esc(p.nom) + ' ' + (p.appli ? '<span class="badge b-ok">inscrit par l\'appli</span>' : p.src === 'qr' ? '<span class="badge b-ok">QR code' + (p.pid ? ' · adhérent' : ' · invité') + '</span>' : p.src === 'ecran' ? '<span class="badge">écran des ateliers' + (p.pid ? ' · adhérent' : '') + '</span>' : p.pid ? '<span class="badge">adhérent</span>' : '<span class="badge">invité</span>') + (p.hors_ops ? ' <span class="badge b-warn">pas au One Point Slam</span>' : '') + (enJeu[p.k] ? ' <span class="badge b-ac">dans la manche en cours</span>' : '') + '</span><span style="display:flex;gap:6px"><button class="btn sm ghost" data-jxops="' + esc(p.k) + '" title="Participe au tirage du One Point Slam ou non">' + (p.hors_ops ? 'Mettre au OPS' : 'Retirer du OPS') + '</button><button class="btn sm ko" data-jxd="' + esc(p.k) + '"' + (enJeu[p.k] ? ' disabled title="Termine ou refais la manche en cours d\'abord"' : '') + '>Retirer</button></span></div>';
       }).join('') : '<div class="it mut">Personne pour l\'instant.</div>') + '</div></div>' +
       '<p class="mut xs" style="margin-top:10px">Les joueurs ajoutés pendant une manche jouent à partir de la manche suivante.</p>';
     var ajouter = function (n, pid) {
@@ -3708,6 +3747,7 @@ function vueJeux(m, id) {
     });
     $('jx-addn').onclick = function () { var l = $('jx-noms').value.split('\n'); majJoueurs(function () { var n = 0; l.forEach(function (x) { if (ajouter(x)) n++; }); return n; }).then(function (n) { if (n) toast(n + ' joueur' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '')); }); };
     all('[data-jxd]').forEach(function (b) { b.onclick = function () { majJoueurs(function (l) { JE.joueurs = l.filter(function (p) { return p.k !== b.dataset.jxd; }); }); }; });
+    all('[data-jxops]').forEach(function (b) { b.onclick = function () { majJoueurs(function (l) { l.forEach(function (p) { if (p.k === b.dataset.jxops) { if (p.hors_ops) delete p.hors_ops; else p.hors_ops = true; } }); }); }; });
   };
 
   // ----- Réglages -----
