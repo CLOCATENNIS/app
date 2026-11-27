@@ -88,6 +88,16 @@ label{display:block;font-weight:600;margin:10px 0 6px}
 .pl button{min-height:38px;font-size:14px;padding:0 10px}
 .win{font-family:var(--disp);font-weight:800;font-size:clamp(44px,8vw,80px);color:var(--ball);text-align:center;padding:12px 0;min-height:1.4em}
 .lotjeu{text-align:center;font-family:var(--disp);font-weight:700;font-size:clamp(22px,2.6vw,32px);color:var(--ink)}.lotjeu b{color:var(--ball)}
+.roue{position:relative;height:300px;overflow:hidden;border-radius:16px;background:#0d1117;border:1px solid var(--line);margin:8px 0;-webkit-mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent)}
+.roue .bande{position:absolute;left:0;right:0;top:0;will-change:transform}
+.roue .bande div{height:60px;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:38px;color:var(--mute);white-space:nowrap}
+.roue .fenetre{position:absolute;left:12px;right:12px;top:120px;height:60px;border-top:3px solid var(--ball);border-bottom:3px solid var(--ball);border-radius:6px;pointer-events:none}
+.roue.fin .bande div.g{color:var(--ball);font-size:46px}
+.confettis{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:10}
+.confettis i{position:absolute;top:-20px;width:10px;height:16px;border-radius:2px;animation:tombe 2.6s ease-in forwards}
+@keyframes tombe{to{transform:translateY(110vh) rotate(720deg);opacity:.9}}
+.win.pop{animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
 .tnum{text-align:center;font-family:var(--disp);font-weight:700;font-size:clamp(24px,3vw,36px);color:var(--mute);font-variant-numeric:tabular-nums;min-height:1.2em}
 summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 table{width:100%;border-collapse:collapse;font-size:15px}
@@ -190,10 +200,12 @@ td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <dialog id="dFinal" class="wide">
   <button class="close" data-close>Fermer</button>
   <h2>Tirage de la tombola</h2>
-  <p class="hint">Chaque ticket a un numéro. L'ordinateur tire un numéro au hasard (générateur aléatoire sécurisé du navigateur) : plus tu as de tickets, plus tu as de chances. Un gagnant n'est tiré qu'une fois.</p>
+  <p class="hint">Chaque prénom qui défile vaut un ticket : plus tu as de tickets, plus ton prénom passe souvent. Le ticket gagnant est tiré par le générateur aléatoire sécurisé du navigateur. Un gagnant n'est tiré qu'une fois.</p>
   <div class="lotjeu" id="lotJeu"></div>
+  <div class="roue" id="roue" hidden><div class="bande" id="bande"></div><div class="fenetre"></div></div>
   <div class="tnum" id="tnum"></div>
   <div class="win" id="win" aria-live="polite"></div>
+  <div class="confettis" id="confettis" aria-hidden="true"></div>
   <div class="row"><button class="btn-draw" id="bWin">Tirer un ticket</button></div>
   <p class="hint" id="winners"></p>
   <details><summary>Voir les tickets de chacun</summary><div class="scroll"><table id="tTab"></table></div></details>
@@ -457,20 +469,57 @@ $('bReset').onclick = function () {
   else { b.textContent = 'Confirmer : effacer les matchs des ateliers'; $('setMsg').textContent = 'Les matchs de pickleball et de touch tennis (et leurs tickets) seront effacés.'; }
 };
 $('bOublier').onclick = function () { $('dSettings').close(); oublier(); };
+// ----- Tirage : roulette de 5 secondes. Chaque prénom de la bande vaut un ticket, le gagnant est tiré d'abord (hasard sécurisé) -----
+var audio = null;
+function son(f, d, v) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    var o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime;
+    o.frequency.value = f; o.type = 'triangle'; g.gain.setValueAtTime(v || 0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + (d || 0.05));
+    o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + (d || 0.05) + 0.02);
+  } catch (e) {}
+}
+function fanfare() { [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { son(f, 0.25, 0.12); }, i * 140); }); }
+function confettis() {
+  var c = $('confettis'), coul = ['#e4f24a', '#ffffff', '#1a4f8f', '#d06a3c', '#f4f1e6'], h = '';
+  for (var i = 0; i < 90; i++) h += '<i style="left:' + rnd(100) + '%;background:' + coul[i % coul.length] + ';animation-delay:' + (rnd(60) / 100) + 's;animation-duration:' + (2 + rnd(150) / 100) + 's"></i>';
+  c.innerHTML = h; setTimeout(function () { c.innerHTML = ''; }, 4500);
+}
 $('bWin').onclick = function () {
   montre = -1; render();
   var R = ticketRanges();
   if (!R.length) { $('tnum').textContent = ''; $('win').textContent = 'Plus aucun ticket en jeu'; return; }
-  var tot = R[R.length - 1].to, num = rnd(tot) + 1, w = R.filter(function (r) { return num >= r.from && num <= r.to; })[0].p;
+  var tot = R[R.length - 1].to, num = rnd(tot) + 1, w = R.filter(function (r) { return num >= r.from && num <= r.to; })[0].p, il = T.winners.length;
+  // Les téléphones voient « tirage en cours » pendant la roulette
+  T.tirage = { etat: 'en_cours', lot: lotDe(il), n: il + 1, at: Date.now() }; sauver(true);
   var done = function () {
-    $('tnum').textContent = 'Ticket n° ' + num + ' sur ' + tot; $('win').textContent = w.nom; montre = T.winners.length;
-    T.winners.push(w.k); T.tirages = (T.tirages || []).concat([{ k: w.k, num: num, tot: tot, at: Date.now() }]);
-    sauver(true); render(); $('bWin').disabled = false;
+    $('roue').classList.add('fin');
+    $('tnum').textContent = 'Ticket n° ' + num + ' sur ' + tot; $('win').textContent = w.nom; $('win').classList.remove('pop'); void $('win').offsetWidth; $('win').classList.add('pop');
+    montre = il; T.winners.push(w.k); T.tirages = (T.tirages || []).concat([{ k: w.k, num: num, tot: tot, at: Date.now() }]);
+    T.tirage = { etat: 'fini', k: w.k, nom: w.nom, lot: lotDe(il), n: il + 1, at: Date.now() };
+    sauver(true); render(); $('bWin').disabled = false; fanfare(); if (!reduce) confettis();
   };
+  $('win').textContent = ''; $('tnum').textContent = '';
   if (reduce) return done();
-  $('bWin').disabled = true; $('win').textContent = '…'; var t = setInterval(function () { $('tnum').textContent = 'Ticket n° ' + (1 + Math.floor(Math.random() * tot)) + ' sur ' + tot; }, 70);
-  setTimeout(function () { clearInterval(t); done(); }, 2500);
+  // Bande : tickets mélangés (un prénom par ticket), répétés pour défiler ~5 s, le gagnant à l'arrivée
+  var pool = []; R.forEach(function (r) { for (var i = 0; i < r.t; i++) pool.push(r.p.nom); });
+  for (var i = pool.length - 1; i > 0; i--) { var j = rnd(i + 1), x = pool[i]; pool[i] = pool[j]; pool[j] = x; }
+  var N = 70, items = []; for (i = 0; i < N; i++) items.push(pool[i % pool.length]);
+  var cible = N - 4; items[cible] = w.nom;
+  $('bande').innerHTML = items.map(function (n, i) { return '<div' + (i === cible ? ' class="g"' : '') + '>' + esc(n) + '</div>'; }).join('');
+  var b = $('bande'), H = 60, fin = -(cible * H - 120), dur = 5000, t0 = null, der = -1;
+  $('roue').hidden = false; $('roue').classList.remove('fin'); b.style.transform = 'translateY(0px)'; $('bWin').disabled = true;
+  var ease = function (x) { return 1 - Math.pow(1 - x, 4); };
+  var pas = function (ts) {
+    if (t0 === null) t0 = ts;
+    var p = Math.min(1, (ts - t0) / dur), y = fin * ease(p), idx = Math.floor((-y + 120 + H / 2) / H);
+    b.style.transform = 'translateY(' + y.toFixed(1) + 'px)';
+    if (idx !== der) { der = idx; son(900 + rnd(200), 0.03, 0.05); }
+    if (p < 1) requestAnimationFrame(pas); else setTimeout(done, 350);
+  };
+  requestAnimationFrame(pas);
 };
+$('bFinal').addEventListener('click', function () { $('roue').hidden = true; });
 $('fRelier').onsubmit = function (e) {
   e.preventDefault(); var c = $('iCode').value.trim().toUpperCase(); $('relMsg').textContent = '';
   if (c.length !== 6) { $('relMsg').textContent = 'Le code fait 6 caractères.'; return; }

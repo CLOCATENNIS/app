@@ -57,6 +57,18 @@ button{font:inherit;cursor:pointer;border-radius:12px;min-height:48px;padding:0 
 .lots li span,.tous li span{color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
 .tous li.moi{background:var(--soft);border-radius:10px;font-weight:700;padding-inline:10px}
 .tag{color:var(--ac);font-weight:700}
+.direct{border-radius:16px;padding:14px 16px;margin-bottom:12px;font-weight:700;text-align:center;background:var(--navy);color:#fff}
+.direct.encours{animation:pulse 1s ease-in-out infinite alternate}
+.direct b{color:var(--balle)}
+@keyframes pulse{from{opacity:.75;transform:scale(.99)}to{opacity:1;transform:scale(1.01)}}
+.alerte{display:grid;gap:10px;font-size:14px;color:var(--mut)}
+.gagne{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:#0B3547;color:#fff;text-align:center}
+.gagne>div{max-width:420px;display:grid;gap:10px;animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+.gagne .gn{font-family:var(--disp);font-weight:800;font-size:clamp(30px,9vw,44px);line-height:1.05;margin:0}
+.gagne h2{font-family:var(--disp);font-weight:800;font-size:clamp(48px,16vw,72px);line-height:1;margin:0;color:var(--balle);text-transform:uppercase}
+.gagne #gL{font-size:24px;font-weight:700;margin:0}.gagne .gp{margin:0;font-weight:700;letter-spacing:.04em;color:#c9d6df}.gagne .mut{color:#c9d6df}
+@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.direct.encours,.gagne>div{animation:none}}
 </style>
 </head>
 <body>
@@ -72,12 +84,15 @@ button{font:inherit;cursor:pointer;border-radius:12px;min-height:48px;padding:0 
     <p class="mut small">Adhérent du club : prénom et nom comme sur ta licence, on te retrouve tout seul. Invité : ton nom sert seulement pour les jeux et la tombola de la soirée.</p>
   </form>
   <section id="suivi" hidden>
+    <div class="direct" id="direct" hidden></div>
     <div class="card ok" id="bravo" hidden><h2>C'est fait !</h2><p class="mut small" style="margin:0">Regarde l'écran : ton nom peut sortir au prochain tirage. Tes tickets montent quand tu joues.</p></div>
     <div class="card"><div class="tete"><b>Tes tickets</b><span class="mut small" id="maj"></span></div><ul class="mes" id="mes"></ul></div>
     <div class="card" id="lotsBox" hidden><b>Les lots</b><p class="mut small" style="margin:4px 0 0">Le premier ticket tiré gagne le lot 1, le deuxième le lot 2, et ainsi de suite.</p><ol class="lots" id="lots"></ol></div>
     <div class="card"><div class="tete"><b>Tous les participants</b><span class="mut small" id="tot"></span></div><ol class="tous" id="tous"></ol></div>
+    <div class="card alerte"><span>Garde cette page ouverte pendant le tirage : ton téléphone sonne et vibre si ton ticket sort.</span><button type="button" class="add" id="tester">Activer le son</button></div>
     <button type="button" class="add" id="encore">Enregistrer d'autres personnes</button>
   </section>
+  <div class="gagne" id="gagne" hidden role="alertdialog" aria-labelledby="gT"><div><p class="gp">Ticket gagnant</p><h2>Bravo !</h2><p class="gn" id="gT"></p><p id="gL"></p><p class="mut">Va récupérer ton lot auprès des organisateurs.</p><button type="button" class="go" id="gOk">Super !</button></div></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="tombola.js?v=202611271130"></script>
@@ -128,12 +143,40 @@ function suivre() {
     var sum = all.reduce(function (s, p) { return s + TB.tickets(p.k, H, M); }, 0);
     $('tot').textContent = all.length + ' · ' + sum + ' tickets';
     $('tous').innerHTML = all.map(function (p, i) { var t = TB.tickets(p.k, H, M), g = W.indexOf(p.k) >= 0; return '<li' + (mes.indexOf(p.k) >= 0 ? ' class="moi"' : '') + '>' + (i + 1) + '. ' + esc(p.nom) + (g ? ' <span class="tag">gagnant</span>' : '') + '<span>' + t + ' ticket' + (t > 1 ? 's' : '') + '</span></li>'; }).join('');
+    direct(S, nom); alerter(S, nom, L);
     $('maj').textContent = 'à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   }).catch(function () {});
 }
+// ----- Alerte quand un de mes tickets sort : son (si activé par un toucher), vibration (Android), grand écran « Bravo » -----
+var audio = null, VUS = 'cloca-soiree-vus-' + code.toUpperCase();
+function debloquer() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch (e) {} }
+document.addEventListener('pointerdown', debloquer, { once: true });
+function son(f, d, v, t0) { if (!audio) return; try { var o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + (t0 || 0); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + d + 0.02); } catch (e) {} }
+function fanfare() { [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) { son(f, 0.3, 0.2, i * 0.16); }); }
+function vibrer() { try { if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 900]); } catch (e) {} }
+$('tester').onclick = function () { debloquer(); son(880, 0.2, 0.15); vibrer(); this.textContent = 'Son activé'; };
+$('gOk').onclick = function () { $('gagne').hidden = true; };
+function vus() { try { return JSON.parse(localStorage.getItem(VUS) || 'null'); } catch (e) { return null; } }
+function alerter(S, nom, L) {
+  var v = vus(), W = S.winners || [], mes = mesK();
+  if (v === null) { try { localStorage.setItem(VUS, JSON.stringify(W)); } catch (e) {} return; }   // premier passage : pas d'alerte pour les anciens tirages
+  var nouveaux = W.filter(function (k) { return v.indexOf(k) < 0; });
+  try { localStorage.setItem(VUS, JSON.stringify(W)); } catch (e) {}
+  var moi = nouveaux.filter(function (k) { return mes.indexOf(k) >= 0; })[0];
+  if (!moi) return;
+  var i = W.indexOf(moi);
+  $('gT').textContent = nom(moi); $('gL').textContent = L[i] ? 'Tu gagnes : ' + L[i] : 'Ton ticket est sorti !';
+  $('gagne').hidden = false; vibrer(); fanfare();
+}
+function direct(S, nom) {
+  var t = S.tirage, el = $('direct'), age = t ? Date.now() - t.at : 1e9;
+  if (t && t.etat === 'en_cours' && age < 30000) { el.hidden = false; el.className = 'direct encours'; el.innerHTML = 'Tirage en cours…' + (t.lot ? '<br>Lot ' + t.n + ' : <b>' + esc(t.lot) + '</b>' : ''); }
+  else if (t && t.etat === 'fini' && age < 90000) { el.hidden = false; el.className = 'direct'; el.innerHTML = (t.lot ? 'Lot ' + t.n + ' : <b>' + esc(t.lot) + '</b><br>' : 'Ticket gagnant : ') + esc(nom(t.k)); }
+  else el.hidden = true;
+}
 function voirSuivi(bravo) {
   $('form').hidden = true; $('ferme').hidden = true; $('suivi').hidden = false; $('bravo').hidden = !bravo;
-  $('encore').hidden = !OUVERT; suivre(); clearInterval(minuterie); minuterie = setInterval(suivre, 10000); window.scrollTo(0, 0);
+  $('encore').hidden = !OUVERT; suivre(); clearInterval(minuterie); minuterie = setInterval(suivre, 4000); window.scrollTo(0, 0);
 }
 var OUVERT = false;
 $('form').onsubmit = function (e) {
